@@ -1,8 +1,11 @@
 const express = require('express');
 const http = require('http');
 const path = require('path');
+const dns = require('dns');
 const { Pool } = require('pg');
 const { Server } = require('socket.io');
+
+dns.setDefaultResultOrder('ipv4first');
 
 const DATABASE_URL = process.env.DATABASE_URL;
 if (!DATABASE_URL) {
