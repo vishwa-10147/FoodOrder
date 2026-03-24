@@ -1,0 +1,442 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Management Site - Tableside</title>
+  <style>
+    :root {
+      --charcoal: #2C2C2A;
+      --accent: #1D9E75;
+      --accent-light: #E1F5EE;
+      --accent-dark: #085041;
+      --warn: #BA7517;
+      --warn-light: #FAEEDA;
+      --info: #185FA5;
+      --info-light: #E6F1FB;
+      --border: 0.5px solid var(--color-border-tertiary);
+      --radius: var(--border-radius-lg);
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: var(--font-sans); }
+    body { padding: 18px; background: var(--color-background-primary); }
+    #app { display: flex; min-height: 680px; border: var(--border); border-radius: var(--border-radius-xl); overflow: hidden; background: var(--color-background-tertiary); }
+
+    #sidebar { width: 220px; background: var(--color-background-primary); border-right: var(--border); }
+    .logo { padding: 20px 16px; border-bottom: var(--border); }
+    .logo h1 { font-size: 15px; color: var(--color-text-primary); }
+    .logo p { font-size: 11px; color: var(--color-text-secondary); margin-top: 2px; }
+    .nav { padding: 12px 0; }
+    .nav-item { padding: 10px 16px; cursor: pointer; font-size: 13px; color: var(--color-text-secondary); display: flex; align-items: center; justify-content: space-between; }
+    .nav-item.active { background: var(--accent-light); color: var(--accent-dark); font-weight: 500; }
+    .badge { background: var(--warn); color: white; border-radius: 999px; font-size: 10px; padding: 1px 6px; }
+
+    #main { flex: 1; display: flex; flex-direction: column; }
+    .topbar { height: 52px; padding: 0 20px; border-bottom: var(--border); background: var(--color-background-primary); display: flex; align-items: center; justify-content: space-between; }
+    .title { font-size: 15px; font-weight: 500; color: var(--color-text-primary); }
+    .time { font-size: 12px; color: var(--color-text-secondary); }
+
+    .content { display: none; flex: 1; padding: 20px; overflow-y: auto; }
+    .content.active { display: block; }
+
+    .metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-bottom: 16px; }
+    .metric { background: var(--color-background-secondary); border-radius: var(--border-radius-md); padding: 12px 14px; }
+    .metric .l { font-size: 11px; color: var(--color-text-secondary); margin-bottom: 4px; }
+    .metric .v { font-size: 22px; color: var(--color-text-primary); font-weight: 500; }
+    .metric .s { font-size: 11px; color: var(--warn); margin-top: 2px; }
+
+    .section { margin-bottom: 16px; }
+    .section h3 { font-size: 13px; margin-bottom: 10px; color: var(--color-text-primary); }
+
+    .orders-grid { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 10px; }
+    .order-card { border: var(--border); border-radius: var(--border-radius-md); background: var(--color-background-primary); padding: 12px; }
+    .order-head { display: flex; justify-content: space-between; margin-bottom: 8px; }
+    .order-id { font-size: 13px; font-weight: 500; color: var(--color-text-primary); }
+    .tag { font-size: 10px; padding: 2px 7px; border-radius: 999px; }
+    .tag.dine { background: var(--info-light); color: var(--info); }
+    .tag.takeaway { background: var(--warn-light); color: var(--warn); }
+    .tag.preorder { background: var(--accent-light); color: var(--accent-dark); }
+
+    .table-grid { display:grid; grid-template-columns:repeat(7,minmax(0,1fr)); gap:8px; }
+    .section-head { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:10px; }
+    .section-head h3 { margin-bottom:0; }
+    .table-actions { display:flex; align-items:center; gap:6px; }
+    .table-input { width:88px; border:var(--border); border-radius:var(--border-radius-md); padding:5px 7px; font-size:11px; color:var(--color-text-primary); background:var(--color-background-primary); }
+    .small-btn { border:var(--border); border-radius:var(--border-radius-md); background:var(--color-background-secondary); font-size:11px; padding:6px 8px; cursor:pointer; color:var(--color-text-secondary); }
+    .table-cell { cursor:pointer; padding:10px 6px; border-radius:var(--border-radius-md); border:var(--border); text-align:center; }
+    .table-cell .n { font-size:11px; font-weight:500; }
+    .table-cell .st { font-size:10px; }
+    .free { background:var(--color-background-secondary); }
+    .free .n { color:var(--color-text-primary); }
+    .free .st { color:var(--color-text-tertiary); }
+    .ordering { background:var(--warn-light); border:0.5px solid #FAC775; }
+    .ordering .n { color:#633806; }
+    .ordering .st { color:#854F0B; }
+    .occupied { background:var(--accent-light); border:0.5px solid #9FE1CB; }
+    .occupied .n { color:#085041; }
+    .occupied .st { color:#0F6E56; }
+
+    .pipeline { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; }
+    .col { background:var(--color-background-secondary); border-radius:var(--border-radius-md); padding:10px; }
+    .col-title { font-size:11px; color:var(--color-text-secondary); display:flex; justify-content:space-between; margin-bottom:8px; }
+    .item { border:var(--border); border-radius:var(--border-radius-md); background:var(--color-background-primary); padding:8px 10px; margin-bottom:7px; }
+    .item .id { font-size:12px; font-weight:500; color:var(--color-text-primary); }
+    .item .desc { font-size:11px; color:var(--color-text-secondary); margin:2px 0 6px; }
+    .btn { width:100%; border:var(--border); border-radius:var(--border-radius-md); background:var(--color-background-secondary); font-size:11px; padding:5px; cursor:pointer; color:var(--color-text-secondary); }
+
+    .track-pills { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px; }
+    .pill { font-size:12px; border:var(--border); border-radius:999px; padding:5px 12px; cursor:pointer; color:var(--color-text-secondary); background:var(--color-background-primary); }
+    .pill.active { background:var(--charcoal); color:white; border-color:var(--charcoal); }
+    .track-card { border:var(--border); border-radius:var(--border-radius-md); background:var(--color-background-primary); padding:14px; }
+    .progress { height:5px; border-radius:999px; background:var(--color-background-secondary); overflow:hidden; margin:8px 0; }
+    .fill { height:100%; background:var(--accent); }
+
+    .audit-list { border:var(--border); border-radius:var(--border-radius-md); background:var(--color-background-primary); max-height:220px; overflow:auto; }
+    .audit-item { padding:10px 12px; border-bottom:var(--border); }
+    .audit-item:last-child { border-bottom:none; }
+    .audit-main { font-size:12px; color:var(--color-text-primary); }
+    .audit-meta { font-size:11px; color:var(--color-text-secondary); margin-top:2px; }
+
+    .modal-backdrop { position:fixed; inset:0; background:rgba(0,0,0,0.25); display:none; align-items:center; justify-content:center; z-index:1000; }
+    .modal-backdrop.open { display:flex; }
+    .modal-card { width:min(420px, calc(100vw - 32px)); background:var(--color-background-primary); border:var(--border); border-radius:var(--border-radius-md); padding:14px; }
+    .modal-title { font-size:14px; font-weight:500; color:var(--color-text-primary); margin-bottom:6px; }
+    .modal-desc { font-size:12px; color:var(--color-text-secondary); margin-bottom:12px; }
+    .modal-actions { display:flex; justify-content:flex-end; gap:8px; }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <aside id="sidebar">
+      <div class="logo">
+        <h1>Tableside</h1>
+        <p>Management Site</p>
+      </div>
+      <nav class="nav">
+        <div class="nav-item active" data-view="dashboard" onclick="switchView('dashboard', this)">Dashboard</div>
+        <div class="nav-item" data-view="kitchen" onclick="switchView('kitchen', this)">Kitchen <span class="badge" id="k-badge">0</span></div>
+        <div class="nav-item" data-view="tracking" onclick="switchView('tracking', this)">Tracking</div>
+      </nav>
+    </aside>
+
+    <main id="main">
+      <div class="topbar">
+        <div class="title" id="title">Dashboard</div>
+        <div class="time" id="time">Live</div>
+      </div>
+
+      <section class="content active" id="view-dashboard">
+        <div class="metrics">
+          <div class="metric"><div class="l">Active orders</div><div class="v" id="m-active">0</div><div class="s" id="m-overdue">0 overdue</div></div>
+          <div class="metric"><div class="l">Tables occupied</div><div class="v" id="m-tables">0/0</div><div class="s">Live capacity</div></div>
+          <div class="metric"><div class="l">Avg wait time</div><div class="v" id="m-wait">0m</div><div class="s">Realtime</div></div>
+          <div class="metric"><div class="l">Revenue today</div><div class="v" id="m-revenue">₹0</div><div class="s">Paid orders only</div></div>
+        </div>
+
+        <div class="section">
+          <h3>Recent orders</h3>
+          <div class="orders-grid" id="recent"></div>
+        </div>
+
+        <div class="section">
+          <div class="section-head">
+            <h3>Table status (click to toggle)</h3>
+            <div class="table-actions">
+              <button class="small-btn" onclick="addTable()">+ Add table</button>
+              <input id="remove-table-number" class="table-input" type="number" min="1" placeholder="Table #" />
+              <button class="small-btn" onclick="removeTable()">- Remove table</button>
+            </div>
+          </div>
+          <div class="table-grid" id="tables"></div>
+        </div>
+
+        <div class="section">
+          <h3>Activity log</h3>
+          <div class="audit-list" id="audit-list"></div>
+        </div>
+      </section>
+
+      <section class="content" id="view-kitchen">
+        <div class="pipeline">
+          <div class="col"><div class="col-title">New <span id="c-new">0</span></div><div id="l-new"></div></div>
+          <div class="col"><div class="col-title">Preparing <span id="c-preparing">0</span></div><div id="l-preparing"></div></div>
+          <div class="col"><div class="col-title">Ready <span id="c-ready">0</span></div><div id="l-ready"></div></div>
+          <div class="col"><div class="col-title">Delivered <span id="c-delivered">0</span></div><div id="l-delivered"></div></div>
+        </div>
+      </section>
+
+      <section class="content" id="view-tracking">
+        <div class="track-pills" id="tpills"></div>
+        <div class="track-card" id="tcard"></div>
+      </section>
+    </main>
+  </div>
+
+  <div class="modal-backdrop" id="remove-modal">
+    <div class="modal-card">
+      <div class="modal-title">Remove table</div>
+      <div class="modal-desc" id="remove-modal-text">Are you sure?</div>
+      <div class="modal-actions">
+        <button class="small-btn" onclick="closeRemoveModal()">Cancel</button>
+        <button class="small-btn" onclick="confirmRemoveTable()">Remove</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script>
+    const socket = io();
+    let state = { menu: [], tables: [], orders: [], stats: {} };
+    let auditLogs = [];
+    let selectedOrderId = null;
+    let pendingRemoveTableNumber = null;
+
+    function money(v) { return `₹${Number(v || 0).toLocaleString('en-IN')}`; }
+
+    function switchView(view, el) {
+      document.querySelectorAll('.content').forEach((c) => c.classList.remove('active'));
+      document.getElementById(`view-${view}`).classList.add('active');
+      document.querySelectorAll('.nav-item').forEach((n) => n.classList.remove('active'));
+      if (el) el.classList.add('active');
+      document.getElementById('title').textContent = view.charAt(0).toUpperCase() + view.slice(1);
+    }
+
+    async function api(path, method = 'GET', body) {
+      const res = await fetch(path, {
+        method,
+        headers: { 'Content-Type': 'application/json', 'X-Actor': 'management-ui' },
+        body: body ? JSON.stringify(body) : undefined
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: 'Request failed' }));
+        throw new Error(err.error || 'Request failed');
+      }
+      return res.json();
+    }
+
+    function badge(order) {
+      if (order.orderType === 'dine') return `<span class="tag dine">Table ${order.tableNumber || '-'}</span>`;
+      if (order.orderType === 'takeaway') return '<span class="tag takeaway">Takeaway</span>';
+      return '<span class="tag preorder">Pre-order</span>';
+    }
+
+    function eta(order) {
+      if (order.status === 'delivered') return 'Delivered';
+      const elapsed = Math.floor((Date.now() - order.createdAt) / 60000);
+      const left = Math.max(0, order.etaMinutes - elapsed);
+      return `ETA ${left}m`;
+    }
+
+    function renderDashboard() {
+      const s = state.stats || {};
+      document.getElementById('m-active').textContent = s.activeOrders || 0;
+      document.getElementById('m-overdue').textContent = `${s.overdue || 0} overdue`;
+      document.getElementById('m-tables').textContent = `${s.occupiedTables || 0}/${s.tableCapacity || 0}`;
+      document.getElementById('m-wait').textContent = `${s.avgWait || 0}m`;
+      document.getElementById('m-revenue').textContent = money(s.revenueToday || 0);
+      document.getElementById('k-badge').textContent = (state.orders || []).filter((o) => o.status === 'new').length;
+
+      const recent = state.orders.slice(0, 3);
+      document.getElementById('recent').innerHTML = recent.length ? recent.map((o) => `
+        <div class="order-card">
+          <div class="order-head"><span class="order-id">${o.label}</span>${badge(o)}</div>
+          <div style="font-size:12px;color:var(--color-text-secondary);line-height:1.6;margin-bottom:8px;">${o.items.map((i) => `${i.name} × ${i.qty}`).join('<br>')}</div>
+          <div style="display:flex;justify-content:space-between;font-size:12px;">
+            <span style="font-weight:500;color:var(--color-text-primary);">${money(o.total)}</span>
+            <span style="color:var(--color-text-secondary);">${eta(o)}</span>
+          </div>
+        </div>
+      `).join('') : '<div class="order-card">No orders yet.</div>';
+
+      document.getElementById('tables').innerHTML = state.tables.map((t) => `
+        <div class="table-cell ${t.status}" onclick="toggleTable(${t.tableNumber})">
+          <div class="n">T${t.tableNumber}</div>
+          <div class="st">${t.status.charAt(0).toUpperCase() + t.status.slice(1)}</div>
+        </div>
+      `).join('');
+
+      const removeInput = document.getElementById('remove-table-number');
+      if (removeInput) {
+        const maxTable = state.tables.length ? Math.max(...state.tables.map((t) => t.tableNumber)) : 1;
+        removeInput.max = String(maxTable);
+      }
+    }
+
+    function formatAuditAction(log) {
+      if (log.action === 'table_added') return `Added table T${log.entityId}`;
+      if (log.action === 'table_removed') return `Removed table T${log.entityId}`;
+      if (log.action === 'table_status_toggled') return `Table T${log.entityId} status changed`;
+      if (log.action === 'order_status_changed') return `Order #${String(log.entityId).padStart(4, '0')} status updated`;
+      if (log.action === 'order_paid') return `Order #${String(log.entityId).padStart(4, '0')} marked paid`;
+      if (log.action === 'order_created') return `New order #${String(log.entityId).padStart(4, '0')} created`;
+      return `${log.action} (${log.entityType})`;
+    }
+
+    function renderAuditLogs() {
+      const container = document.getElementById('audit-list');
+      if (!auditLogs.length) {
+        container.innerHTML = '<div class="audit-item"><div class="audit-meta">No activity yet.</div></div>';
+        return;
+      }
+      container.innerHTML = auditLogs.map((log) => `
+        <div class="audit-item">
+          <div class="audit-main">${formatAuditAction(log)}</div>
+          <div class="audit-meta">${new Date(log.createdAt).toLocaleString('en-IN')} · ${log.actor}</div>
+        </div>
+      `).join('');
+    }
+
+    function nextStatus(st) {
+      if (st === 'new') return 'preparing';
+      if (st === 'preparing') return 'ready';
+      if (st === 'ready') return 'delivered';
+      return 'delivered';
+    }
+
+    function renderKitchen() {
+      const groups = { new: [], preparing: [], ready: [], delivered: [] };
+      state.orders.forEach((o) => groups[o.status]?.push(o));
+      ['new', 'preparing', 'ready', 'delivered'].forEach((st) => {
+        document.getElementById(`c-${st}`).textContent = groups[st].length;
+        document.getElementById(`l-${st}`).innerHTML = groups[st].length ? groups[st].map((o) => `
+          <div class="item" style="opacity:${st === 'delivered' ? '0.65' : '1'};">
+            <div style="display:flex;justify-content:space-between;align-items:center;gap:6px;">
+              <span class="id">${o.label}</span>${badge(o)}
+            </div>
+            <div class="desc">${o.items.map((i) => `${i.name} × ${i.qty}`).join(', ')}</div>
+            <div style="font-size:10px;color:var(--color-text-tertiary);margin-bottom:6px;">${eta(o)}</div>
+            ${st === 'delivered' ? '' : `<button class="btn" onclick="changeStatus(${o.id}, '${nextStatus(st)}')">Move to ${nextStatus(st)}</button>`}
+          </div>
+        `).join('') : '<div class="item"><div style="font-size:11px;color:var(--color-text-tertiary);">No orders</div></div>';
+      });
+    }
+
+    function renderTracking() {
+      if (!state.orders.length) {
+        document.getElementById('tpills').innerHTML = '';
+        document.getElementById('tcard').textContent = 'No orders for tracking.';
+        return;
+      }
+      if (!selectedOrderId || !state.orders.some((o) => o.id === selectedOrderId)) selectedOrderId = state.orders[0].id;
+
+      document.getElementById('tpills').innerHTML = state.orders.slice(0, 8).map((o) => `
+        <div class="pill ${o.id === selectedOrderId ? 'active' : ''}" onclick="selectOrder(${o.id})">${o.label}</div>
+      `).join('');
+
+      const o = state.orders.find((x) => x.id === selectedOrderId);
+      document.getElementById('tcard').innerHTML = `
+        <div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start;">
+          <div>
+            <div style="font-size:15px;font-weight:500;color:var(--color-text-primary);">${o.label} — ${o.items.map((i) => `${i.name} × ${i.qty}`).join(', ')}</div>
+            <div style="font-size:12px;color:var(--color-text-secondary);margin-top:3px;">${o.orderType}${o.tableNumber ? ` · Table ${o.tableNumber}` : ''} · ${money(o.total)}</div>
+          </div>
+          <div style="font-size:12px;color:var(--accent-dark);background:var(--accent-light);padding:4px 10px;border-radius:999px;">${eta(o)}</div>
+        </div>
+        <div class="progress"><div class="fill" style="width:${o.progress || 0}%;"></div></div>
+        <div style="font-size:11px;color:var(--color-text-secondary);">${o.progress || 0}% complete · ${o.status} · ${o.paid ? 'Paid' : 'Pending payment'}</div>
+      `;
+    }
+
+    function renderAll() {
+      renderDashboard();
+      renderKitchen();
+      renderTracking();
+      renderAuditLogs();
+    }
+
+    async function changeStatus(orderId, status) {
+      try {
+        await api(`/api/orders/${orderId}/status`, 'POST', { status });
+      } catch (e) { alert(e.message); }
+    }
+
+    async function toggleTable(tableNumber) {
+      try {
+        await api(`/api/tables/${tableNumber}/toggle`, 'POST', {});
+      } catch (e) { alert(e.message); }
+    }
+
+    async function addTable() {
+      try {
+        await api('/api/tables', 'POST', {});
+      } catch (e) { alert(e.message); }
+    }
+
+    function openRemoveModal(tableNumber) {
+      pendingRemoveTableNumber = tableNumber;
+      document.getElementById('remove-modal-text').textContent = `Remove table T${tableNumber}? Only free tables can be removed.`;
+      document.getElementById('remove-modal').classList.add('open');
+    }
+
+    function closeRemoveModal() {
+      pendingRemoveTableNumber = null;
+      document.getElementById('remove-modal').classList.remove('open');
+    }
+
+    async function confirmRemoveTable() {
+      if (!pendingRemoveTableNumber) return;
+      try {
+        await api(`/api/tables/${pendingRemoveTableNumber}`, 'DELETE');
+        const input = document.getElementById('remove-table-number');
+        input.value = '';
+        closeRemoveModal();
+      } catch (e) {
+        alert(e.message);
+      }
+    }
+
+    async function removeTable() {
+      try {
+        const input = document.getElementById('remove-table-number');
+        const requested = Number(input.value || 0);
+        let tableNumber = requested;
+
+        if (!tableNumber) {
+          const freeTables = state.tables.filter((t) => t.status === 'free').map((t) => t.tableNumber);
+          if (!freeTables.length) {
+            alert('No free table available to remove. Enter a table number manually.');
+            return;
+          }
+          tableNumber = Math.max(...freeTables);
+        }
+
+        openRemoveModal(tableNumber);
+      } catch (e) { alert(e.message); }
+    }
+
+    async function loadAuditLogs() {
+      try {
+        const data = await api('/api/audit-logs?limit=30');
+        auditLogs = data.logs || [];
+        renderAuditLogs();
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
+    function selectOrder(orderId) {
+      selectedOrderId = orderId;
+      renderTracking();
+    }
+
+    function updateTime() {
+      const now = new Date();
+      document.getElementById('time').textContent = `Live · ${now.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}`;
+    }
+
+    socket.on('state:update', (newState) => {
+      state = newState;
+      renderAll();
+      loadAuditLogs();
+    });
+
+    (async function init() {
+      updateTime();
+      setInterval(updateTime, 30000);
+      const data = await api('/api/state');
+      state = data;
+      await loadAuditLogs();
+      renderAll();
+    })();
+  </script>
+</body>
+</html>

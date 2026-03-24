@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Client Site - Tableside</title>
+  <style>
+    :root {
+      --charcoal: #2C2C2A;
+      --accent: #1D9E75;
+      --accent-light: #E1F5EE;
+      --accent-dark: #085041;
+      --warn: #BA7517;
+      --warn-light: #FAEEDA;
+      --info: #185FA5;
+      --info-light: #E6F1FB;
+      --border: 0.5px solid var(--color-border-tertiary);
+      --radius: var(--border-radius-lg);
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: var(--font-sans); }
+    body { padding: 18px; background: var(--color-background-primary); }
+    #app { display: flex; min-height: 680px; border: var(--border); border-radius: var(--border-radius-xl); overflow: hidden; background: var(--color-background-tertiary); }
+
+    #sidebar { width: 220px; background: var(--color-background-primary); border-right: var(--border); }
+    .logo { padding: 20px 16px; border-bottom: var(--border); }
+    .logo h1 { font-size: 15px; color: var(--color-text-primary); }
+    .logo p { font-size: 11px; color: var(--color-text-secondary); margin-top: 2px; }
+    .nav { padding: 12px 0; }
+    .nav-item { padding: 10px 16px; cursor: pointer; font-size: 13px; color: var(--color-text-secondary); }
+    .nav-item.active { background: var(--accent-light); color: var(--accent-dark); font-weight: 500; }
+
+    #main { flex: 1; display: flex; flex-direction: column; }
+    .topbar { height: 52px; padding: 0 20px; border-bottom: var(--border); background: var(--color-background-primary); display: flex; align-items: center; justify-content: space-between; }
+    .title { font-size: 15px; font-weight: 500; color: var(--color-text-primary); }
+    .time { font-size: 12px; color: var(--color-text-secondary); }
+
+    .content { display: none; flex: 1; padding: 20px; overflow-y: auto; }
+    .content.active { display: block; }
+
+    .customer-wrap { display:flex; gap:16px; }
+    .menu-panel { flex:1; }
+    .cart-panel { width:260px; flex-shrink:0; }
+    .order-type-tabs { display:flex; background:var(--color-background-secondary); border-radius:var(--border-radius-md); padding:3px; margin-bottom:14px; }
+    .order-type-tab { flex:1; text-align:center; padding:6px 4px; font-size:12px; cursor:pointer; color:var(--color-text-secondary); border-radius:6px; }
+    .order-type-tab.active { background:var(--color-background-primary); color:var(--color-text-primary); font-weight:500; }
+    .field-label { font-size:11px; color:var(--color-text-secondary); margin-bottom:4px; }
+    .field-input, .notes-input { width:100%; border:var(--border); border-radius:var(--border-radius-md); padding:6px 8px; background:var(--color-background-primary); color:var(--color-text-primary); font-size:12px; }
+    .notes-input { resize:none; margin:10px 0 8px; }
+    .eta { display:none; align-items:center; gap:6px; font-size:11px; color:var(--accent-dark); background:var(--accent-light); padding:6px 8px; border-radius:var(--border-radius-md); margin-bottom:10px; }
+
+    .menu-categories { display:flex; gap:6px; margin-bottom:12px; flex-wrap:wrap; }
+    .cat { padding:4px 11px; border-radius:999px; border:var(--border); font-size:12px; cursor:pointer; color:var(--color-text-secondary); background:var(--color-background-primary); }
+    .cat.active { background:var(--charcoal); border-color:var(--charcoal); color:white; }
+
+    .menu-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; }
+    .menu-item { border:var(--border); border-radius:var(--border-radius-md); background:var(--color-background-primary); padding:12px; }
+    .emoji { font-size:24px; display:block; margin-bottom:6px; }
+    .name { font-size:13px; color:var(--color-text-primary); font-weight:500; }
+    .desc { font-size:11px; color:var(--color-text-secondary); margin:2px 0 6px; }
+    .foot { display:flex; justify-content:space-between; align-items:center; }
+    .price { font-size:13px; color:var(--color-text-primary); font-weight:500; }
+    .add { width:22px; height:22px; border-radius:50%; background:var(--charcoal); color:white; border:none; cursor:pointer; font-size:16px; }
+
+    .box { border:var(--border); border-radius:var(--border-radius-md); background:var(--color-background-primary); padding:14px; }
+    .box h3 { font-size:13px; color:var(--color-text-primary); margin-bottom:12px; }
+    .cart-items { min-height:80px; margin-bottom:12px; }
+    .cart-item { display:flex; gap:8px; align-items:center; padding:6px 0; border-bottom:var(--border); }
+    .cart-item:last-child { border-bottom:none; }
+    .qty { width:20px; height:20px; border-radius:4px; background:var(--color-background-secondary); display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:500; }
+    .nm { flex:1; font-size:12px; color:var(--color-text-primary); }
+    .pr { font-size:12px; color:var(--color-text-secondary); }
+    .empty { font-size:12px; color:var(--color-text-tertiary); text-align:center; padding:20px 0; }
+    .row { display:flex; justify-content:space-between; font-size:12px; color:var(--color-text-secondary); margin-bottom:4px; }
+    .row.total { font-size:14px; font-weight:500; color:var(--color-text-primary); margin-top:6px; }
+    .btn { width:100%; background:var(--charcoal); color:white; border:none; border-radius:var(--border-radius-md); padding:9px; font-size:13px; font-weight:500; cursor:pointer; }
+
+    .track-pills { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px; }
+    .pill { font-size:12px; border:var(--border); border-radius:999px; padding:5px 12px; cursor:pointer; color:var(--color-text-secondary); background:var(--color-background-primary); }
+    .pill.active { background:var(--charcoal); color:white; border-color:var(--charcoal); }
+    .track-card { border:var(--border); border-radius:var(--border-radius-md); background:var(--color-background-primary); padding:14px; }
+    .progress { height:5px; border-radius:999px; background:var(--color-background-secondary); overflow:hidden; margin:8px 0; }
+    .fill { height:100%; background:var(--accent); }
+
+    .payment-wrap { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+    .pay-card { border:var(--border); border-radius:var(--border-radius-md); background:var(--color-background-primary); padding:18px; }
+    .pay-card h3 { font-size:13px; color:var(--color-text-primary); margin-bottom:14px; }
+    .methods { display:flex; gap:6px; margin-bottom:12px; }
+    .method { flex:1; font-size:12px; border:var(--border); border-radius:var(--border-radius-md); padding:8px; text-align:center; color:var(--color-text-secondary); cursor:pointer; }
+    .method.active { border-color:var(--charcoal); background:var(--color-background-secondary); color:var(--color-text-primary); font-weight:500; }
+    .sum-row { display:flex; justify-content:space-between; font-size:13px; color:var(--color-text-secondary); padding:5px 0; border-bottom:var(--border); }
+    .sum-row.total { border-bottom:none; font-size:15px; font-weight:500; color:var(--color-text-primary); padding-top:8px; }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <aside id="sidebar">
+      <div class="logo">
+        <h1>Tableside</h1>
+        <p>Client Site</p>
+      </div>
+      <nav class="nav">
+        <div class="nav-item active" data-view="order" onclick="switchView('order', this)">Place order</div>
+        <div class="nav-item" data-view="tracking" onclick="switchView('tracking', this)">Track order</div>
+        <div class="nav-item" data-view="payment" onclick="switchView('payment', this)">Payment</div>
+      </nav>
+    </aside>
+
+    <main id="main">
+      <div class="topbar">
+        <div class="title" id="title">Place Order</div>
+        <div class="time" id="time">Live</div>
+      </div>
+
+      <section class="content active" id="view-order">
+        <div class="customer-wrap">
+          <div class="menu-panel">
+            <div class="order-type-tabs">
+              <div class="order-type-tab active" onclick="setOrderType(this, 'dine')">Dine-in</div>
+              <div class="order-type-tab" onclick="setOrderType(this, 'takeaway')">Takeaway</div>
+              <div class="order-type-tab" onclick="setOrderType(this, 'preorder')">Pre-order</div>
+            </div>
+
+            <div id="table-group" style="margin-bottom:10px;">
+              <div class="field-label">Table number</div>
+              <input id="table-number" class="field-input" type="number" min="1" max="14" value="1" />
+            </div>
+            <div id="eta" class="eta">🕐 Schedule your pickup time and we will have it ready.</div>
+
+            <div class="menu-categories">
+              <div class="cat active" onclick="setCat(this, 'all')">All</div>
+              <div class="cat" onclick="setCat(this, 'mains')">Mains</div>
+              <div class="cat" onclick="setCat(this, 'breads')">Breads</div>
+              <div class="cat" onclick="setCat(this, 'drinks')">Drinks</div>
+              <div class="cat" onclick="setCat(this, 'starters')">Starters</div>
+            </div>
+
+            <div class="menu-grid" id="menu"></div>
+          </div>
+
+          <div class="cart-panel">
+            <div class="box">
+              <h3>Your order</h3>
+              <div class="cart-items" id="cart-items"><div class="empty">Nothing added yet</div></div>
+              <textarea id="notes" class="notes-input" rows="2" placeholder="Add notes (allergies, spice level...)"></textarea>
+              <div class="row"><span>Subtotal</span><span id="sub">₹0</span></div>
+              <div class="row"><span>Tax (5%)</span><span id="tax">₹0</span></div>
+              <div class="row total"><span>Total</span><span id="total">₹0</span></div>
+              <button class="btn" onclick="placeOrder()">Place order & checkout →</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="content" id="view-tracking">
+        <div class="track-pills" id="tpills"></div>
+        <div class="track-card" id="tcard"></div>
+      </section>
+
+      <section class="content" id="view-payment">
+        <div class="payment-wrap">
+          <div class="pay-card">
+            <h3>Payment details</h3>
+            <div class="methods">
+              <div class="method active" onclick="setMethod(this)">Card</div>
+              <div class="method" onclick="setMethod(this)">UPI</div>
+              <div class="method" onclick="setMethod(this)">Cash</div>
+            </div>
+            <button class="btn" id="pay-btn" onclick="payOrder()">Pay ₹0</button>
+          </div>
+          <div class="pay-card">
+            <h3>Order summary</h3>
+            <div id="pay-summary"></div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script>
+    const socket = io();
+    let state = { menu: [], tables: [], orders: [], stats: {} };
+    let cart = [];
+    let currentCat = 'all';
+    let orderType = 'dine';
+    let selectedTrackingOrderId = null;
+    let pendingPaymentOrderId = null;
+
+    function money(v) { return `₹${Number(v || 0).toLocaleString('en-IN')}`; }
+
+    async function api(path, method = 'GET', body) {
+      const res = await fetch(path, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: body ? JSON.stringify(body) : undefined
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: 'Request failed' }));
+        throw new Error(err.error || 'Request failed');
+      }
+      return res.json();
+    }
+
+    function switchView(view, el) {
+      document.querySelectorAll('.content').forEach((c) => c.classList.remove('active'));
+      document.getElementById(`view-${view}`).classList.add('active');
+      document.querySelectorAll('.nav-item').forEach((n) => n.classList.remove('active'));
+      if (el) el.classList.add('active');
+      document.getElementById('title').textContent = view.charAt(0).toUpperCase() + view.slice(1);
+    }
+
+    function setCat(el, cat) {
+      document.querySelectorAll('.cat').forEach((c) => c.classList.remove('active'));
+      el.classList.add('active');
+      currentCat = cat;
+      renderMenu();
+    }
+
+    function setOrderType(el, type) {
+      document.querySelectorAll('.order-type-tab').forEach((t) => t.classList.remove('active'));
+      el.classList.add('active');
+      orderType = type;
+      document.getElementById('eta').style.display = (type === 'takeaway' || type === 'preorder') ? 'flex' : 'none';
+      document.getElementById('table-group').style.display = type === 'dine' ? 'block' : 'none';
+    }
+
+    function setMethod(el) {
+      document.querySelectorAll('.method').forEach((m) => m.classList.remove('active'));
+      el.classList.add('active');
+    }
+
+    function renderMenu() {
+      const menu = currentCat === 'all' ? state.menu : state.menu.filter((m) => m.cat === currentCat);
+      document.getElementById('menu').innerHTML = menu.map((m) => `
+        <div class="menu-item">
+          <span class="emoji">${m.emoji}</span>
+          <div class="name">${m.name}</div>
+          <div class="desc">${m.desc}</div>
+          <div class="foot">
+            <span class="price">${money(m.price)}</span>
+            <button class="add" onclick="addToCart(${m.id})">+</button>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    function addToCart(menuItemId) {
+      const item = state.menu.find((m) => m.id === menuItemId);
+      if (!item) return;
+      const existing = cart.find((c) => c.menuItemId === menuItemId);
+      if (existing) existing.qty += 1;
+      else cart.push({ menuItemId, name: item.name, price: item.price, qty: 1 });
+      renderCart();
+    }
+
+    function renderCart() {
+      const box = document.getElementById('cart-items');
+      if (!cart.length) {
+        box.innerHTML = '<div class="empty">Nothing added yet</div>';
+        updateTotals(0);
+        return;
+      }
+      box.innerHTML = cart.map((i) => `
+        <div class="cart-item">
+          <div class="qty">${i.qty}</div>
+          <div class="nm">${i.name}</div>
+          <div class="pr">${money(i.price * i.qty)}</div>
+        </div>
+      `).join('');
+      updateTotals(cart.reduce((s, i) => s + i.price * i.qty, 0));
+    }
+
+    function updateTotals(subtotal) {
+      const tax = Math.round(subtotal * 0.05);
+      document.getElementById('sub').textContent = money(subtotal);
+      document.getElementById('tax').textContent = money(tax);
+      document.getElementById('total').textContent = money(subtotal + tax);
+    }
+
+    async function placeOrder() {
+      if (!cart.length) return;
+      try {
+        const tableNumber = Number(document.getElementById('table-number').value || 1);
+        const notes = document.getElementById('notes').value || '';
+        const response = await api('/api/orders', 'POST', {
+          orderType,
+          tableNumber,
+          notes,
+          items: cart.map((i) => ({ menuItemId: i.menuItemId, qty: i.qty }))
+        });
+        pendingPaymentOrderId = response.order.id;
+        selectedTrackingOrderId = response.order.id;
+        cart = [];
+        document.getElementById('notes').value = '';
+        switchView('payment', document.querySelector('.nav-item[data-view="payment"]'));
+        renderCart();
+      } catch (e) {
+        alert(e.message);
+      }
+    }
+
+    function renderTracking() {
+      if (!state.orders.length) {
+        document.getElementById('tpills').innerHTML = '';
+        document.getElementById('tcard').textContent = 'No orders to track.';
+        return;
+      }
+
+      if (!selectedTrackingOrderId || !state.orders.some((o) => o.id === selectedTrackingOrderId)) {
+        selectedTrackingOrderId = state.orders[0].id;
+      }
+
+      document.getElementById('tpills').innerHTML = state.orders.slice(0, 8).map((o) => `
+        <div class="pill ${o.id === selectedTrackingOrderId ? 'active' : ''}" onclick="selectOrder(${o.id})">${o.label}</div>
+      `).join('');
+
+      const o = state.orders.find((x) => x.id === selectedTrackingOrderId);
+      const elapsed = Math.floor((Date.now() - o.createdAt) / 60000);
+      const left = o.status === 'delivered' ? 0 : Math.max(0, o.etaMinutes - elapsed);
+      document.getElementById('tcard').innerHTML = `
+        <div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start;">
+          <div>
+            <div style="font-size:15px;font-weight:500;color:var(--color-text-primary);">${o.label} — ${o.items.map((i) => `${i.name} × ${i.qty}`).join(', ')}</div>
+            <div style="font-size:12px;color:var(--color-text-secondary);margin-top:3px;">${o.orderType}${o.tableNumber ? ` · Table ${o.tableNumber}` : ''} · ${money(o.total)}</div>
+          </div>
+          <div style="font-size:12px;color:var(--accent-dark);background:var(--accent-light);padding:4px 10px;border-radius:999px;">${o.status === 'delivered' ? 'Delivered' : `ETA ${left}m`}</div>
+        </div>
+        <div class="progress"><div class="fill" style="width:${o.progress || 0}%;"></div></div>
+        <div style="font-size:11px;color:var(--color-text-secondary);">${o.progress || 0}% complete · ${o.status} · ${o.paid ? 'Paid' : 'Pending payment'}</div>
+      `;
+    }
+
+    function renderPayment() {
+      const order = state.orders.find((o) => o.id === pendingPaymentOrderId) || state.orders.find((o) => o.paid === 0) || null;
+      const sum = document.getElementById('pay-summary');
+      const btn = document.getElementById('pay-btn');
+
+      if (!order) {
+        sum.innerHTML = '<div class="sum-row">No pending order</div>';
+        btn.textContent = 'Pay ₹0';
+        btn.disabled = true;
+        return;
+      }
+
+      pendingPaymentOrderId = order.id;
+      btn.disabled = order.paid === 1;
+      btn.textContent = order.paid ? 'Already paid' : `Pay ${money(order.total)}`;
+
+      sum.innerHTML = `
+        ${order.items.map((i) => `<div class="sum-row"><span>${i.name} × ${i.qty}</span><span>${money(i.price * i.qty)}</span></div>`).join('')}
+        <div class="sum-row"><span>Tax (5%)</span><span>${money(order.tax)}</span></div>
+        <div class="sum-row"><span>Service</span><span>${money(order.service)}</span></div>
+        <div class="sum-row total"><span>Total</span><span>${money(order.total)}</span></div>
+        <div style="margin-top:10px;font-size:11px;color:var(--color-text-secondary);">${order.label} · ${order.paid ? 'Paid' : 'Payment pending'}</div>
+      `;
+    }
+
+    async function payOrder() {
+      if (!pendingPaymentOrderId) return;
+      try {
+        await api(`/api/orders/${pendingPaymentOrderId}/pay`, 'POST', {});
+      } catch (e) {
+        alert(e.message);
+      }
+    }
+
+    function selectOrder(id) {
+      selectedTrackingOrderId = id;
+      renderTracking();
+    }
+
+    function renderAll() {
+      renderMenu();
+      renderCart();
+      renderTracking();
+      renderPayment();
+    }
+
+    function updateTime() {
+      const now = new Date();
+      document.getElementById('time').textContent = `Live · ${now.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}`;
+    }
+
+    socket.on('state:update', (newState) => {
+      state = newState;
+      renderAll();
+    });
+
+    (async function init() {
+      updateTime();
+      setInterval(updateTime, 30000);
+      const data = await api('/api/state');
+      state = data;
+      renderAll();
+    })();
+  </script>
+</body>
+</html>

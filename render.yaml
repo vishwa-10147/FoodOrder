@@ -1,0 +1,14 @@
+services:
+  - type: web
+    name: food-ordering-app
+    env: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PGSSL
+        value: "true"
+      - key: DATABASE_URL
+        sync: false
