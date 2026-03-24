@@ -56,12 +56,26 @@
     .tag.takeaway { background: var(--warn-light); color: var(--warn); }
     .tag.preorder { background: var(--accent-light); color: var(--accent-dark); }
 
+    .table-layout { display:grid; grid-template-columns:minmax(0, 2fr) minmax(260px, 1fr); gap:10px; align-items:start; }
     .table-grid { display:grid; grid-template-columns:repeat(7,minmax(0,1fr)); gap:8px; }
+    .menu-side { border:var(--border); border-radius:var(--border-radius-md); background:var(--color-background-primary); padding:10px; min-height:140px; }
+    .menu-side-title { font-size:12px; font-weight:500; color:var(--color-text-primary); margin-bottom:8px; }
+    .menu-side-empty { font-size:11px; color:var(--color-text-secondary); }
+    .menu-cat { margin-bottom:8px; }
+    .menu-cat:last-child { margin-bottom:0; }
+    .menu-cat-name { font-size:11px; color:var(--color-text-secondary); text-transform:capitalize; margin-bottom:4px; }
+    .menu-row { font-size:12px; color:var(--color-text-primary); display:flex; justify-content:space-between; align-items:center; gap:8px; padding:2px 0; }
+    .qty-controls { display:flex; align-items:center; gap:6px; }
+    .qty-btn { width:22px; height:22px; border:var(--border); border-radius:var(--border-radius-md); background:var(--color-background-secondary); color:var(--color-text-primary); cursor:pointer; font-size:14px; line-height:1; }
+    .qty-val { min-width:16px; text-align:center; font-size:12px; color:var(--color-text-primary); }
+    .menu-submit-wrap { margin-top:10px; padding-top:8px; border-top:var(--border); display:flex; justify-content:space-between; align-items:center; gap:8px; }
+    .menu-submit-note { font-size:11px; color:var(--color-text-secondary); }
     .section-head { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:10px; }
     .section-head h3 { margin-bottom:0; }
     .table-actions { display:flex; align-items:center; gap:6px; }
     .table-input { width:88px; border:var(--border); border-radius:var(--border-radius-md); padding:5px 7px; font-size:11px; color:var(--color-text-primary); background:var(--color-background-primary); }
     .small-btn { border:var(--border); border-radius:var(--border-radius-md); background:var(--color-background-secondary); font-size:11px; padding:6px 8px; cursor:pointer; color:var(--color-text-secondary); }
+    .small-btn:disabled { opacity:0.5; cursor:not-allowed; }
     .table-cell { cursor:pointer; padding:10px 6px; border-radius:var(--border-radius-md); border:var(--border); text-align:center; }
     .table-cell .n { font-size:11px; font-weight:500; }
     .table-cell .st { font-size:10px; }
@@ -96,6 +110,55 @@
     .audit-main { font-size:12px; color:var(--color-text-primary); }
     .audit-meta { font-size:11px; color:var(--color-text-secondary); margin-top:2px; }
 
+    .menu-admin-list { border:var(--border); border-radius:var(--border-radius-md); background:var(--color-background-primary); overflow:hidden; }
+    .menu-admin-form { border:var(--border); border-radius:var(--border-radius-md); background:var(--color-background-primary); padding:10px; margin-bottom:10px; }
+    .menu-admin-form-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px; margin-bottom:8px; }
+    .menu-admin-input { width:100%; border:var(--border); border-radius:var(--border-radius-md); padding:6px 8px; font-size:12px; color:var(--color-text-primary); background:var(--color-background-primary); }
+    .menu-admin-form-actions { display:flex; align-items:center; justify-content:space-between; gap:8px; }
+    .menu-admin-item { display:flex; align-items:center; justify-content:space-between; gap:8px; padding:10px 12px; border-bottom:var(--border); }
+    .menu-admin-item:last-child { border-bottom:none; }
+    .menu-admin-name { font-size:12px; color:var(--color-text-primary); }
+    .menu-admin-meta { font-size:11px; color:var(--color-text-secondary); margin-top:2px; }
+    .menu-admin-actions { display:flex; align-items:center; gap:6px; }
+    .state-btn { border:var(--border); border-radius:var(--border-radius-md); background:var(--color-background-secondary); color:var(--color-text-secondary); font-size:11px; padding:5px 8px; cursor:pointer; }
+    .state-btn.active.available { background:var(--accent-light); color:var(--accent-dark); border-color:#9FE1CB; }
+    .state-btn.active.unavailable { background:var(--warn-light); color:var(--warn); border-color:#FAC775; }
+    .state-btn.active.free { background:var(--color-background-secondary); color:var(--color-text-primary); }
+    .state-btn.active.ordering { background:var(--warn-light); color:#854F0B; border-color:#FAC775; }
+    .state-btn.active.occupied { background:var(--accent-light); color:var(--accent-dark); border-color:#9FE1CB; }
+
+    .menu-orders-list { border:var(--border); border-radius:var(--border-radius-md); background:var(--color-background-primary); overflow:hidden; }
+    .menu-order-item { padding:10px 12px; border-bottom:var(--border); }
+    .menu-order-item:last-child { border-bottom:none; }
+    .menu-order-head { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:6px; }
+    .menu-order-id { font-size:12px; font-weight:500; color:var(--color-text-primary); }
+    .menu-order-time { font-size:11px; color:var(--color-text-secondary); }
+    .menu-order-meta { font-size:11px; color:var(--color-text-secondary); margin-bottom:6px; }
+    .menu-order-lines { font-size:12px; color:var(--color-text-primary); line-height:1.6; }
+    .menu-order-total { margin-top:6px; font-size:12px; font-weight:500; color:var(--color-text-primary); }
+
+    .receipt { border:var(--border); border-radius:var(--border-radius-md); padding:10px; background:var(--color-background-primary); }
+    .receipt.compact { padding:8px; }
+    .receipt-title { font-size:13px; font-weight:600; color:var(--color-text-primary); letter-spacing:0.6px; }
+    .receipt-bill { font-size:12px; color:var(--color-text-primary); margin-top:2px; }
+    .receipt-head-row { display:flex; justify-content:space-between; gap:8px; margin-top:4px; font-size:11px; color:var(--color-text-secondary); }
+    .receipt-divider { border-top:var(--border); margin:8px 0; }
+    .receipt-grid-head, .receipt-grid-row { display:grid; grid-template-columns:minmax(0, 1fr) 52px 72px 84px; gap:8px; align-items:center; }
+    .receipt-grid-head { font-size:11px; color:var(--color-text-secondary); }
+    .receipt-grid-row { font-size:12px; color:var(--color-text-primary); margin-top:4px; }
+    .receipt-grid-row span:nth-child(2), .receipt-grid-row span:nth-child(3), .receipt-grid-row span:nth-child(4),
+    .receipt-grid-head span:nth-child(2), .receipt-grid-head span:nth-child(3), .receipt-grid-head span:nth-child(4) { text-align:right; }
+    .receipt-total-line { display:flex; justify-content:space-between; font-size:12px; color:var(--color-text-primary); margin-top:4px; }
+    .receipt-total-line.grand { font-size:14px; font-weight:600; }
+    .receipt-foot { margin-top:8px; font-size:11px; color:var(--color-text-secondary); }
+
+    .table-status-admin-list { border:var(--border); border-radius:var(--border-radius-md); background:var(--color-background-primary); overflow:hidden; }
+    .table-status-admin-item { display:flex; align-items:center; justify-content:space-between; gap:8px; padding:10px 12px; border-bottom:var(--border); }
+    .table-status-admin-item:last-child { border-bottom:none; }
+    .table-status-admin-name { font-size:12px; color:var(--color-text-primary); }
+    .table-status-admin-meta { font-size:11px; color:var(--color-text-secondary); margin-top:2px; }
+    .table-status-admin-actions { display:flex; align-items:center; gap:6px; }
+
     .modal-backdrop { position:fixed; inset:0; background:rgba(0,0,0,0.25); display:none; align-items:center; justify-content:center; z-index:1000; }
     .modal-backdrop.open { display:flex; }
     .modal-card { width:min(420px, calc(100vw - 32px)); background:var(--color-background-primary); border:var(--border); border-radius:var(--border-radius-md); padding:14px; }
@@ -115,6 +178,7 @@
         <div class="nav-item active" data-view="dashboard" onclick="switchView('dashboard', this)">Dashboard</div>
         <div class="nav-item" data-view="kitchen" onclick="switchView('kitchen', this)">Kitchen <span class="badge" id="k-badge">0</span></div>
         <div class="nav-item" data-view="tracking" onclick="switchView('tracking', this)">Tracking</div>
+        <div class="nav-item" data-view="menu" onclick="switchView('menu', this)">Menu</div>
       </nav>
     </aside>
 
@@ -139,14 +203,22 @@
 
         <div class="section">
           <div class="section-head">
-            <h3>Table status (click to toggle)</h3>
+            <h3>Table status (click free table to toggle · click ordering/occupied table to view menu)</h3>
             <div class="table-actions">
               <button class="small-btn" onclick="addTable()">+ Add table</button>
               <input id="remove-table-number" class="table-input" type="number" min="1" placeholder="Table #" />
               <button class="small-btn" onclick="removeTable()">- Remove table</button>
             </div>
           </div>
-          <div class="table-grid" id="tables"></div>
+          <div class="table-layout">
+            <div class="table-grid" id="tables"></div>
+            <div class="menu-side" id="ordering-menu-panel"></div>
+          </div>
+        </div>
+
+        <div class="section">
+          <h3>Table status switch</h3>
+          <div class="table-status-admin-list" id="dashboard-table-status-list"></div>
         </div>
 
         <div class="section">
@@ -167,6 +239,35 @@
       <section class="content" id="view-tracking">
         <div class="track-pills" id="tpills"></div>
         <div class="track-card" id="tcard"></div>
+      </section>
+
+      <section class="content" id="view-menu">
+        <div class="section">
+          <h3>Menu availability</h3>
+          <div class="menu-admin-form">
+            <div class="menu-admin-form-grid">
+              <input id="menu-name" class="menu-admin-input" placeholder="Food name" />
+              <input id="menu-price" class="menu-admin-input" type="number" min="1" placeholder="Cost (₹)" />
+              <input id="menu-cat" class="menu-admin-input" placeholder="Category (mains/drinks...)" />
+              <input id="menu-emoji" class="menu-admin-input" placeholder="Emoji (optional)" />
+              <input id="menu-desc" class="menu-admin-input" placeholder="Description (optional)" />
+              <input id="menu-delete-id" class="menu-admin-input" type="number" min="1" placeholder="Delete item ID" />
+            </div>
+            <div class="menu-admin-form-actions">
+              <div class="menu-admin-meta">Customize menu by adding/removing items.</div>
+              <div style="display:flex; gap:6px;">
+                <button class="small-btn" onclick="addMenuItem()">+ Add item</button>
+                <button class="small-btn" onclick="deleteMenuItemByInput()">- Delete item</button>
+              </div>
+            </div>
+          </div>
+          <div class="menu-admin-list" id="menu-admin-list"></div>
+        </div>
+
+        <div class="section">
+          <h3>Order list</h3>
+          <div class="menu-orders-list" id="menu-order-list"></div>
+        </div>
       </section>
     </main>
   </div>
@@ -189,8 +290,61 @@
     let auditLogs = [];
     let selectedOrderId = null;
     let pendingRemoveTableNumber = null;
+    let selectedOrderingTableNumber = null;
+    const tableOrderDrafts = {};
 
     function money(v) { return `₹${Number(v || 0).toLocaleString('en-IN')}`; }
+
+    function escapeHtml(value) {
+      return String(value || '')
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#39;');
+    }
+
+    function orderSubtotal(order) {
+      const computed = (order.items || []).reduce((sum, item) => sum + (Number(item.price || 0) * Number(item.qty || 0)), 0);
+      return Number(order.subtotal || computed);
+    }
+
+    // Shared receipt renderer used in dashboard cards, tracking, and menu order list for consistent bills.
+    function receiptMarkup(order, compact = false) {
+      const createdAt = new Date(order.createdAt || Date.now());
+      const dateText = createdAt.toLocaleDateString('en-GB');
+      const timeText = createdAt.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: false });
+      const subtotal = orderSubtotal(order);
+      const tax = Number(order.tax || 0);
+      const service = Number(order.service || 0);
+      const total = Number(order.total || (subtotal + tax + service));
+
+      return `
+        <div class="receipt ${compact ? 'compact' : ''}">
+          <div class="receipt-title">RESTAURANT</div>
+          <div class="receipt-bill">Bill : ${escapeHtml(order.label || '-')}</div>
+          <div class="receipt-head-row"><span>Date : ${dateText}</span><span>Time : ${timeText}</span></div>
+          <div class="receipt-head-row"><span>Table : ${order.tableNumber ? `T${order.tableNumber}` : '-'}</span><span>${escapeHtml(order.orderType || '-')}</span></div>
+          <div class="receipt-divider"></div>
+          <div class="receipt-grid-head"><span>Item Name</span><span>Qty.</span><span>Rate</span><span>Amount</span></div>
+          ${(order.items || []).map((item) => `
+            <div class="receipt-grid-row">
+              <span>${escapeHtml(item.name)}</span>
+              <span>${Number(item.qty || 0)}</span>
+              <span>${money(item.price || 0)}</span>
+              <span>${money(Number(item.price || 0) * Number(item.qty || 0))}</span>
+            </div>
+          `).join('')}
+          <div class="receipt-divider"></div>
+          <div class="receipt-total-line"><span>Sub Total</span><span>${money(subtotal)}</span></div>
+          <div class="receipt-total-line"><span>Tax</span><span>${money(tax)}</span></div>
+          <div class="receipt-total-line"><span>Service</span><span>${money(service)}</span></div>
+          <div class="receipt-divider"></div>
+          <div class="receipt-total-line grand"><span>Gross Amount</span><span>${money(total)}</span></div>
+          <div class="receipt-foot">${escapeHtml(order.paid ? 'Paid' : 'Payment pending')} · ${escapeHtml(order.status || '-')}</div>
+        </div>
+      `;
+    }
 
     function switchView(view, el) {
       document.querySelectorAll('.content').forEach((c) => c.classList.remove('active'));
@@ -216,6 +370,7 @@
     function badge(order) {
       if (order.orderType === 'dine') return `<span class="tag dine">Table ${order.tableNumber || '-'}</span>`;
       if (order.orderType === 'takeaway') return '<span class="tag takeaway">Takeaway</span>';
+      if (order.orderType === 'preorder' && order.tableNumber) return `<span class="tag preorder">Pre-order · T${order.tableNumber}</span>`;
       return '<span class="tag preorder">Pre-order</span>';
     }
 
@@ -239,26 +394,173 @@
       document.getElementById('recent').innerHTML = recent.length ? recent.map((o) => `
         <div class="order-card">
           <div class="order-head"><span class="order-id">${o.label}</span>${badge(o)}</div>
-          <div style="font-size:12px;color:var(--color-text-secondary);line-height:1.6;margin-bottom:8px;">${o.items.map((i) => `${i.name} × ${i.qty}`).join('<br>')}</div>
+          ${receiptMarkup(o, true)}
           <div style="display:flex;justify-content:space-between;font-size:12px;">
-            <span style="font-weight:500;color:var(--color-text-primary);">${money(o.total)}</span>
             <span style="color:var(--color-text-secondary);">${eta(o)}</span>
+            <span style="font-weight:500;color:var(--color-text-primary);">${money(o.total)}</span>
           </div>
         </div>
       `).join('') : '<div class="order-card">No orders yet.</div>';
 
       document.getElementById('tables').innerHTML = state.tables.map((t) => `
-        <div class="table-cell ${t.status}" onclick="toggleTable(${t.tableNumber})">
+        <div class="table-cell ${t.status}" onclick="onTableClick(${t.tableNumber})">
           <div class="n">T${t.tableNumber}</div>
           <div class="st">${t.status.charAt(0).toUpperCase() + t.status.slice(1)}</div>
         </div>
       `).join('');
+
+      renderOrderingMenuPanel();
 
       const removeInput = document.getElementById('remove-table-number');
       if (removeInput) {
         const maxTable = state.tables.length ? Math.max(...state.tables.map((t) => t.tableNumber)) : 1;
         removeInput.max = String(maxTable);
       }
+    }
+
+    function renderOrderingMenuPanel() {
+      const panel = document.getElementById('ordering-menu-panel');
+      if (!panel) return;
+
+      const activeTables = state.tables
+        .filter((t) => t.status === 'ordering' || t.status === 'occupied')
+        .map((t) => t.tableNumber);
+      if (!activeTables.length) {
+        selectedOrderingTableNumber = null;
+        panel.innerHTML = '<div class="menu-side-title">Occupied / Ordering Table Menu</div><div class="menu-side-empty">No table is in occupied or ordering state.</div>';
+        return;
+      }
+
+      if (!selectedOrderingTableNumber || !activeTables.includes(selectedOrderingTableNumber)) {
+        selectedOrderingTableNumber = activeTables[0];
+      }
+
+      if (!tableOrderDrafts[selectedOrderingTableNumber]) {
+        tableOrderDrafts[selectedOrderingTableNumber] = {};
+      }
+
+      const draft = tableOrderDrafts[selectedOrderingTableNumber];
+
+      const availableMenu = (state.menu || []).filter((item) => Number(item.available) === 1);
+      const byCategory = availableMenu.reduce((acc, item) => {
+        const key = item.cat || 'other';
+        if (!acc[key]) acc[key] = [];
+        acc[key].push(item);
+        return acc;
+      }, {});
+
+      const categories = Object.keys(byCategory);
+      if (!categories.length) {
+        panel.innerHTML = `<div class="menu-side-title">Occupied / Ordering Table Menu · T${selectedOrderingTableNumber}</div><div class="menu-side-empty">All menu items are unavailable right now.</div>`;
+        return;
+      }
+
+      const selectedCount = Object.values(draft).reduce((sum, qty) => sum + Number(qty || 0), 0);
+      const canCancel = selectedCount > 0;
+      panel.innerHTML = `
+        <div class="menu-side-title">Occupied / Ordering Table Menu · T${selectedOrderingTableNumber}</div>
+        ${categories.map((cat) => `
+          <div class="menu-cat">
+            <div class="menu-cat-name">${cat}</div>
+            ${(byCategory[cat] || []).map((item) => `
+              <div class="menu-row">
+                <span>${item.name} · ${money(item.price)}</span>
+                <div class="qty-controls">
+                  <button class="qty-btn" onclick="updateDraftQty(${item.id}, -1)">−</button>
+                  <span class="qty-val">${draft[item.id] || 0}</span>
+                  <button class="qty-btn" onclick="updateDraftQty(${item.id}, 1)">+</button>
+                </div>
+              </div>
+            `).join('')}
+          </div>
+        `).join('')}
+        <div class="menu-submit-wrap">
+          <div class="menu-submit-note">Items selected: ${selectedCount}</div>
+          <div style="display:flex; gap:6px;">
+            <button class="small-btn" ${canCancel ? '' : 'disabled'} onclick="cancelOrderingTableOrder()">Cancel</button>
+            <button class="small-btn" onclick="submitOrderingTableOrder()">Submit</button>
+          </div>
+        </div>
+      `;
+    }
+
+    function cancelOrderingTableOrder() {
+      if (!selectedOrderingTableNumber) return;
+      setTableStatusFree(selectedOrderingTableNumber);
+    }
+
+    async function setTableStatusFree(tableNumber) {
+      await setTableStatus(tableNumber, 'free');
+    }
+
+    async function setTableStatus(tableNumber, status) {
+      try {
+        if (status === 'free') {
+          tableOrderDrafts[tableNumber] = {};
+        }
+        await api(`/api/tables/${tableNumber}/status`, 'POST', { status });
+      } catch (e) {
+        alert(e.message);
+      }
+    }
+
+    function updateDraftQty(menuItemId, delta) {
+      if (!selectedOrderingTableNumber) return;
+      if (!tableOrderDrafts[selectedOrderingTableNumber]) tableOrderDrafts[selectedOrderingTableNumber] = {};
+
+      const current = Number(tableOrderDrafts[selectedOrderingTableNumber][menuItemId] || 0);
+      const next = Math.max(0, current + delta);
+      tableOrderDrafts[selectedOrderingTableNumber][menuItemId] = next;
+      renderOrderingMenuPanel();
+    }
+
+    async function submitOrderingTableOrder() {
+      try {
+        if (!selectedOrderingTableNumber) {
+          alert('Select an occupied or ordering table first.');
+          return;
+        }
+
+        const table = state.tables.find((t) => t.tableNumber === selectedOrderingTableNumber);
+        if (!table || (table.status !== 'ordering' && table.status !== 'occupied')) {
+          alert('Selected table is not in ordering or occupied state.');
+          return;
+        }
+
+        const draft = tableOrderDrafts[selectedOrderingTableNumber] || {};
+        const items = Object.entries(draft)
+          .filter(([, qty]) => Number(qty) > 0)
+          .map(([menuItemId, qty]) => ({ menuItemId: Number(menuItemId), qty: Number(qty) }));
+
+        if (!items.length) {
+          alert('Please add at least one item using + before submit.');
+          return;
+        }
+
+        await api('/api/orders', 'POST', {
+          orderType: 'dine',
+          tableNumber: selectedOrderingTableNumber,
+          notes: 'Created from management ordering panel',
+          items
+        });
+
+        tableOrderDrafts[selectedOrderingTableNumber] = {};
+      } catch (e) {
+        alert(e.message);
+      }
+    }
+
+    async function onTableClick(tableNumber) {
+      const table = state.tables.find((t) => t.tableNumber === tableNumber);
+      if (!table) return;
+
+      if (table.status === 'ordering' || table.status === 'occupied') {
+        selectedOrderingTableNumber = tableNumber;
+        renderOrderingMenuPanel();
+        return;
+      }
+
+      await toggleTable(tableNumber);
     }
 
     function formatAuditAction(log) {
@@ -324,13 +626,7 @@
 
       const o = state.orders.find((x) => x.id === selectedOrderId);
       document.getElementById('tcard').innerHTML = `
-        <div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start;">
-          <div>
-            <div style="font-size:15px;font-weight:500;color:var(--color-text-primary);">${o.label} — ${o.items.map((i) => `${i.name} × ${i.qty}`).join(', ')}</div>
-            <div style="font-size:12px;color:var(--color-text-secondary);margin-top:3px;">${o.orderType}${o.tableNumber ? ` · Table ${o.tableNumber}` : ''} · ${money(o.total)}</div>
-          </div>
-          <div style="font-size:12px;color:var(--accent-dark);background:var(--accent-light);padding:4px 10px;border-radius:999px;">${eta(o)}</div>
-        </div>
+        ${receiptMarkup(o)}
         <div class="progress"><div class="fill" style="width:${o.progress || 0}%;"></div></div>
         <div style="font-size:11px;color:var(--color-text-secondary);">${o.progress || 0}% complete · ${o.status} · ${o.paid ? 'Paid' : 'Pending payment'}</div>
       `;
@@ -340,7 +636,136 @@
       renderDashboard();
       renderKitchen();
       renderTracking();
+      renderMenuManagement();
+      renderMenuOrders();
+      renderTableStatusSwitch();
       renderAuditLogs();
+    }
+
+    function renderMenuManagement() {
+      const container = document.getElementById('menu-admin-list');
+      if (!container) return;
+
+      const rows = (state.menu || []).slice().sort((a, b) => Number(a.id) - Number(b.id));
+      if (!rows.length) {
+        container.innerHTML = '<div class="menu-admin-item"><div class="menu-admin-meta">No menu items found.</div></div>';
+        return;
+      }
+
+      container.innerHTML = rows.map((item) => {
+        const isAvailable = Number(item.available) === 1;
+        return `
+          <div class="menu-admin-item">
+            <div>
+              <div class="menu-admin-name">#${item.id} · ${item.name}</div>
+              <div class="menu-admin-meta">${item.cat} · ${money(item.price)}</div>
+            </div>
+            <div class="menu-admin-actions">
+              <button class="state-btn available ${isAvailable ? 'active available' : ''}" onclick="setMenuAvailability(${item.id}, true)">Available</button>
+              <button class="state-btn unavailable ${!isAvailable ? 'active unavailable' : ''}" onclick="setMenuAvailability(${item.id}, false)">Unavailable</button>
+              <button class="state-btn" onclick="deleteMenuItem(${item.id})">-</button>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function renderMenuOrders() {
+      const orderContainer = document.getElementById('menu-order-list');
+      if (!orderContainer) return;
+
+      // Keep latest orders first so staff sees newest bills at the top.
+      const orders = (state.orders || []).slice().sort((a, b) => Number(b.createdAt) - Number(a.createdAt));
+      if (!orders.length) {
+        orderContainer.innerHTML = '<div class="menu-order-item"><div class="menu-order-time">No orders found.</div></div>';
+      } else {
+        orderContainer.innerHTML = orders.map((order) => {
+          return `
+            <div class="menu-order-item">
+              ${receiptMarkup(order)}
+            </div>
+          `;
+        }).join('');
+      }
+
+    }
+
+    function renderTableStatusSwitch() {
+      const tableContainer = document.getElementById('dashboard-table-status-list');
+      if (!tableContainer) return;
+
+      const tables = (state.tables || []).slice().sort((a, b) => Number(a.tableNumber) - Number(b.tableNumber));
+      if (!tables.length) {
+        tableContainer.innerHTML = '<div class="table-status-admin-item"><div class="table-status-admin-meta">No tables found.</div></div>';
+        return;
+      }
+
+      tableContainer.innerHTML = tables.map((table) => `
+        <div class="table-status-admin-item">
+          <div>
+            <div class="table-status-admin-name">Table ${table.tableNumber}</div>
+            <div class="table-status-admin-meta">Current: ${table.status}</div>
+          </div>
+          <div class="table-status-admin-actions">
+            <button class="state-btn ${table.status === 'free' ? 'active free' : ''}" onclick="setTableStatus(${table.tableNumber}, 'free')">Free</button>
+            <button class="state-btn ${table.status === 'ordering' ? 'active ordering' : ''}" onclick="setTableStatus(${table.tableNumber}, 'ordering')">Ordering</button>
+            <button class="state-btn ${table.status === 'occupied' ? 'active occupied' : ''}" onclick="setTableStatus(${table.tableNumber}, 'occupied')">Occupied</button>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    async function setMenuAvailability(menuItemId, available) {
+      try {
+        await api(`/api/menu/${menuItemId}/availability`, 'POST', { available });
+      } catch (e) {
+        alert(e.message);
+      }
+    }
+
+    async function addMenuItem() {
+      try {
+        const name = String(document.getElementById('menu-name').value || '').trim();
+        const price = Number(document.getElementById('menu-price').value || 0);
+        const cat = String(document.getElementById('menu-cat').value || '').trim();
+        const emoji = String(document.getElementById('menu-emoji').value || '').trim();
+        const desc = String(document.getElementById('menu-desc').value || '').trim();
+
+        await api('/api/menu', 'POST', {
+          name,
+          price,
+          cat,
+          emoji,
+          desc,
+          available: true
+        });
+
+        document.getElementById('menu-name').value = '';
+        document.getElementById('menu-price').value = '';
+        document.getElementById('menu-cat').value = '';
+        document.getElementById('menu-emoji').value = '';
+        document.getElementById('menu-desc').value = '';
+      } catch (e) {
+        alert(e.message);
+      }
+    }
+
+    async function deleteMenuItem(menuItemId) {
+      try {
+        await api(`/api/menu/${menuItemId}`, 'DELETE');
+      } catch (e) {
+        alert(e.message);
+      }
+    }
+
+    async function deleteMenuItemByInput() {
+      const menuItemId = Number(document.getElementById('menu-delete-id').value || 0);
+      if (!menuItemId) {
+        alert('Enter a valid item ID to delete.');
+        return;
+      }
+      await deleteMenuItem(menuItemId);
+      document.getElementById('menu-delete-id').value = '';
     }
 
     async function changeStatus(orderId, status) {
