@@ -130,6 +130,7 @@
     .menu-orders-list { border:var(--border); border-radius:var(--border-radius-md); background:var(--color-background-primary); overflow:hidden; }
     .menu-order-item { padding:10px 12px; border-bottom:var(--border); }
     .menu-order-item:last-child { border-bottom:none; }
+    .menu-order-date-group { padding:10px 12px; border-bottom:var(--border); background:var(--color-background-secondary); font-size:12px; font-weight:600; color:var(--color-text-primary); }
     .menu-order-head { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:6px; }
     .menu-order-id { font-size:12px; font-weight:500; color:var(--color-text-primary); }
     .menu-order-time { font-size:11px; color:var(--color-text-secondary); }
@@ -309,7 +310,7 @@
             <h3>Order list</h3>
             <div class="order-export-controls">
               <input id="order-export-date" class="order-export-date" type="date" />
-              <button class="small-btn" onclick="downloadOrdersByDateCsv()">Download day summary</button>
+              <button class="small-btn" onclick="downloadOrdersByDateExcel()">Download Excel</button>
             </div>
           </div>
           <div class="menu-orders-list" id="menu-order-list"></div>
@@ -804,8 +805,16 @@
       if (!orders.length) {
         orderContainer.innerHTML = '<div class="menu-order-item"><div class="menu-order-time">No orders found.</div></div>';
       } else {
+        let lastDateKey = '';
         orderContainer.innerHTML = orders.map((order) => {
+          const created = new Date(order.createdAt || Date.now());
+          const dateKey = created.toLocaleDateString('en-GB');
+          const dateHeader = dateKey !== lastDateKey
+            ? `<div class="menu-order-date-group">${dateKey}</div>`
+            : '';
+          lastDateKey = dateKey;
           return `
+            ${dateHeader}
             <div class="menu-order-item">
               ${receiptMarkup(order)}
             </div>
@@ -832,15 +841,16 @@
       });
     }
 
-    function csvEscape(value) {
-      const text = String(value ?? '');
-      if (text.includes(',') || text.includes('"') || text.includes('\n')) {
-        return `"${text.replaceAll('"', '""')}"`;
-      }
-      return text;
+    function htmlEscape(value) {
+      return String(value ?? '')
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#39;');
     }
 
-    function downloadOrdersByDateCsv() {
+    function downloadOrdersByDateExcel() {
       const dateText = getSelectedExportDate();
       if (!dateText) {
         alert('Select a date first.');
@@ -859,40 +869,70 @@
       let totalTax = 0;
       let totalService = 0;
       let totalSubtotal = 0;
+      let totalOrders = 0;
 
-      rows.forEach((order) => {
+      const dataRows = rows.map((order) => {
+        totalOrders += 1;
         totalAmount += Number(order.total || 0);
         totalTax += Number(order.tax || 0);
         totalService += Number(order.service || 0);
         totalSubtotal += Number(order.subtotal || 0);
 
         const itemsText = (order.items || []).map((item) => `${item.name} x${item.qty}`).join(' | ');
-        lines.push([
-          csvEscape(order.label),
-          csvEscape(new Date(order.createdAt || Date.now()).toLocaleString('en-IN')),
-          csvEscape(order.orderType),
-          csvEscape(order.tableNumber ? `T${order.tableNumber}` : '-'),
-          csvEscape(order.status),
-          csvEscape(order.paid ? 'Yes' : 'No'),
-          csvEscape(order.paymentMethod || '-'),
-          csvEscape(itemsText),
-          csvEscape(order.subtotal || 0),
-          csvEscape(order.tax || 0),
-          csvEscape(order.service || 0),
-          csvEscape(order.total || 0),
-          csvEscape(order.notes || '')
-        ].join(','));
-      });
+        return `
+          <tr>
+            <td>${htmlEscape(order.label)}</td>
+            <td>${htmlEscape(new Date(order.createdAt || Date.now()).toLocaleString('en-IN'))}</td>
+            <td>${htmlEscape(order.orderType)}</td>
+            <td>${htmlEscape(order.tableNumber ? `T${order.tableNumber}` : '-')}</td>
+            <td>${htmlEscape(order.status)}</td>
+            <td>${htmlEscape(order.paid ? 'Yes' : 'No')}</td>
+            <td>${htmlEscape(order.paymentMethod || '-')}</td>
+            <td>${htmlEscape(itemsText)}</td>
+            <td style="mso-number-format:'0';">${Number(order.subtotal || 0)}</td>
+            <td style="mso-number-format:'0';">${Number(order.tax || 0)}</td>
+            <td style="mso-number-format:'0';">${Number(order.service || 0)}</td>
+            <td style="mso-number-format:'0';">${Number(order.total || 0)}</td>
+            <td>${htmlEscape(order.notes || '')}</td>
+          </tr>
+        `;
+      }).join('');
 
-      lines.push('');
-      lines.push(['Summary', '', '', '', '', '', '', '', totalSubtotal, totalTax, totalService, totalAmount, ''].join(','));
+      const workbookHtml = `
+        <html xmlns:o="urn:schemas-microsoft-com:office:office"
+              xmlns:x="urn:schemas-microsoft-com:office:excel"
+              xmlns="http://www.w3.org/TR/REC-html40">
+          <head>
+            <meta charset="utf-8" />
+            <xml>
+              <x:ExcelWorkbook>
+                <x:ExcelWorksheets>
+                  <x:ExcelWorksheet>
+                    <x:Name>Orders ${dateText}</x:Name>
+                    <x:WorksheetOptions><x:DisplayGridlines/></x:WorksheetOptions>
+                  </x:ExcelWorksheet>
+                </x:ExcelWorksheets>
+              </x:ExcelWorkbook>
+            </xml>
+          </head>
+          <body>
+            <table border="1">
+              <tr><th colspan="13" style="font-size:16px;">FoodOrder Daily Summary - ${htmlEscape(dateText)}</th></tr>
+              <tr><th colspan="13">Total Orders: ${totalOrders} | Subtotal: ${totalSubtotal} | Tax: ${totalTax} | Service: ${totalService} | Gross Total: ${totalAmount}</th></tr>
+              <tr>
+                <th>Order ID</th><th>Created At</th><th>Type</th><th>Table</th><th>Status</th><th>Paid</th><th>Payment Method</th><th>Items</th><th>Subtotal</th><th>Tax</th><th>Service</th><th>Total</th><th>Notes</th>
+              </tr>
+              ${dataRows}
+            </table>
+          </body>
+        </html>
+      `;
 
-      const csv = `\uFEFF${lines.join('\n')}`;
-      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const blob = new Blob([workbookHtml], { type: 'application/vnd.ms-excel;charset=utf-8;' });
       const url = URL.createObjectURL(blob);
       const anchor = document.createElement('a');
       anchor.href = url;
-      anchor.download = `orders-summary-${dateText}.csv`;
+      anchor.download = `orders-summary-${dateText}.xls`;
       anchor.click();
       URL.revokeObjectURL(url);
     }
