@@ -430,6 +430,18 @@ seedDatabase();
 app.use(express.json());
 app.use(express.static(__dirname));
 
+app.get('/', (_req, res) => {
+  res.redirect('/client.html');
+});
+
+app.get('/client', (_req, res) => {
+  res.redirect('/client.html');
+});
+
+app.get('/management', (_req, res) => {
+  res.redirect('/management.html');
+});
+
 const apiRateLimiter = createMemoryRateLimiter({
   windowMs: RATE_LIMIT_WINDOW_MS,
   max: RATE_LIMIT_MAX,
