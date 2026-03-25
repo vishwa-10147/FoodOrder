@@ -244,9 +244,15 @@ function seedDatabase() {
 
   const orderCount = db.prepare('SELECT COUNT(*) as count FROM orders').get().count;
   if (orderCount === 0) {
+    const tableNumbers = db.prepare('SELECT table_number as tableNumber FROM table_status ORDER BY table_number ASC').all();
+    if (!tableNumbers.length) return;
+
+    const preferredDineTable = tableNumbers.find((row) => row.tableNumber === 4)?.tableNumber || tableNumbers[0].tableNumber;
+    const preferredPreorderTable = tableNumbers.find((row) => row.tableNumber !== preferredDineTable)?.tableNumber || preferredDineTable;
+
     createOrder({
       orderType: 'dine',
-      tableNumber: 4,
+      tableNumber: preferredDineTable,
       notes: 'Less spice please',
       items: [
         { menuItemId: 1, qty: 2 },
@@ -259,6 +265,7 @@ function seedDatabase() {
     });
     createOrder({
       orderType: 'preorder',
+      tableNumber: preferredPreorderTable,
       notes: 'Pickup at 1:15 PM',
       items: [
         { menuItemId: 2, qty: 1 },
