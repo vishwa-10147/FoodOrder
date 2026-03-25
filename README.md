@@ -133,6 +133,12 @@ npm start
 - `POST /api/orders` – create order
 - `POST /api/orders/:id/status` – update order status (`new|preparing|ready|delivered`)
 - `POST /api/orders/:id/pay` – mark order paid
+- `POST /api/orders/:id/razorpay-order` – create Razorpay order for online checkout
+- `POST /api/orders/:id/razorpay/verify` – verify Razorpay signature and mark paid
+
+### Payments
+- `GET /api/payments/razorpay/config` – online payment availability for frontend
+- `POST /api/payments/razorpay/webhook` – webhook capture sync from Razorpay
 
 ### Tables
 - `POST /api/tables/:tableNumber/toggle` – cycle table state
@@ -217,6 +223,20 @@ This is the lowest-risk option for low traffic because no DB rewrite is needed.
 - Free plans may sleep when idle (cold starts).
 - For smoother always-on behavior, use a low paid Render instance.
 - Backups continue to run on server interval and are saved under the mounted `data/backups/` path.
+
+### Razorpay (UPI/Card) setup
+
+1. Create Razorpay account and get test keys.
+2. Add these env vars in Render service:
+  - `RAZORPAY_KEY_ID`
+  - `RAZORPAY_KEY_SECRET`
+  - `RAZORPAY_WEBHOOK_SECRET` (recommended)
+3. In Razorpay dashboard, set webhook URL:
+  - `https://<your-service>.onrender.com/api/payments/razorpay/webhook`
+4. Enable event:
+  - `payment.captured`
+
+Cash payments continue to work through internal backend validation.
 
 For small single-location setups, local SQLite is recommended.
 

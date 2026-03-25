@@ -17,6 +17,12 @@ services:
         value: "120"
       - key: DB_BACKUP_RETENTION_COUNT
         value: "72"
+      - key: RAZORPAY_KEY_ID
+        sync: false
+      - key: RAZORPAY_KEY_SECRET
+        sync: false
+      - key: RAZORPAY_WEBHOOK_SECRET
+        sync: false
     disks:
       - name: sqlite-data
         mountPath: /opt/render/project/src/data

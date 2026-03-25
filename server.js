@@ -3,9 +3,11 @@ const http = require('http');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
+const crypto = require('crypto');
 const Database = require('better-sqlite3');
 const { Server } = require('socket.io');
 const QRCode = require('qrcode');
+const Razorpay = require('razorpay');
 
 const app = express();
 const server = http.createServer(app);
@@ -27,6 +29,15 @@ const RATE_LIMIT_MAX = Math.max(1, Number(process.env.RATE_LIMIT_MAX || 240));
 const DB_BACKUP_ENABLED = String(process.env.DB_BACKUP_ENABLED || 'true') !== 'false';
 const DB_BACKUP_INTERVAL_MINUTES = Math.max(1, Number(process.env.DB_BACKUP_INTERVAL_MINUTES || 60));
 const DB_BACKUP_RETENTION_COUNT = Math.max(1, Number(process.env.DB_BACKUP_RETENTION_COUNT || 48));
+
+const RAZORPAY_KEY_ID = String(process.env.RAZORPAY_KEY_ID || '').trim();
+const RAZORPAY_KEY_SECRET = String(process.env.RAZORPAY_KEY_SECRET || '').trim();
+const RAZORPAY_WEBHOOK_SECRET = String(process.env.RAZORPAY_WEBHOOK_SECRET || '').trim();
+const RAZORPAY_ENABLED = Boolean(RAZORPAY_KEY_ID && RAZORPAY_KEY_SECRET);
+
+const razorpay = RAZORPAY_ENABLED
+  ? new Razorpay({ key_id: RAZORPAY_KEY_ID, key_secret: RAZORPAY_KEY_SECRET })
+  : null;
 
 let lastBackupAt = null;
 
@@ -134,6 +145,8 @@ CREATE TABLE IF NOT EXISTS orders (
   status TEXT NOT NULL CHECK(status IN ('new','preparing','ready','delivered')),
   paid INTEGER NOT NULL DEFAULT 0,
   payment_method TEXT,
+  payment_gateway_order_id TEXT,
+  payment_gateway_payment_id TEXT,
   paid_at INTEGER,
   eta_minutes INTEGER NOT NULL DEFAULT 15,
   created_at INTEGER NOT NULL,
@@ -222,9 +235,17 @@ function seedDatabase() {
 
   const orderColumns = db.prepare('PRAGMA table_info(orders)').all();
   const hasPaymentMethodColumn = orderColumns.some((col) => col.name === 'payment_method');
+  const hasPaymentGatewayOrderIdColumn = orderColumns.some((col) => col.name === 'payment_gateway_order_id');
+  const hasPaymentGatewayPaymentIdColumn = orderColumns.some((col) => col.name === 'payment_gateway_payment_id');
   const hasPaidAtColumn = orderColumns.some((col) => col.name === 'paid_at');
   if (!hasPaymentMethodColumn) {
     db.exec('ALTER TABLE orders ADD COLUMN payment_method TEXT');
+  }
+  if (!hasPaymentGatewayOrderIdColumn) {
+    db.exec('ALTER TABLE orders ADD COLUMN payment_gateway_order_id TEXT');
+  }
+  if (!hasPaymentGatewayPaymentIdColumn) {
+    db.exec('ALTER TABLE orders ADD COLUMN payment_gateway_payment_id TEXT');
   }
   if (!hasPaidAtColumn) {
     db.exec('ALTER TABLE orders ADD COLUMN paid_at INTEGER');
@@ -334,7 +355,7 @@ function createOrder({ orderType, tableNumber = null, notes = '', items, status 
 
 function getOrders() {
   const orders = db.prepare(
-    `SELECT id, order_type as orderType, table_number as tableNumber, notes, status, paid, payment_method as paymentMethod, paid_at as paidAt, eta_minutes as etaMinutes, created_at as createdAt, updated_at as updatedAt
+    `SELECT id, order_type as orderType, table_number as tableNumber, notes, status, paid, payment_method as paymentMethod, payment_gateway_order_id as paymentGatewayOrderId, payment_gateway_payment_id as paymentGatewayPaymentId, paid_at as paidAt, eta_minutes as etaMinutes, created_at as createdAt, updated_at as updatedAt
      FROM orders
      ORDER BY created_at DESC`
   ).all();
@@ -406,6 +427,32 @@ function getState() {
   return { menu, tables, orders, stats };
 }
 
+function markOrderPaid({ orderId, actor, paymentMethod, paymentGatewayOrderId = null, paymentGatewayPaymentId = null }) {
+  const order = db.prepare('SELECT id, order_type as orderType, table_number as tableNumber, paid FROM orders WHERE id = ?').get(orderId);
+  if (!order) throw new Error('Order not found');
+  if (Number(order.paid) === 1) throw new Error('Order is already paid');
+
+  const paidAt = Date.now();
+  db.prepare(
+    'UPDATE orders SET paid = 1, payment_method = ?, payment_gateway_order_id = ?, payment_gateway_payment_id = ?, paid_at = ?, updated_at = ? WHERE id = ?'
+  ).run(paymentMethod, paymentGatewayOrderId, paymentGatewayPaymentId, paidAt, paidAt, orderId);
+
+  if ((order.orderType === 'dine' || order.orderType === 'preorder') && order.tableNumber) {
+    db.prepare('UPDATE table_status SET status = ? WHERE table_number = ?').run('occupied', order.tableNumber);
+  }
+
+  logAudit({
+    action: 'order_paid',
+    entityType: 'order',
+    entityId: orderId,
+    actor,
+    details: { paymentMethod, paymentGatewayOrderId, paymentGatewayPaymentId, paidAt }
+  });
+
+  broadcastState();
+  return getOrders().find((entry) => entry.id === orderId);
+}
+
 function broadcastState() {
   io.emit('state:update', getState());
 }
@@ -427,7 +474,11 @@ function getLocalAccessUrls(port) {
 
 seedDatabase();
 
-app.use(express.json());
+const jsonParser = express.json();
+app.use((req, res, next) => {
+  if (req.path === '/api/payments/razorpay/webhook') return next();
+  return jsonParser(req, res, next);
+});
 app.use(express.static(__dirname));
 
 app.get('/', (_req, res) => {
@@ -657,6 +708,162 @@ app.post('/api/orders/:id/status', (req, res) => {
   return res.json({ ok: true });
 });
 
+app.get('/api/payments/razorpay/config', (_req, res) => {
+  return res.json({ enabled: RAZORPAY_ENABLED, keyId: RAZORPAY_ENABLED ? RAZORPAY_KEY_ID : null });
+});
+
+app.post('/api/orders/:id/razorpay-order', async (req, res) => {
+  try {
+    if (!RAZORPAY_ENABLED || !razorpay) {
+      return res.status(400).json({ error: 'Razorpay is not configured' });
+    }
+
+    const orderId = Number(req.params.id);
+    const actor = getActor(req);
+    const order = getOrders().find((entry) => entry.id === orderId);
+    if (!order) return res.status(404).json({ error: 'Order not found' });
+    if (Number(order.paid) === 1) return res.status(400).json({ error: 'Order is already paid' });
+
+    const amountPaise = Math.round(Number(order.total || 0) * 100);
+    if (!Number.isFinite(amountPaise) || amountPaise <= 0) {
+      return res.status(400).json({ error: 'Invalid order amount' });
+    }
+
+    const gatewayOrder = await razorpay.orders.create({
+      amount: amountPaise,
+      currency: 'INR',
+      receipt: `order_${order.id}_${Date.now()}`,
+      notes: {
+        appOrderId: String(order.id),
+        appOrderLabel: String(order.label || '')
+      }
+    });
+
+    db.prepare('UPDATE orders SET payment_gateway_order_id = ?, updated_at = ? WHERE id = ?')
+      .run(gatewayOrder.id, Date.now(), order.id);
+
+    logAudit({
+      action: 'payment_gateway_order_created',
+      entityType: 'order',
+      entityId: order.id,
+      actor,
+      details: { gateway: 'razorpay', gatewayOrderId: gatewayOrder.id, amountPaise }
+    });
+
+    broadcastState();
+
+    return res.json({
+      keyId: RAZORPAY_KEY_ID,
+      gatewayOrderId: gatewayOrder.id,
+      amountPaise,
+      currency: 'INR',
+      appOrder: getOrders().find((entry) => entry.id === order.id)
+    });
+  } catch (error) {
+    return res.status(400).json({ error: error.message || 'Unable to create Razorpay order' });
+  }
+});
+
+app.post('/api/orders/:id/razorpay/verify', async (req, res) => {
+  try {
+    if (!RAZORPAY_ENABLED || !razorpay) {
+      return res.status(400).json({ error: 'Razorpay is not configured' });
+    }
+
+    const orderId = Number(req.params.id);
+    const actor = getActor(req);
+    const razorpayOrderId = String(req.body?.razorpayOrderId || '').trim();
+    const razorpayPaymentId = String(req.body?.razorpayPaymentId || '').trim();
+    const razorpaySignature = String(req.body?.razorpaySignature || '').trim();
+
+    if (!razorpayOrderId || !razorpayPaymentId || !razorpaySignature) {
+      return res.status(400).json({ error: 'Missing Razorpay verification fields' });
+    }
+
+    const order = getOrders().find((entry) => entry.id === orderId);
+    if (!order) return res.status(404).json({ error: 'Order not found' });
+    if (Number(order.paid) === 1) return res.status(400).json({ error: 'Order is already paid' });
+
+    if (order.paymentGatewayOrderId && order.paymentGatewayOrderId !== razorpayOrderId) {
+      return res.status(400).json({ error: 'Gateway order mismatch' });
+    }
+
+    const expectedSignature = crypto
+      .createHmac('sha256', RAZORPAY_KEY_SECRET)
+      .update(`${razorpayOrderId}|${razorpayPaymentId}`)
+      .digest('hex');
+    if (expectedSignature !== razorpaySignature) {
+      return res.status(400).json({ error: 'Invalid Razorpay signature' });
+    }
+
+    const payment = await razorpay.payments.fetch(razorpayPaymentId);
+    const expectedAmountPaise = Math.round(Number(order.total || 0) * 100);
+    if (Number(payment.amount || 0) !== expectedAmountPaise) {
+      return res.status(400).json({ error: 'Razorpay amount mismatch' });
+    }
+    if (String(payment.order_id || '') !== razorpayOrderId) {
+      return res.status(400).json({ error: 'Razorpay order reference mismatch' });
+    }
+    if (!['captured', 'authorized'].includes(String(payment.status || '').toLowerCase())) {
+      return res.status(400).json({ error: 'Payment not completed yet' });
+    }
+
+    const normalizedMethod = String(payment.method || req.body?.paymentMethod || 'online').trim().toLowerCase();
+    const updatedOrder = markOrderPaid({
+      orderId,
+      actor,
+      paymentMethod: normalizedMethod,
+      paymentGatewayOrderId: razorpayOrderId,
+      paymentGatewayPaymentId: razorpayPaymentId
+    });
+
+    return res.json({ ok: true, order: updatedOrder });
+  } catch (error) {
+    return res.status(400).json({ error: error.message || 'Razorpay verification failed' });
+  }
+});
+
+app.post('/api/payments/razorpay/webhook', express.raw({ type: 'application/json' }), (req, res) => {
+  try {
+    if (!RAZORPAY_ENABLED || !RAZORPAY_WEBHOOK_SECRET) {
+      return res.status(400).json({ error: 'Razorpay webhook is not configured' });
+    }
+
+    const signature = String(req.headers['x-razorpay-signature'] || '').trim();
+    if (!signature) return res.status(400).json({ error: 'Missing webhook signature' });
+
+    const bodyBuffer = Buffer.isBuffer(req.body) ? req.body : Buffer.from(req.body || '');
+    const expected = crypto.createHmac('sha256', RAZORPAY_WEBHOOK_SECRET).update(bodyBuffer).digest('hex');
+    if (expected !== signature) {
+      return res.status(400).json({ error: 'Invalid webhook signature' });
+    }
+
+    const payload = JSON.parse(bodyBuffer.toString('utf8') || '{}');
+    const event = String(payload?.event || '').trim();
+    if (event !== 'payment.captured') return res.json({ ok: true, ignored: true });
+
+    const paymentEntity = payload?.payload?.payment?.entity;
+    const orderEntity = payload?.payload?.order?.entity;
+    const appOrderId = Number(orderEntity?.notes?.appOrderId || 0);
+    if (!appOrderId) return res.json({ ok: true, ignored: true });
+
+    const existing = getOrders().find((entry) => entry.id === appOrderId);
+    if (!existing || Number(existing.paid) === 1) return res.json({ ok: true, ignored: true });
+
+    markOrderPaid({
+      orderId: appOrderId,
+      actor: 'razorpay-webhook',
+      paymentMethod: String(paymentEntity?.method || 'online').toLowerCase(),
+      paymentGatewayOrderId: String(paymentEntity?.order_id || orderEntity?.id || ''),
+      paymentGatewayPaymentId: String(paymentEntity?.id || '')
+    });
+
+    return res.json({ ok: true });
+  } catch (error) {
+    return res.status(400).json({ error: error.message || 'Webhook processing failed' });
+  }
+});
+
 app.post('/api/orders/:id/pay', (req, res) => {
   const orderId = Number(req.params.id);
   const actor = getActor(req);
@@ -666,12 +873,9 @@ app.post('/api/orders/:id/pay', (req, res) => {
   }
 
   const amount = Number(req.body?.amount || 0);
-  const order = db.prepare('SELECT id, order_type as orderType, table_number as tableNumber, paid FROM orders WHERE id = ?').get(orderId);
-  if (!order) return res.status(404).json({ error: 'Order not found' });
-  if (Number(order.paid) === 1) return res.status(400).json({ error: 'Order is already paid' });
-
   const fullOrder = getOrders().find((entry) => entry.id === orderId);
   if (!fullOrder) return res.status(404).json({ error: 'Order details not found' });
+  if (Number(fullOrder.paid) === 1) return res.status(400).json({ error: 'Order is already paid' });
 
   if (!Number.isFinite(amount) || amount <= 0) {
     return res.status(400).json({ error: 'Invalid payment amount' });
@@ -680,23 +884,7 @@ app.post('/api/orders/:id/pay', (req, res) => {
     return res.status(400).json({ error: `Payment amount mismatch. Expected ${fullOrder.total}` });
   }
 
-  const paidAt = Date.now();
-  db.prepare('UPDATE orders SET paid = 1, payment_method = ?, paid_at = ?, updated_at = ? WHERE id = ?').run(paymentMethod, paidAt, paidAt, orderId);
-  // Payment confirms table usage for dine/pre-order; keep table marked occupied.
-  if ((order.orderType === 'dine' || order.orderType === 'preorder') && order.tableNumber) {
-    db.prepare('UPDATE table_status SET status = ? WHERE table_number = ?').run('occupied', order.tableNumber);
-  }
-
-  logAudit({
-    action: 'order_paid',
-    entityType: 'order',
-    entityId: orderId,
-    actor,
-    details: { paymentMethod, amount, paidAt }
-  });
-
-  broadcastState();
-  const updatedOrder = getOrders().find((entry) => entry.id === orderId);
+  const updatedOrder = markOrderPaid({ orderId, actor, paymentMethod });
   return res.json({ ok: true, order: updatedOrder });
 });
 

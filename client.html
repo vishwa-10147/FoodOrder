@@ -194,6 +194,7 @@
     </main>
   </div>
 
+  <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
   <script src="/socket.io/socket.io.js"></script>
   <script>
     const socket = io();
@@ -204,6 +205,7 @@
     let selectedTrackingOrderId = null;
     let pendingPaymentOrderId = null;
     let selectedPaymentMethod = 'card';
+    let razorpayConfig = { enabled: false, keyId: null };
 
     function money(v) { return `₹${Number(v || 0).toLocaleString('en-IN')}`; }
 
@@ -518,10 +520,55 @@
           return;
         }
 
-        await api(`/api/orders/${pendingPaymentOrderId}/pay`, 'POST', {
-          paymentMethod: selectedPaymentMethod,
-          amount: order.total
+        if (selectedPaymentMethod === 'cash') {
+          await api(`/api/orders/${pendingPaymentOrderId}/pay`, 'POST', {
+            paymentMethod: selectedPaymentMethod,
+            amount: order.total
+          });
+          return;
+        }
+
+        if (!razorpayConfig.enabled || !razorpayConfig.keyId) {
+          alert('Online payment is not configured yet. Please use Cash or configure Razorpay keys.');
+          return;
+        }
+
+        const gateway = await api(`/api/orders/${pendingPaymentOrderId}/razorpay-order`, 'POST', {
+          paymentMethod: selectedPaymentMethod
         });
+
+        const methodOptions = selectedPaymentMethod === 'upi'
+          ? { upi: true, card: false, netbanking: false, wallet: false }
+          : { upi: false, card: true, netbanking: false, wallet: false };
+
+        const checkout = new Razorpay({
+          key: gateway.keyId,
+          amount: gateway.amountPaise,
+          currency: gateway.currency || 'INR',
+          name: 'FoodOrder',
+          description: `Payment for ${order.label}`,
+          order_id: gateway.gatewayOrderId,
+          method: methodOptions,
+          handler: async function (response) {
+            try {
+              await api(`/api/orders/${pendingPaymentOrderId}/razorpay/verify`, 'POST', {
+                paymentMethod: selectedPaymentMethod,
+                razorpayOrderId: response.razorpay_order_id,
+                razorpayPaymentId: response.razorpay_payment_id,
+                razorpaySignature: response.razorpay_signature
+              });
+            } catch (error) {
+              alert(error.message || 'Payment verification failed');
+            }
+          }
+        });
+
+        checkout.on('payment.failed', function (response) {
+          const reason = response?.error?.description || response?.error?.reason || 'Payment failed';
+          alert(reason);
+        });
+
+        checkout.open();
       } catch (e) {
         alert(e.message);
       }
@@ -572,6 +619,11 @@
 
       const data = await api('/api/state');
       state = data;
+      try {
+        razorpayConfig = await api('/api/payments/razorpay/config');
+      } catch (_error) {
+        razorpayConfig = { enabled: false, keyId: null };
+      }
       renderAll();
     })();
   </script>
