@@ -228,7 +228,57 @@
     let selectedPaymentMethod = 'card';
     let razorpayConfig = { enabled: false, keyId: null };
 
+    const CLIENT_ORDER_IDS_KEY = 'foodorder_client_order_ids';
+    const CLIENT_SELECTED_ORDER_KEY = 'foodorder_selected_tracking_order_id';
+    const CLIENT_PENDING_ORDER_KEY = 'foodorder_pending_payment_order_id';
+    let clientOrderIds = new Set();
+
     function money(v) { return `₹${Number(v || 0).toLocaleString('en-IN')}`; }
+
+    function loadStoredNumberArray(key) {
+      try {
+        const raw = localStorage.getItem(key);
+        if (!raw) return [];
+        const parsed = JSON.parse(raw);
+        if (!Array.isArray(parsed)) return [];
+        return parsed.map((value) => Number(value)).filter((value) => Number.isFinite(value) && value > 0);
+      } catch (_error) {
+        return [];
+      }
+    }
+
+    function saveStoredNumberArray(key, values) {
+      try {
+        localStorage.setItem(key, JSON.stringify(values));
+      } catch (_error) {
+      }
+    }
+
+    function rememberClientOrder(orderId) {
+      const numericOrderId = Number(orderId || 0);
+      if (!numericOrderId) return;
+      clientOrderIds.add(numericOrderId);
+      saveStoredNumberArray(CLIENT_ORDER_IDS_KEY, Array.from(clientOrderIds));
+    }
+
+    function setSelectedTrackingOrder(orderId) {
+      selectedTrackingOrderId = Number(orderId || 0) || null;
+      if (selectedTrackingOrderId) {
+        try { localStorage.setItem(CLIENT_SELECTED_ORDER_KEY, String(selectedTrackingOrderId)); } catch (_error) {}
+      }
+    }
+
+    function setPendingPaymentOrder(orderId) {
+      pendingPaymentOrderId = Number(orderId || 0) || null;
+      if (pendingPaymentOrderId) {
+        try { localStorage.setItem(CLIENT_PENDING_ORDER_KEY, String(pendingPaymentOrderId)); } catch (_error) {}
+      }
+    }
+
+    function getClientScopedOrders() {
+      const ids = clientOrderIds;
+      return (state.orders || []).filter((order) => ids.has(Number(order.id)));
+    }
 
     function escapeHtml(value) {
       return String(value || '')
@@ -477,8 +527,9 @@
           notes,
           items: cart.map((i) => ({ menuItemId: i.menuItemId, qty: i.qty }))
         });
-        pendingPaymentOrderId = response.order.id;
-        selectedTrackingOrderId = response.order.id;
+        rememberClientOrder(response.order.id);
+        setPendingPaymentOrder(response.order.id);
+        setSelectedTrackingOrder(response.order.id);
         cart = [];
         document.getElementById('notes').value = '';
         switchView('payment', document.querySelector('.nav-item[data-view="payment"]'));
@@ -489,21 +540,23 @@
     }
 
     function renderTracking() {
-      if (!state.orders.length) {
+      const scopedOrders = getClientScopedOrders();
+
+      if (!scopedOrders.length) {
         document.getElementById('tpills').innerHTML = '';
-        document.getElementById('tcard').textContent = 'No orders to track.';
+        document.getElementById('tcard').textContent = 'No orders from this device yet.';
         return;
       }
 
-      if (!selectedTrackingOrderId || !state.orders.some((o) => o.id === selectedTrackingOrderId)) {
-        selectedTrackingOrderId = state.orders[0].id;
+      if (!selectedTrackingOrderId || !scopedOrders.some((o) => o.id === selectedTrackingOrderId)) {
+        setSelectedTrackingOrder(scopedOrders[0].id);
       }
 
-      document.getElementById('tpills').innerHTML = state.orders.slice(0, 8).map((o) => `
+      document.getElementById('tpills').innerHTML = scopedOrders.slice(0, 8).map((o) => `
         <div class="pill ${o.id === selectedTrackingOrderId ? 'active' : ''}" onclick="selectOrder(${o.id})">${o.label}</div>
       `).join('');
 
-      const o = state.orders.find((x) => x.id === selectedTrackingOrderId);
+      const o = scopedOrders.find((x) => x.id === selectedTrackingOrderId);
       const elapsed = Math.floor((Date.now() - o.createdAt) / 60000);
       const left = o.status === 'delivered' ? 0 : Math.max(0, o.etaMinutes - elapsed);
       document.getElementById('tcard').innerHTML = `
@@ -514,7 +567,8 @@
     }
 
     function renderPayment() {
-      const order = state.orders.find((o) => o.id === pendingPaymentOrderId) || state.orders.find((o) => o.paid === 0) || null;
+      const scopedOrders = getClientScopedOrders();
+      const order = scopedOrders.find((o) => o.id === pendingPaymentOrderId) || scopedOrders.find((o) => o.paid === 0) || null;
       const sum = document.getElementById('pay-summary');
       const btn = document.getElementById('pay-btn');
 
@@ -525,7 +579,7 @@
         return;
       }
 
-      pendingPaymentOrderId = order.id;
+      setPendingPaymentOrder(order.id);
       btn.disabled = order.paid === 1;
       btn.textContent = order.paid ? 'Already paid' : `Pay ${money(order.total)}`;
 
@@ -596,7 +650,7 @@
     }
 
     function selectOrder(id) {
-      selectedTrackingOrderId = id;
+      setSelectedTrackingOrder(id);
       renderTracking();
     }
 
@@ -637,6 +691,10 @@
       const hh = String(today.getHours()).padStart(2, '0');
       const mi = String(today.getMinutes()).padStart(2, '0');
       timeInput.value = `${hh}:${mi}`;
+
+      clientOrderIds = new Set(loadStoredNumberArray(CLIENT_ORDER_IDS_KEY));
+      setSelectedTrackingOrder(Number(localStorage.getItem(CLIENT_SELECTED_ORDER_KEY) || 0));
+      setPendingPaymentOrder(Number(localStorage.getItem(CLIENT_PENDING_ORDER_KEY) || 0));
 
       const data = await api('/api/state');
       state = data;
