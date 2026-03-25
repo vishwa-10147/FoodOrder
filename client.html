@@ -179,9 +179,9 @@
           <div class="pay-card">
             <h3>Payment details</h3>
             <div class="methods">
-              <div class="method active" onclick="setMethod(this)">Card</div>
-              <div class="method" onclick="setMethod(this)">UPI</div>
-              <div class="method" onclick="setMethod(this)">Cash</div>
+              <div class="method active" onclick="setMethod(this, 'card')">Card</div>
+              <div class="method" onclick="setMethod(this, 'upi')">UPI</div>
+              <div class="method" onclick="setMethod(this, 'cash')">Cash</div>
             </div>
             <button class="btn" id="pay-btn" onclick="payOrder()">Pay ₹0</button>
           </div>
@@ -203,6 +203,7 @@
     let orderType = 'dine';
     let selectedTrackingOrderId = null;
     let pendingPaymentOrderId = null;
+    let selectedPaymentMethod = 'card';
 
     function money(v) { return `₹${Number(v || 0).toLocaleString('en-IN')}`; }
 
@@ -252,7 +253,7 @@
           <div class="receipt-total-line"><span>Service</span><span>${money(service)}</span></div>
           <div class="receipt-divider"></div>
           <div class="receipt-total-line grand"><span>Gross Amount</span><span>${money(total)}</span></div>
-          <div class="receipt-foot">${escapeHtml(order.paid ? 'Paid' : 'Payment pending')} · ${escapeHtml(order.status || '-')}</div>
+          <div class="receipt-foot">${escapeHtml(order.paid ? 'Paid' : 'Payment pending')} · ${escapeHtml(order.status || '-')} · ${escapeHtml((order.paymentMethod || selectedPaymentMethod || '-').toUpperCase())}</div>
         </div>
       `;
     }
@@ -323,9 +324,10 @@
       return `Scheduled for ${date} ${time}`;
     }
 
-    function setMethod(el) {
+    function setMethod(el, method) {
       document.querySelectorAll('.method').forEach((m) => m.classList.remove('active'));
       el.classList.add('active');
+      selectedPaymentMethod = String(method || 'card').trim().toLowerCase();
     }
 
     function renderDineTableOptions() {
@@ -510,7 +512,16 @@
     async function payOrder() {
       if (!pendingPaymentOrderId) return;
       try {
-        await api(`/api/orders/${pendingPaymentOrderId}/pay`, 'POST', {});
+        const order = state.orders.find((o) => o.id === pendingPaymentOrderId);
+        if (!order) {
+          alert('Pending order not found for payment.');
+          return;
+        }
+
+        await api(`/api/orders/${pendingPaymentOrderId}/pay`, 'POST', {
+          paymentMethod: selectedPaymentMethod,
+          amount: order.total
+        });
       } catch (e) {
         alert(e.message);
       }

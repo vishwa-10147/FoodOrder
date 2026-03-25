@@ -5,10 +5,19 @@ services:
     plan: free
     buildCommand: npm install
     startCommand: npm start
+    healthCheckPath: /api/health
     envVars:
       - key: NODE_ENV
         value: production
-      - key: PGSSL
+      - key: PORT
+        value: "10000"
+      - key: DB_BACKUP_ENABLED
         value: "true"
-      - key: DATABASE_URL
-        sync: false
+      - key: DB_BACKUP_INTERVAL_MINUTES
+        value: "120"
+      - key: DB_BACKUP_RETENTION_COUNT
+        value: "72"
+    disks:
+      - name: sqlite-data
+        mountPath: /opt/render/project/src/data
+        sizeGB: 1

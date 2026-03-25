@@ -133,6 +133,8 @@ CREATE TABLE IF NOT EXISTS orders (
   notes TEXT DEFAULT '',
   status TEXT NOT NULL CHECK(status IN ('new','preparing','ready','delivered')),
   paid INTEGER NOT NULL DEFAULT 0,
+  payment_method TEXT,
+  paid_at INTEGER,
   eta_minutes INTEGER NOT NULL DEFAULT 15,
   created_at INTEGER NOT NULL,
   updated_at INTEGER NOT NULL
@@ -216,6 +218,16 @@ function seedDatabase() {
       items.forEach((item) => insertMenu.run(item.name, item.description, item.price, item.emoji, item.category));
     });
     tx(seedMenu);
+  }
+
+  const orderColumns = db.prepare('PRAGMA table_info(orders)').all();
+  const hasPaymentMethodColumn = orderColumns.some((col) => col.name === 'payment_method');
+  const hasPaidAtColumn = orderColumns.some((col) => col.name === 'paid_at');
+  if (!hasPaymentMethodColumn) {
+    db.exec('ALTER TABLE orders ADD COLUMN payment_method TEXT');
+  }
+  if (!hasPaidAtColumn) {
+    db.exec('ALTER TABLE orders ADD COLUMN paid_at INTEGER');
   }
 
   const tableCount = db.prepare('SELECT COUNT(*) as count FROM table_status').get().count;
@@ -315,7 +327,7 @@ function createOrder({ orderType, tableNumber = null, notes = '', items, status 
 
 function getOrders() {
   const orders = db.prepare(
-    `SELECT id, order_type as orderType, table_number as tableNumber, notes, status, paid, eta_minutes as etaMinutes, created_at as createdAt, updated_at as updatedAt
+    `SELECT id, order_type as orderType, table_number as tableNumber, notes, status, paid, payment_method as paymentMethod, paid_at as paidAt, eta_minutes as etaMinutes, created_at as createdAt, updated_at as updatedAt
      FROM orders
      ORDER BY created_at DESC`
   ).all();
@@ -629,18 +641,44 @@ app.post('/api/orders/:id/status', (req, res) => {
 app.post('/api/orders/:id/pay', (req, res) => {
   const orderId = Number(req.params.id);
   const actor = getActor(req);
-  const order = db.prepare('SELECT id, order_type as orderType, table_number as tableNumber FROM orders WHERE id = ?').get(orderId);
-  if (!order) return res.status(404).json({ error: 'Order not found' });
+  const paymentMethod = String(req.body?.paymentMethod || 'card').trim().toLowerCase();
+  if (!['card', 'upi', 'cash'].includes(paymentMethod)) {
+    return res.status(400).json({ error: 'Invalid payment method' });
+  }
 
-  db.prepare('UPDATE orders SET paid = 1, updated_at = ? WHERE id = ?').run(Date.now(), orderId);
+  const amount = Number(req.body?.amount || 0);
+  const order = db.prepare('SELECT id, order_type as orderType, table_number as tableNumber, paid FROM orders WHERE id = ?').get(orderId);
+  if (!order) return res.status(404).json({ error: 'Order not found' });
+  if (Number(order.paid) === 1) return res.status(400).json({ error: 'Order is already paid' });
+
+  const fullOrder = getOrders().find((entry) => entry.id === orderId);
+  if (!fullOrder) return res.status(404).json({ error: 'Order details not found' });
+
+  if (!Number.isFinite(amount) || amount <= 0) {
+    return res.status(400).json({ error: 'Invalid payment amount' });
+  }
+  if (Math.round(amount) !== Math.round(fullOrder.total)) {
+    return res.status(400).json({ error: `Payment amount mismatch. Expected ${fullOrder.total}` });
+  }
+
+  const paidAt = Date.now();
+  db.prepare('UPDATE orders SET paid = 1, payment_method = ?, paid_at = ?, updated_at = ? WHERE id = ?').run(paymentMethod, paidAt, paidAt, orderId);
   // Payment confirms table usage for dine/pre-order; keep table marked occupied.
   if ((order.orderType === 'dine' || order.orderType === 'preorder') && order.tableNumber) {
     db.prepare('UPDATE table_status SET status = ? WHERE table_number = ?').run('occupied', order.tableNumber);
   }
-  logAudit({ action: 'order_paid', entityType: 'order', entityId: orderId, actor });
+
+  logAudit({
+    action: 'order_paid',
+    entityType: 'order',
+    entityId: orderId,
+    actor,
+    details: { paymentMethod, amount, paidAt }
+  });
 
   broadcastState();
-  return res.json({ ok: true });
+  const updatedOrder = getOrders().find((entry) => entry.id === orderId);
+  return res.json({ ok: true, order: updatedOrder });
 });
 
 app.post('/api/tables/:tableNumber/toggle', (req, res) => {

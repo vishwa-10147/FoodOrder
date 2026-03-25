@@ -314,6 +314,7 @@
       const createdAt = new Date(order.createdAt || Date.now());
       const dateText = createdAt.toLocaleDateString('en-GB');
       const timeText = createdAt.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: false });
+      const paidTimeText = order.paidAt ? new Date(order.paidAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: false }) : null;
       const subtotal = orderSubtotal(order);
       const tax = Number(order.tax || 0);
       const service = Number(order.service || 0);
@@ -341,7 +342,7 @@
           <div class="receipt-total-line"><span>Service</span><span>${money(service)}</span></div>
           <div class="receipt-divider"></div>
           <div class="receipt-total-line grand"><span>Gross Amount</span><span>${money(total)}</span></div>
-          <div class="receipt-foot">${escapeHtml(order.paid ? 'Paid' : 'Payment pending')} · ${escapeHtml(order.status || '-')}</div>
+          <div class="receipt-foot">${escapeHtml(order.paid ? 'Paid' : 'Payment pending')} · ${escapeHtml(order.status || '-')} · ${escapeHtml((order.paymentMethod || '-').toUpperCase())}${paidTimeText ? ` · ${escapeHtml(paidTimeText)}` : ''}</div>
         </div>
       `;
     }
