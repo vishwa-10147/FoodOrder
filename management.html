@@ -159,6 +159,37 @@
     .table-status-admin-meta { font-size:11px; color:var(--color-text-secondary); margin-top:2px; }
     .table-status-admin-actions { display:flex; align-items:center; gap:6px; }
 
+    .section-head-wrap { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:8px; flex-wrap:wrap; }
+    .order-export-controls { display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
+    .order-export-date { border:var(--border); border-radius:var(--border-radius-md); padding:6px 8px; font-size:12px; color:var(--color-text-primary); background:var(--color-background-primary); }
+    .print-controls { display:flex; align-items:center; gap:6px; flex-wrap:wrap; margin-bottom:8px; }
+    .print-note { font-size:11px; color:var(--color-text-secondary); }
+
+    @media (max-width: 980px) {
+      body { padding: 10px; }
+      #app { flex-direction: column; min-height: auto; }
+      #sidebar { width: 100%; border-right: none; border-bottom: var(--border); }
+      .nav { display: flex; overflow-x: auto; padding: 0; }
+      .nav-item { white-space: nowrap; }
+      .content { padding: 12px; }
+      .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .orders-grid { grid-template-columns: 1fr; }
+      .table-layout { grid-template-columns: 1fr; }
+      .table-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+      .pipeline { grid-template-columns: 1fr; }
+      .menu-admin-form-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .section-head { align-items: flex-start; flex-direction: column; }
+    }
+
+    @media (max-width: 640px) {
+      .metrics { grid-template-columns: 1fr; }
+      .table-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .menu-admin-form-grid { grid-template-columns: 1fr; }
+      .table-actions { width: 100%; flex-wrap: wrap; }
+      .table-input { width: 100%; }
+      .small-btn { width: auto; }
+    }
+
     .modal-backdrop { position:fixed; inset:0; background:rgba(0,0,0,0.25); display:none; align-items:center; justify-content:center; z-index:1000; }
     .modal-backdrop.open { display:flex; }
     .modal-card { width:min(420px, calc(100vw - 32px)); background:var(--color-background-primary); border:var(--border); border-radius:var(--border-radius-md); padding:14px; }
@@ -222,6 +253,15 @@
         </div>
 
         <div class="section">
+          <h3>Print controls</h3>
+          <div class="print-controls">
+            <button class="small-btn" id="auto-print-toggle" onclick="toggleAutoPrint()">Auto print: Off</button>
+            <button class="small-btn" onclick="printLatestOrder()">Select printer & print latest</button>
+            <div class="print-note">Printer selection appears in the browser print dialog.</div>
+          </div>
+        </div>
+
+        <div class="section">
           <h3>Activity log</h3>
           <div class="audit-list" id="audit-list"></div>
         </div>
@@ -265,7 +305,13 @@
         </div>
 
         <div class="section">
-          <h3>Order list</h3>
+          <div class="section-head-wrap">
+            <h3>Order list</h3>
+            <div class="order-export-controls">
+              <input id="order-export-date" class="order-export-date" type="date" />
+              <button class="small-btn" onclick="downloadOrdersByDateCsv()">Download day summary</button>
+            </div>
+          </div>
           <div class="menu-orders-list" id="menu-order-list"></div>
         </div>
       </section>
@@ -291,6 +337,8 @@
     let selectedOrderId = null;
     let pendingRemoveTableNumber = null;
     let selectedOrderingTableNumber = null;
+    let autoPrintEnabled = false;
+    let knownOrderIds = new Set();
     const tableOrderDrafts = {};
 
     function money(v) { return `₹${Number(v || 0).toLocaleString('en-IN')}`; }
@@ -640,7 +688,83 @@
       renderMenuManagement();
       renderMenuOrders();
       renderTableStatusSwitch();
+      renderPrintControls();
       renderAuditLogs();
+    }
+
+    function renderPrintControls() {
+      const button = document.getElementById('auto-print-toggle');
+      if (!button) return;
+      button.textContent = `Auto print: ${autoPrintEnabled ? 'On' : 'Off'}`;
+    }
+
+    function toggleAutoPrint() {
+      autoPrintEnabled = !autoPrintEnabled;
+      renderPrintControls();
+    }
+
+    function formatOrderPrintHtml(order) {
+      const created = new Date(order.createdAt || Date.now());
+      const rows = (order.items || []).map((item) => `
+        <tr>
+          <td>${item.name}</td>
+          <td style="text-align:right;">${item.qty}</td>
+          <td style="text-align:right;">${money(item.price)}</td>
+          <td style="text-align:right;">${money(item.price * item.qty)}</td>
+        </tr>
+      `).join('');
+
+      return `
+        <html>
+          <head>
+            <title>${order.label}</title>
+            <style>
+              body { font-family: Arial, sans-serif; padding: 12px; color: #222; }
+              h1 { font-size: 18px; margin: 0 0 8px; }
+              .meta { font-size: 12px; margin-bottom: 8px; }
+              table { width: 100%; border-collapse: collapse; }
+              th, td { border-bottom: 1px solid #ddd; padding: 6px 4px; font-size: 12px; }
+              th { text-align: left; }
+              .total { margin-top: 10px; font-size: 14px; font-weight: 700; text-align: right; }
+            </style>
+          </head>
+          <body>
+            <h1>FoodOrder</h1>
+            <div class="meta">${order.label} · ${created.toLocaleString('en-IN')} · ${order.orderType}${order.tableNumber ? ` · Table ${order.tableNumber}` : ''}</div>
+            <table>
+              <thead>
+                <tr><th>Item</th><th style="text-align:right;">Qty</th><th style="text-align:right;">Rate</th><th style="text-align:right;">Amount</th></tr>
+              </thead>
+              <tbody>${rows}</tbody>
+            </table>
+            <div class="total">Total: ${money(order.total)}</div>
+          </body>
+        </html>
+      `;
+    }
+
+    function printOrder(order) {
+      if (!order) return;
+      const popup = window.open('', '_blank', 'width=420,height=640');
+      if (!popup) {
+        alert('Please allow popups to print orders.');
+        return;
+      }
+      popup.document.open();
+      popup.document.write(formatOrderPrintHtml(order));
+      popup.document.close();
+      popup.focus();
+      setTimeout(() => {
+        popup.print();
+      }, 250);
+    }
+
+    function printLatestOrder() {
+      if (!state.orders.length) {
+        alert('No orders available to print.');
+        return;
+      }
+      printOrder(state.orders[0]);
     }
 
     function renderMenuManagement() {
@@ -689,6 +813,88 @@
         }).join('');
       }
 
+    }
+
+    function getSelectedExportDate() {
+      const input = document.getElementById('order-export-date');
+      if (!input || !input.value) return null;
+      return input.value;
+    }
+
+    function getOrdersForDate(dateText) {
+      if (!dateText) return [];
+      return (state.orders || []).filter((order) => {
+        const d = new Date(order.createdAt || Date.now());
+        const yyyy = d.getFullYear();
+        const mm = String(d.getMonth() + 1).padStart(2, '0');
+        const dd = String(d.getDate()).padStart(2, '0');
+        return `${yyyy}-${mm}-${dd}` === dateText;
+      });
+    }
+
+    function csvEscape(value) {
+      const text = String(value ?? '');
+      if (text.includes(',') || text.includes('"') || text.includes('\n')) {
+        return `"${text.replaceAll('"', '""')}"`;
+      }
+      return text;
+    }
+
+    function downloadOrdersByDateCsv() {
+      const dateText = getSelectedExportDate();
+      if (!dateText) {
+        alert('Select a date first.');
+        return;
+      }
+
+      const rows = getOrdersForDate(dateText);
+      if (!rows.length) {
+        alert('No orders found for selected date.');
+        return;
+      }
+
+      const header = ['Order ID', 'Created At', 'Type', 'Table', 'Status', 'Paid', 'Payment Method', 'Items', 'Subtotal', 'Tax', 'Service', 'Total', 'Notes'];
+      const lines = [header.join(',')];
+      let totalAmount = 0;
+      let totalTax = 0;
+      let totalService = 0;
+      let totalSubtotal = 0;
+
+      rows.forEach((order) => {
+        totalAmount += Number(order.total || 0);
+        totalTax += Number(order.tax || 0);
+        totalService += Number(order.service || 0);
+        totalSubtotal += Number(order.subtotal || 0);
+
+        const itemsText = (order.items || []).map((item) => `${item.name} x${item.qty}`).join(' | ');
+        lines.push([
+          csvEscape(order.label),
+          csvEscape(new Date(order.createdAt || Date.now()).toLocaleString('en-IN')),
+          csvEscape(order.orderType),
+          csvEscape(order.tableNumber ? `T${order.tableNumber}` : '-'),
+          csvEscape(order.status),
+          csvEscape(order.paid ? 'Yes' : 'No'),
+          csvEscape(order.paymentMethod || '-'),
+          csvEscape(itemsText),
+          csvEscape(order.subtotal || 0),
+          csvEscape(order.tax || 0),
+          csvEscape(order.service || 0),
+          csvEscape(order.total || 0),
+          csvEscape(order.notes || '')
+        ].join(','));
+      });
+
+      lines.push('');
+      lines.push(['Summary', '', '', '', '', '', '', '', totalSubtotal, totalTax, totalService, totalAmount, ''].join(','));
+
+      const csv = `\uFEFF${lines.join('\n')}`;
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.download = `orders-summary-${dateText}.csv`;
+      anchor.click();
+      URL.revokeObjectURL(url);
     }
 
     function renderTableStatusSwitch() {
@@ -850,9 +1056,20 @@
     }
 
     socket.on('state:update', (newState) => {
+      const previousIds = knownOrderIds;
+      const nextIds = new Set((newState.orders || []).map((order) => order.id));
       state = newState;
       renderAll();
       loadAuditLogs();
+
+      if (autoPrintEnabled) {
+        const newOrders = (newState.orders || []).filter((order) => !previousIds.has(order.id));
+        if (newOrders.length) {
+          printOrder(newOrders[0]);
+        }
+      }
+
+      knownOrderIds = nextIds;
     });
 
     (async function init() {
@@ -860,6 +1077,17 @@
       setInterval(updateTime, 30000);
       const data = await api('/api/state');
       state = data;
+      knownOrderIds = new Set((data.orders || []).map((order) => order.id));
+
+      const exportDateInput = document.getElementById('order-export-date');
+      if (exportDateInput) {
+        const now = new Date();
+        const yyyy = now.getFullYear();
+        const mm = String(now.getMonth() + 1).padStart(2, '0');
+        const dd = String(now.getDate()).padStart(2, '0');
+        exportDateInput.value = `${yyyy}-${mm}-${dd}`;
+      }
+
       await loadAuditLogs();
       renderAll();
     })();
