@@ -45,6 +45,8 @@ const SWIGGY_STORE_ID = String(process.env.SWIGGY_STORE_ID || '').trim();
 const SWIGGY_WEBHOOK_STRICT = String(process.env.SWIGGY_WEBHOOK_STRICT || 'true').toLowerCase() !== 'false';
 const SWIGGY_SYNC_INTERVAL_MS = Math.max(3000, Number(process.env.SWIGGY_SYNC_INTERVAL_MS || 15 * 1000));
 const SWIGGY_ONLY_MODE = String(process.env.SWIGGY_ONLY_MODE || 'false').toLowerCase() === 'true';
+const SWIGGY_MENU_PULL_ENABLED = String(process.env.SWIGGY_MENU_PULL_ENABLED || 'false').toLowerCase() === 'true';
+const SWIGGY_MENU_PULL_INTERVAL_MS = Math.max(30000, Number(process.env.SWIGGY_MENU_PULL_INTERVAL_MS || 5 * 60 * 1000));
 
 const razorpay = RAZORPAY_ENABLED
   ? new Razorpay({ key_id: RAZORPAY_KEY_ID, key_secret: RAZORPAY_KEY_SECRET })
@@ -498,7 +500,14 @@ function getState() {
   const tables = db.prepare('SELECT table_number as tableNumber, status FROM table_status ORDER BY table_number ASC').all();
   const orders = getOrders();
   const stats = getStats(orders, tables);
-  return { menu, tables, orders, stats, swiggyOnlyMode: SWIGGY_ONLY_MODE };
+  return {
+    menu,
+    tables,
+    orders,
+    stats,
+    swiggyOnlyMode: SWIGGY_ONLY_MODE,
+    swiggyMenuLiveMode: SWIGGY_MENU_PULL_ENABLED
+  };
 }
 
 function markOrderPaid({ orderId, actor, paymentMethod, paymentGatewayOrderId = null, paymentGatewayPaymentId = null }) {
@@ -763,6 +772,106 @@ function parseSwiggyPayment(orderNode, payload) {
   };
 }
 
+function normalizeSwiggyMenuItems(payload) {
+  const root = payload?.data || payload || {};
+  const candidates = [
+    root?.items,
+    root?.menu,
+    root?.catalog,
+    root?.catalog?.items,
+    root?.menu?.items,
+    root?.payload?.items
+  ].find((entry) => Array.isArray(entry));
+
+  const rows = Array.isArray(candidates) ? candidates : [];
+  const byName = new Map();
+
+  rows.forEach((row) => {
+    const name = String(row?.name || row?.title || row?.item_name || '').trim();
+    if (!name) return;
+
+    const pricePaise = Number(row?.pricePaise || row?.price_paise || row?.price_in_paise || 0);
+    const rawPrice = Number(row?.price || row?.amount || 0);
+    const price = pricePaise > 0
+      ? Math.round(pricePaise / 100)
+      : Math.round(rawPrice);
+    if (!Number.isFinite(price) || price <= 0) return;
+
+    const category = String(row?.category || row?.category_name || row?.group || 'other').trim().toLowerCase() || 'other';
+    const description = String(row?.description || row?.desc || '').trim() || 'Swiggy synced item';
+    const available = row?.inStock === false || row?.available === false || row?.isAvailable === false ? 0 : 1;
+    const itemCode = String(row?.itemCode || row?.id || row?.item_id || '').trim() || null;
+    byName.set(name.toLowerCase(), { name, description, price, category, available, itemCode });
+  });
+
+  return Array.from(byName.values());
+}
+
+async function fetchSwiggyMenuPayload() {
+  try {
+    return await swiggyRequest('/menu', 'GET');
+  } catch (_error) {
+    return swiggyRequest('/menu/live', 'GET');
+  }
+}
+
+async function pullSwiggyMenuIntoLocal({ actor = 'system', reason = 'manual' } = {}) {
+  if (!SWIGGY_ENABLED) throw new Error('Swiggy integration is disabled');
+
+  const payload = await fetchSwiggyMenuPayload();
+  const items = normalizeSwiggyMenuItems(payload);
+  if (!items.length) throw new Error('No menu items found in Swiggy response');
+
+  const now = Date.now();
+  const findByName = db.prepare('SELECT id FROM menu_items WHERE lower(name) = lower(?)');
+  const updateItem = db.prepare(
+    'UPDATE menu_items SET description = ?, price = ?, category = ?, available = ? WHERE id = ?'
+  );
+  const insertItem = db.prepare(
+    'INSERT INTO menu_items (name, description, price, emoji, category, available) VALUES (?, ?, ?, ?, ?, ?)'
+  );
+
+  const tx = db.transaction(() => {
+    let inserted = 0;
+    let updated = 0;
+    for (const item of items) {
+      const existing = findByName.get(item.name);
+      if (existing?.id) {
+        updateItem.run(item.description, item.price, item.category, item.available, existing.id);
+        updated += 1;
+      } else {
+        insertItem.run(item.name, item.description, item.price, '🍽️', item.category, item.available);
+        inserted += 1;
+      }
+    }
+    return { inserted, updated };
+  });
+
+  const summary = tx();
+
+  logAudit({
+    action: 'swiggy_menu_pulled',
+    entityType: 'menu',
+    actor,
+    details: {
+      reason,
+      pulledAt: now,
+      totalFromSwiggy: items.length,
+      inserted: summary.inserted,
+      updated: summary.updated
+    }
+  });
+
+  broadcastState();
+  return {
+    ok: true,
+    reason,
+    totalFromSwiggy: items.length,
+    inserted: summary.inserted,
+    updated: summary.updated
+  };
+}
+
 function verifySwiggyWebhookSignature(rawBuffer, signature) {
   if (!SWIGGY_WEBHOOK_STRICT) return true;
   if (!SWIGGY_WEBHOOK_SECRET) return false;
@@ -853,6 +962,8 @@ app.get('/api/integrations/swiggy/config', (_req, res) => {
   return res.json({
     enabled: SWIGGY_ENABLED,
     swiggyOnlyMode: SWIGGY_ONLY_MODE,
+    swiggyMenuPullEnabled: SWIGGY_MENU_PULL_ENABLED,
+    swiggyMenuPullIntervalMs: SWIGGY_MENU_PULL_INTERVAL_MS,
     apiBaseUrlConfigured: Boolean(SWIGGY_API_BASE_URL),
     apiTokenConfigured: Boolean(SWIGGY_API_TOKEN),
     webhookSecretConfigured: Boolean(SWIGGY_WEBHOOK_SECRET),
@@ -881,6 +992,16 @@ app.post('/api/integrations/swiggy/menu/sync', (req, res) => {
 
   processIntegrationQueue();
   return res.status(202).json({ ok: true, jobId });
+});
+
+app.post('/api/integrations/swiggy/menu/pull', async (req, res) => {
+  try {
+    const actor = getActor(req);
+    const result = await pullSwiggyMenuIntoLocal({ actor, reason: 'manual' });
+    return res.json(result);
+  } catch (error) {
+    return res.status(400).json({ error: error.message || 'Swiggy menu pull failed' });
+  }
 });
 
 app.post('/api/integrations/swiggy/orders/:id/status/sync', (req, res) => {
@@ -1581,3 +1702,10 @@ if (DB_BACKUP_ENABLED) {
 setInterval(() => {
   processIntegrationQueue();
 }, SWIGGY_SYNC_INTERVAL_MS).unref();
+
+if (SWIGGY_ENABLED && SWIGGY_MENU_PULL_ENABLED) {
+  setInterval(() => {
+    pullSwiggyMenuIntoLocal({ actor: 'system', reason: 'scheduled' }).catch((_error) => {
+    });
+  }, SWIGGY_MENU_PULL_INTERVAL_MS).unref();
+}

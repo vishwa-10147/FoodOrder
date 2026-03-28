@@ -99,6 +99,25 @@ Behavior in this mode:
 - Direct payment endpoints and Razorpay checkout endpoints are blocked/ignored.
 - Client page hides order/payment sections and shows tracking-focused behavior.
 
+## 2.5) Your requested model: app confirms/tracks, Swiggy handles menu + payment
+Use this mode when kitchen and status management stay in your app while menu and payments come from Swiggy.
+
+Set these values:
+1. `SWIGGY_ENABLED=true`
+2. `SWIGGY_ONLY_MODE=true`
+3. `SWIGGY_MENU_PULL_ENABLED=true`
+4. `SWIGGY_MENU_PULL_INTERVAL_MS=300000` (or your preferred interval)
+5. `SWIGGY_API_BASE_URL=<partner-api-base>`
+6. `SWIGGY_API_TOKEN=<partner-token>`
+7. `SWIGGY_WEBHOOK_SECRET=<swiggy-webhook-secret>`
+8. `SWIGGY_STORE_ID=<store-id>`
+
+How it works:
+- Menu is pulled from Swiggy into local DB on interval (and manually from management page).
+- Orders are ingested from Swiggy webhooks and shown in your management kitchen/tracking.
+- Payment status is ingested from Swiggy webhook payloads and marked paid locally.
+- Status updates from management are synced back to Swiggy through integration jobs.
+
 ## 3) What is hardened now
 - Basic API rate limiting for `/api/*`
 - Health endpoint: `GET /api/health`

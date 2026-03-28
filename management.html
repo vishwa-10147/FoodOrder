@@ -293,6 +293,7 @@
               <div class="menu-admin-meta" id="swiggy-config-line">Swiggy config: loading...</div>
               <div style="display:flex; gap:6px;">
                 <button class="small-btn" onclick="refreshSwiggyConfig()">Refresh status</button>
+                <button class="small-btn" onclick="pullSwiggyMenuNow()">Pull menu from Swiggy</button>
                 <button class="small-btn" onclick="queueSwiggyMenuSync()">Sync menu to Swiggy</button>
               </div>
             </div>
@@ -1128,7 +1129,10 @@
         const enabledText = swiggyConfig.enabled ? 'enabled' : 'disabled';
         const tokenText = swiggyConfig.apiTokenConfigured ? 'token set' : 'token missing';
         const baseUrlText = swiggyConfig.apiBaseUrlConfigured ? 'base URL set' : 'base URL missing';
-        configLine.textContent = `Swiggy config: ${enabledText} · ${baseUrlText} · ${tokenText}`;
+        const menuModeText = swiggyConfig.swiggyMenuPullEnabled
+          ? `menu live pull on (${Math.round(Number(swiggyConfig.swiggyMenuPullIntervalMs || 0) / 1000)}s)`
+          : 'menu live pull off';
+        configLine.textContent = `Swiggy config: ${enabledText} · ${baseUrlText} · ${tokenText} · ${menuModeText}`;
       }
 
       if (!swiggyJobs.length) {
@@ -1170,6 +1174,17 @@
         await api('/api/integrations/swiggy/menu/sync', 'POST', {});
         await loadSwiggyJobs();
         alert('Swiggy menu sync job queued.');
+      } catch (e) {
+        alert(e.message);
+      }
+    }
+
+    async function pullSwiggyMenuNow() {
+      try {
+        const result = await api('/api/integrations/swiggy/menu/pull', 'POST', {});
+        const inserted = Number(result?.inserted || 0);
+        const updated = Number(result?.updated || 0);
+        alert(`Swiggy menu pulled successfully. Inserted: ${inserted}, Updated: ${updated}`);
       } catch (e) {
         alert(e.message);
       }
