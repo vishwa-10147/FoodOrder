@@ -89,8 +89,11 @@
     .pay-card { border:var(--border); border-radius:var(--border-radius-md); background:var(--color-background-primary); padding:18px; }
     .pay-card h3 { font-size:13px; color:var(--color-text-primary); margin-bottom:14px; }
     .methods { display:flex; gap:6px; margin-bottom:12px; }
-    .method { flex:1; font-size:12px; border:var(--border); border-radius:var(--border-radius-md); padding:8px; text-align:center; color:var(--color-text-secondary); cursor:pointer; }
-    .method.active { border-color:var(--charcoal); background:var(--color-background-secondary); color:var(--color-text-primary); font-weight:500; }
+    .method { flex:1; font-size:12px; border:var(--border); border-radius:var(--border-radius-md); padding:8px; text-align:center; color:var(--color-text-secondary); cursor:pointer; transition: all 0.2s ease; }
+    .method:hover { border-color:var(--accent); color:var(--accent-dark); background:var(--accent-light); }
+    .method.active { border-color:var(--accent); background:var(--accent-light); color:var(--accent-dark); font-weight:600; }
+    .upi-id-group { margin-bottom:12px; }
+    .upi-id-help { font-size:11px; color:var(--color-text-secondary); margin-top:4px; }
     .sum-row { display:flex; justify-content:space-between; font-size:13px; color:var(--color-text-secondary); padding:5px 0; border-bottom:var(--border); }
     .sum-row.total { border-bottom:none; font-size:15px; font-weight:500; color:var(--color-text-primary); padding-top:8px; }
     .receipt { border:var(--border); border-radius:var(--border-radius-md); padding:10px; background:var(--color-background-primary); }
@@ -106,6 +109,7 @@
     .receipt-total-line { display:flex; justify-content:space-between; font-size:12px; color:var(--color-text-primary); margin-top:4px; }
     .receipt-total-line.grand { font-size:14px; font-weight:600; }
     .receipt-foot { margin-top:8px; font-size:11px; color:var(--color-text-secondary); }
+    .mode-note { margin-bottom:12px; border:var(--border); border-radius:var(--border-radius-md); background:var(--warn-light); color:var(--warn); padding:10px; font-size:12px; }
 
     @media (max-width: 980px) {
       body { padding: 10px; }
@@ -150,6 +154,7 @@
       </div>
 
       <section class="content active" id="view-order">
+        <div class="mode-note" id="swiggy-only-note" style="display:none;">Swiggy-only mode is active. Place new orders on Swiggy; this screen only shows tracking information.</div>
         <div class="customer-wrap">
           <div class="menu-panel">
             <div class="order-type-tabs">
@@ -184,7 +189,7 @@
               <div class="row"><span>Subtotal</span><span id="sub">₹0</span></div>
               <div class="row"><span>Tax (5%)</span><span id="tax">₹0</span></div>
               <div class="row total"><span>Total</span><span id="total">₹0</span></div>
-              <button class="btn" onclick="placeOrder()">Place order & checkout →</button>
+              <button class="btn" id="place-btn" onclick="placeOrder()">Place order & checkout →</button>
             </div>
           </div>
         </div>
@@ -202,7 +207,11 @@
             <div class="methods">
               <div class="method active" onclick="setMethod(this, 'card')">Card</div>
               <div class="method" onclick="setMethod(this, 'upi')">UPI</div>
-              <div class="method" onclick="setMethod(this, 'cash')">Cash</div>
+            </div>
+            <div class="upi-id-group" id="upi-id-group" style="display:none;">
+              <div class="field-label">UPI ID</div>
+              <input id="upi-id" class="field-input" type="text" placeholder="example@okhdfcbank" />
+              <div class="upi-id-help">Enter your UPI ID to start a direct UPI collect flow.</div>
             </div>
             <button class="btn" id="pay-btn" onclick="payOrder()">Pay ₹0</button>
           </div>
@@ -231,6 +240,7 @@
     const CLIENT_ORDER_IDS_KEY = 'foodorder_client_order_ids';
     const CLIENT_SELECTED_ORDER_KEY = 'foodorder_selected_tracking_order_id';
     const CLIENT_PENDING_ORDER_KEY = 'foodorder_pending_payment_order_id';
+    const CLIENT_UPI_ID_KEY = 'foodorder_upi_id';
     let clientOrderIds = new Set();
 
     function money(v) { return `₹${Number(v || 0).toLocaleString('en-IN')}`; }
@@ -401,6 +411,36 @@
       document.querySelectorAll('.method').forEach((m) => m.classList.remove('active'));
       el.classList.add('active');
       selectedPaymentMethod = String(method || 'card').trim().toLowerCase();
+
+      const upiGroup = document.getElementById('upi-id-group');
+      if (upiGroup) {
+        upiGroup.style.display = selectedPaymentMethod === 'upi' ? 'block' : 'none';
+      }
+    }
+
+    function isSwiggyOnlyMode() {
+      return Boolean(state?.swiggyOnlyMode);
+    }
+
+    function applySwiggyOnlyModeUI() {
+      const enabled = isSwiggyOnlyMode();
+      const orderNav = document.querySelector('.nav-item[data-view="order"]');
+      const paymentNav = document.querySelector('.nav-item[data-view="payment"]');
+      const note = document.getElementById('swiggy-only-note');
+      const placeBtn = document.getElementById('place-btn');
+
+      if (orderNav) orderNav.style.display = enabled ? 'none' : '';
+      if (paymentNav) paymentNav.style.display = enabled ? 'none' : '';
+      if (note) note.style.display = enabled ? 'block' : 'none';
+
+      if (placeBtn) {
+        placeBtn.disabled = enabled;
+        placeBtn.textContent = enabled ? 'Ordering via Swiggy only' : 'Place order & checkout →';
+      }
+
+      if (enabled) {
+        switchView('tracking', document.querySelector('.nav-item[data-view="tracking"]'));
+      }
     }
 
     function renderDineTableOptions() {
@@ -448,6 +488,11 @@
     }
 
     function addToCart(menuItemId) {
+      if (isSwiggyOnlyMode()) {
+        alert('Cart is disabled in Swiggy-only mode. Place orders on Swiggy.');
+        return;
+      }
+
       const item = state.menu.find((m) => m.id === menuItemId && Number(m.available) === 1);
       if (!item) {
         alert('This item is currently unavailable.');
@@ -503,6 +548,11 @@
     }
 
     async function placeOrder() {
+      if (isSwiggyOnlyMode()) {
+        alert('Direct ordering is disabled in Swiggy-only mode.');
+        return;
+      }
+
       syncCartWithMenu();
       renderCart();
       if (!cart.length) return;
@@ -527,13 +577,23 @@
           notes,
           items: cart.map((i) => ({ menuItemId: i.menuItemId, qty: i.qty }))
         });
+
+        // Keep client state in sync immediately so payment summary shows the newly placed order without waiting for socket refresh.
+        if (response?.order?.id) {
+          const newOrderId = Number(response.order.id);
+          state.orders = [
+            response.order,
+            ...(state.orders || []).filter((existing) => Number(existing.id) !== newOrderId)
+          ];
+        }
+
         rememberClientOrder(response.order.id);
         setPendingPaymentOrder(response.order.id);
         setSelectedTrackingOrder(response.order.id);
         cart = [];
         document.getElementById('notes').value = '';
         switchView('payment', document.querySelector('.nav-item[data-view="payment"]'));
-        renderCart();
+        renderAll();
       } catch (e) {
         alert(e.message);
       }
@@ -587,6 +647,11 @@
     }
 
     async function payOrder() {
+      if (isSwiggyOnlyMode()) {
+        alert('Direct payment is disabled in Swiggy-only mode.');
+        return;
+      }
+
       if (!pendingPaymentOrderId) return;
       try {
         const order = state.orders.find((o) => o.id === pendingPaymentOrderId);
@@ -595,26 +660,36 @@
           return;
         }
 
-        if (selectedPaymentMethod === 'cash') {
-          await api(`/api/orders/${pendingPaymentOrderId}/pay`, 'POST', {
-            paymentMethod: selectedPaymentMethod,
-            amount: order.total
-          });
+        if (!razorpayConfig.enabled || !razorpayConfig.keyId) {
+          alert('Online payment is not configured yet. Please configure Razorpay keys.');
           return;
         }
 
-        if (!razorpayConfig.enabled || !razorpayConfig.keyId) {
-          alert('Online payment is not configured yet. Please use Cash or configure Razorpay keys.');
-          return;
+        const upiIdInput = document.getElementById('upi-id');
+        const upiId = String(upiIdInput?.value || '').trim();
+        if (selectedPaymentMethod === 'upi') {
+          const upiPattern = /^[a-zA-Z0-9._-]{2,}@[a-zA-Z]{2,}$/;
+          if (!upiPattern.test(upiId)) {
+            alert('Please enter a valid UPI ID (example@bank).');
+            return;
+          }
+          try { localStorage.setItem(CLIENT_UPI_ID_KEY, upiId); } catch (_error) {}
         }
 
         const gateway = await api(`/api/orders/${pendingPaymentOrderId}/razorpay-order`, 'POST', {
           paymentMethod: selectedPaymentMethod
         });
 
+        const preferredInstrument = selectedPaymentMethod === 'upi'
+          ? { method: 'upi' }
+          : { method: 'card' };
+        const alternateInstrument = selectedPaymentMethod === 'upi'
+          ? { method: 'card' }
+          : { method: 'upi' };
+
         const methodOptions = selectedPaymentMethod === 'upi'
-          ? { upi: true, card: false, netbanking: false, wallet: false }
-          : { upi: false, card: true, netbanking: false, wallet: false };
+          ? { upi: true, card: true, netbanking: false, wallet: false, emi: false, paylater: false }
+          : { upi: true, card: true, netbanking: false, wallet: false, emi: false, paylater: false };
 
         const checkout = new Razorpay({
           key: gateway.keyId,
@@ -624,6 +699,28 @@
           description: `Payment for ${order.label}`,
           order_id: gateway.gatewayOrderId,
           method: methodOptions,
+          prefill: {
+            method: selectedPaymentMethod,
+            ...(selectedPaymentMethod === 'upi' ? { vpa: upiId } : {})
+          },
+          config: {
+            display: {
+              blocks: {
+                preferred: {
+                  name: selectedPaymentMethod === 'upi' ? 'Pay using UPI' : 'Pay using Card',
+                  instruments: [preferredInstrument]
+                },
+                alternate: {
+                  name: selectedPaymentMethod === 'upi' ? 'Pay using Card' : 'Pay using UPI',
+                  instruments: [alternateInstrument]
+                }
+              },
+              sequence: ['block.preferred', 'block.alternate'],
+              preferences: {
+                show_default_blocks: false
+              }
+            }
+          },
           handler: async function (response) {
             try {
               await api(`/api/orders/${pendingPaymentOrderId}/razorpay/verify`, 'POST', {
@@ -655,6 +752,7 @@
     }
 
     function renderAll() {
+      applySwiggyOnlyModeUI();
       syncCartWithMenu();
       renderDineTableOptions();
       renderCategoryTabs();
@@ -703,6 +801,12 @@
       } catch (_error) {
         razorpayConfig = { enabled: false, keyId: null };
       }
+
+      const upiIdInput = document.getElementById('upi-id');
+      if (upiIdInput) {
+        try { upiIdInput.value = String(localStorage.getItem(CLIENT_UPI_ID_KEY) || ''); } catch (_error) {}
+      }
+
       renderAll();
     })();
   </script>

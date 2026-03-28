@@ -13,6 +13,7 @@
   "type": "commonjs",
   "dependencies": {
     "better-sqlite3": "^12.8.0",
+    "dotenv": "^16.6.1",
     "express": "^5.2.1",
     "qrcode": "^1.5.4",
     "razorpay": "^2.9.6",

@@ -55,6 +55,8 @@
     .tag.dine { background: var(--info-light); color: var(--info); }
     .tag.takeaway { background: var(--warn-light); color: var(--warn); }
     .tag.preorder { background: var(--accent-light); color: var(--accent-dark); }
+    .tag.source-direct { background: var(--color-background-secondary); color: var(--color-text-secondary); }
+    .tag.source-swiggy { background: #fff1de; color: #9a5600; }
 
     .table-layout { display:grid; grid-template-columns:minmax(0, 2fr) minmax(260px, 1fr); gap:10px; align-items:start; }
     .table-grid { display:grid; grid-template-columns:repeat(7,minmax(0,1fr)); gap:8px; }
@@ -165,6 +167,7 @@
     .order-export-date { border:var(--border); border-radius:var(--border-radius-md); padding:6px 8px; font-size:12px; color:var(--color-text-primary); background:var(--color-background-primary); }
     .print-controls { display:flex; align-items:center; gap:6px; flex-wrap:wrap; margin-bottom:8px; }
     .print-note { font-size:11px; color:var(--color-text-secondary); }
+    .hybrid-meta { font-size:11px; color:var(--color-text-secondary); margin-top:8px; }
 
     @media (max-width: 980px) {
       body { padding: 10px; }
@@ -284,6 +287,20 @@
 
       <section class="content" id="view-menu">
         <div class="section">
+          <h3>Hybrid channel controls</h3>
+          <div class="menu-admin-form">
+            <div class="menu-admin-form-actions">
+              <div class="menu-admin-meta" id="swiggy-config-line">Swiggy config: loading...</div>
+              <div style="display:flex; gap:6px;">
+                <button class="small-btn" onclick="refreshSwiggyConfig()">Refresh status</button>
+                <button class="small-btn" onclick="queueSwiggyMenuSync()">Sync menu to Swiggy</button>
+              </div>
+            </div>
+            <div class="hybrid-meta" id="swiggy-job-line">Latest sync job: none</div>
+          </div>
+        </div>
+
+        <div class="section">
           <h3>Menu availability</h3>
           <div class="menu-admin-form">
             <div class="menu-admin-form-grid">
@@ -341,6 +358,8 @@
     let autoPrintEnabled = false;
     let knownOrderIds = new Set();
     const tableOrderDrafts = {};
+    let swiggyConfig = null;
+    let swiggyJobs = [];
 
     function money(v) { return `₹${Number(v || 0).toLocaleString('en-IN')}`; }
 
@@ -424,6 +443,17 @@
       return '<span class="tag preorder">Pre-order</span>';
     }
 
+    function sourceBadge(order) {
+      const source = String(order?.source || 'direct').toLowerCase();
+      if (source === 'swiggy') return '<span class="tag source-swiggy">Swiggy</span>';
+      return '<span class="tag source-direct">Direct</span>';
+    }
+
+    function sourceLabel(order) {
+      const source = String(order?.source || 'direct').toLowerCase();
+      return source === 'swiggy' ? 'Swiggy' : 'Direct';
+    }
+
     function eta(order) {
       if (order.status === 'delivered') return 'Delivered';
       const elapsed = Math.floor((Date.now() - order.createdAt) / 60000);
@@ -443,7 +473,7 @@
       const recent = state.orders.slice(0, 3);
       document.getElementById('recent').innerHTML = recent.length ? recent.map((o) => `
         <div class="order-card">
-          <div class="order-head"><span class="order-id">${o.label}</span>${badge(o)}</div>
+          <div class="order-head"><span class="order-id">${o.label}</span><div style="display:flex;gap:6px;">${badge(o)}${sourceBadge(o)}</div></div>
           ${receiptMarkup(o, true)}
           <div style="display:flex;justify-content:space-between;font-size:12px;">
             <span style="color:var(--color-text-secondary);">${eta(o)}</span>
@@ -652,7 +682,7 @@
         document.getElementById(`l-${st}`).innerHTML = groups[st].length ? groups[st].map((o) => `
           <div class="item" style="opacity:${st === 'delivered' ? '0.65' : '1'};">
             <div style="display:flex;justify-content:space-between;align-items:center;gap:6px;">
-              <span class="id">${o.label}</span>${badge(o)}
+              <span class="id">${o.label}</span><div style="display:flex;gap:6px;">${badge(o)}${sourceBadge(o)}</div>
             </div>
             <div class="desc">${o.items.map((i) => `${i.name} × ${i.qty}`).join(', ')}</div>
             <div style="font-size:10px;color:var(--color-text-tertiary);margin-bottom:6px;">${eta(o)}</div>
@@ -686,6 +716,7 @@
       renderDashboard();
       renderKitchen();
       renderTracking();
+      renderSwiggyIntegrationPanel();
       renderMenuManagement();
       renderMenuOrders();
       renderTableStatusSwitch();
@@ -816,6 +847,7 @@
           return `
             ${dateHeader}
             <div class="menu-order-item">
+              <div class="menu-order-meta">Source: ${sourceLabel(order)}${order.externalOrderId ? ` · External ID: ${escapeHtml(order.externalOrderId)}` : ''}</div>
               ${receiptMarkup(order)}
             </div>
           `;
@@ -1085,6 +1117,64 @@
       }
     }
 
+    function renderSwiggyIntegrationPanel() {
+      const configLine = document.getElementById('swiggy-config-line');
+      const jobLine = document.getElementById('swiggy-job-line');
+      if (!configLine || !jobLine) return;
+
+      if (!swiggyConfig) {
+        configLine.textContent = 'Swiggy config: unavailable';
+      } else {
+        const enabledText = swiggyConfig.enabled ? 'enabled' : 'disabled';
+        const tokenText = swiggyConfig.apiTokenConfigured ? 'token set' : 'token missing';
+        const baseUrlText = swiggyConfig.apiBaseUrlConfigured ? 'base URL set' : 'base URL missing';
+        configLine.textContent = `Swiggy config: ${enabledText} · ${baseUrlText} · ${tokenText}`;
+      }
+
+      if (!swiggyJobs.length) {
+        jobLine.textContent = 'Latest sync job: none';
+      } else {
+        const latest = swiggyJobs[0];
+        jobLine.textContent = `Latest sync job: #${latest.id} · ${latest.jobType} · ${latest.status} · attempts ${latest.attempts}/${latest.maxAttempts}`;
+      }
+    }
+
+    async function refreshSwiggyConfig() {
+      try {
+        swiggyConfig = await api('/api/integrations/swiggy/config');
+      } catch (_error) {
+        swiggyConfig = {
+          enabled: false,
+          apiBaseUrlConfigured: false,
+          apiTokenConfigured: false,
+          webhookSecretConfigured: false,
+          webhookStrict: true,
+          storeIdConfigured: false
+        };
+      }
+      renderSwiggyIntegrationPanel();
+    }
+
+    async function loadSwiggyJobs() {
+      try {
+        const data = await api('/api/integrations/swiggy/jobs?limit=5');
+        swiggyJobs = Array.isArray(data?.jobs) ? data.jobs : [];
+      } catch (_error) {
+        swiggyJobs = [];
+      }
+      renderSwiggyIntegrationPanel();
+    }
+
+    async function queueSwiggyMenuSync() {
+      try {
+        await api('/api/integrations/swiggy/menu/sync', 'POST', {});
+        await loadSwiggyJobs();
+        alert('Swiggy menu sync job queued.');
+      } catch (e) {
+        alert(e.message);
+      }
+    }
+
     function selectOrder(orderId) {
       selectedOrderId = orderId;
       renderTracking();
@@ -1129,6 +1219,8 @@
       }
 
       await loadAuditLogs();
+      await refreshSwiggyConfig();
+      await loadSwiggyJobs();
       renderAll();
     })();
   </script>

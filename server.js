@@ -1,3 +1,5 @@
+require('dotenv').config();
+
 const express = require('express');
 const http = require('http');
 const path = require('path');
@@ -34,6 +36,15 @@ const RAZORPAY_KEY_ID = String(process.env.RAZORPAY_KEY_ID || '').trim();
 const RAZORPAY_KEY_SECRET = String(process.env.RAZORPAY_KEY_SECRET || '').trim();
 const RAZORPAY_WEBHOOK_SECRET = String(process.env.RAZORPAY_WEBHOOK_SECRET || '').trim();
 const RAZORPAY_ENABLED = Boolean(RAZORPAY_KEY_ID && RAZORPAY_KEY_SECRET);
+
+const SWIGGY_ENABLED = String(process.env.SWIGGY_ENABLED || 'false').toLowerCase() === 'true';
+const SWIGGY_API_BASE_URL = String(process.env.SWIGGY_API_BASE_URL || '').trim().replace(/\/$/, '');
+const SWIGGY_API_TOKEN = String(process.env.SWIGGY_API_TOKEN || '').trim();
+const SWIGGY_WEBHOOK_SECRET = String(process.env.SWIGGY_WEBHOOK_SECRET || '').trim();
+const SWIGGY_STORE_ID = String(process.env.SWIGGY_STORE_ID || '').trim();
+const SWIGGY_WEBHOOK_STRICT = String(process.env.SWIGGY_WEBHOOK_STRICT || 'true').toLowerCase() !== 'false';
+const SWIGGY_SYNC_INTERVAL_MS = Math.max(3000, Number(process.env.SWIGGY_SYNC_INTERVAL_MS || 15 * 1000));
+const SWIGGY_ONLY_MODE = String(process.env.SWIGGY_ONLY_MODE || 'false').toLowerCase() === 'true';
 
 const razorpay = RAZORPAY_ENABLED
   ? new Razorpay({ key_id: RAZORPAY_KEY_ID, key_secret: RAZORPAY_KEY_SECRET })
@@ -143,6 +154,8 @@ CREATE TABLE IF NOT EXISTS orders (
   table_number INTEGER,
   notes TEXT DEFAULT '',
   status TEXT NOT NULL CHECK(status IN ('new','preparing','ready','delivered')),
+  source TEXT NOT NULL DEFAULT 'direct',
+  external_order_id TEXT,
   paid INTEGER NOT NULL DEFAULT 0,
   payment_method TEXT,
   payment_gateway_order_id TEXT,
@@ -172,6 +185,34 @@ CREATE TABLE IF NOT EXISTS audit_logs (
   details TEXT,
   created_at INTEGER NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS swiggy_order_map (
+  external_order_id TEXT PRIMARY KEY,
+  local_order_id INTEGER NOT NULL,
+  remote_status TEXT,
+  last_payload TEXT,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL,
+  FOREIGN KEY(local_order_id) REFERENCES orders(id)
+);
+
+CREATE TABLE IF NOT EXISTS integration_sync_jobs (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  provider TEXT NOT NULL,
+  job_type TEXT NOT NULL,
+  reference_id TEXT,
+  payload TEXT NOT NULL,
+  status TEXT NOT NULL CHECK(status IN ('queued','processing','success','failed')),
+  attempts INTEGER NOT NULL DEFAULT 0,
+  max_attempts INTEGER NOT NULL DEFAULT 5,
+  last_error TEXT,
+  next_retry_at INTEGER,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_sync_jobs_poll
+ON integration_sync_jobs(provider, status, next_retry_at, created_at);
 `);
 
 const seedMenu = [
@@ -238,6 +279,8 @@ function seedDatabase() {
   const hasPaymentGatewayOrderIdColumn = orderColumns.some((col) => col.name === 'payment_gateway_order_id');
   const hasPaymentGatewayPaymentIdColumn = orderColumns.some((col) => col.name === 'payment_gateway_payment_id');
   const hasPaidAtColumn = orderColumns.some((col) => col.name === 'paid_at');
+  const hasSourceColumn = orderColumns.some((col) => col.name === 'source');
+  const hasExternalOrderIdColumn = orderColumns.some((col) => col.name === 'external_order_id');
   if (!hasPaymentMethodColumn) {
     db.exec('ALTER TABLE orders ADD COLUMN payment_method TEXT');
   }
@@ -250,6 +293,19 @@ function seedDatabase() {
   if (!hasPaidAtColumn) {
     db.exec('ALTER TABLE orders ADD COLUMN paid_at INTEGER');
   }
+  if (!hasSourceColumn) {
+    db.exec("ALTER TABLE orders ADD COLUMN source TEXT NOT NULL DEFAULT 'direct'");
+  }
+  if (!hasExternalOrderIdColumn) {
+    db.exec('ALTER TABLE orders ADD COLUMN external_order_id TEXT');
+  }
+
+  // Ensure the external order id uniqueness index exists after legacy schemas are migrated.
+  db.exec(`
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_orders_external_order_id
+    ON orders(external_order_id)
+    WHERE external_order_id IS NOT NULL;
+  `);
 
   const tableCount = db.prepare('SELECT COUNT(*) as count FROM table_status').get().count;
   if (tableCount === 0) {
@@ -309,7 +365,25 @@ function getMenuMap() {
   }, {});
 }
 
-function createOrder({ orderType, tableNumber = null, notes = '', items, status = 'new', paid = 0, etaMinutes = 15 }) {
+function getMenuByNameMap() {
+  const rows = db.prepare('SELECT id, name, price FROM menu_items').all();
+  return rows.reduce((acc, row) => {
+    acc[String(row.name || '').trim().toLowerCase()] = row;
+    return acc;
+  }, {});
+}
+
+function createOrder({
+  orderType,
+  tableNumber = null,
+  notes = '',
+  items,
+  status = 'new',
+  paid = 0,
+  etaMinutes = 15,
+  source = 'direct',
+  externalOrderId = null
+}) {
   if (!Array.isArray(items) || items.length === 0) {
     throw new Error('Order must contain items');
   }
@@ -330,8 +404,8 @@ function createOrder({ orderType, tableNumber = null, notes = '', items, status 
 
   const now = Date.now();
   const insertOrder = db.prepare(
-    `INSERT INTO orders (order_type, table_number, notes, status, paid, eta_minutes, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+     `INSERT INTO orders (order_type, table_number, notes, status, source, external_order_id, paid, eta_minutes, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   );
   const insertItem = db.prepare(
     `INSERT INTO order_items (order_id, menu_item_id, item_name, item_price, qty)
@@ -339,7 +413,7 @@ function createOrder({ orderType, tableNumber = null, notes = '', items, status 
   );
 
   const tx = db.transaction(() => {
-    const result = insertOrder.run(orderType, tableNumber, notes, status, paid, etaMinutes, now, now);
+    const result = insertOrder.run(orderType, tableNumber, notes, status, source, externalOrderId, paid, etaMinutes, now, now);
     normalizedItems.forEach((item) => {
       insertItem.run(result.lastInsertRowid, item.menuItemId, item.menu.name, item.menu.price, item.qty);
     });
@@ -355,7 +429,7 @@ function createOrder({ orderType, tableNumber = null, notes = '', items, status 
 
 function getOrders() {
   const orders = db.prepare(
-    `SELECT id, order_type as orderType, table_number as tableNumber, notes, status, paid, payment_method as paymentMethod, payment_gateway_order_id as paymentGatewayOrderId, payment_gateway_payment_id as paymentGatewayPaymentId, paid_at as paidAt, eta_minutes as etaMinutes, created_at as createdAt, updated_at as updatedAt
+    `SELECT id, order_type as orderType, table_number as tableNumber, notes, status, source, external_order_id as externalOrderId, paid, payment_method as paymentMethod, payment_gateway_order_id as paymentGatewayOrderId, payment_gateway_payment_id as paymentGatewayPaymentId, paid_at as paidAt, eta_minutes as etaMinutes, created_at as createdAt, updated_at as updatedAt
      FROM orders
      ORDER BY created_at DESC`
   ).all();
@@ -424,7 +498,7 @@ function getState() {
   const tables = db.prepare('SELECT table_number as tableNumber, status FROM table_status ORDER BY table_number ASC').all();
   const orders = getOrders();
   const stats = getStats(orders, tables);
-  return { menu, tables, orders, stats };
+  return { menu, tables, orders, stats, swiggyOnlyMode: SWIGGY_ONLY_MODE };
 }
 
 function markOrderPaid({ orderId, actor, paymentMethod, paymentGatewayOrderId = null, paymentGatewayPaymentId = null }) {
@@ -453,6 +527,254 @@ function markOrderPaid({ orderId, actor, paymentMethod, paymentGatewayOrderId = 
   return getOrders().find((entry) => entry.id === orderId);
 }
 
+function normalizeSwiggyStatus(rawStatus) {
+  const status = String(rawStatus || '').trim().toLowerCase();
+  if (!status) return null;
+  if (['placed', 'pending', 'created', 'new'].includes(status)) return 'new';
+  if (['accepted', 'confirmed', 'preparing', 'in_kitchen', 'in-progress'].includes(status)) return 'preparing';
+  if (['ready', 'ready_for_pickup', 'picked_up', 'out_for_delivery'].includes(status)) return 'ready';
+  if (['delivered', 'completed', 'cancelled', 'canceled', 'rejected'].includes(status)) return 'delivered';
+  return null;
+}
+
+function toSwiggyOrderStatus(localStatus) {
+  if (localStatus === 'new') return 'PLACED';
+  if (localStatus === 'preparing') return 'ACCEPTED';
+  if (localStatus === 'ready') return 'READY_FOR_PICKUP';
+  if (localStatus === 'delivered') return 'DELIVERED';
+  return 'PLACED';
+}
+
+function enqueueIntegrationJob({ provider, jobType, referenceId = null, payload = {}, maxAttempts = 5 }) {
+  const now = Date.now();
+  const result = db.prepare(
+    `INSERT INTO integration_sync_jobs
+      (provider, job_type, reference_id, payload, status, attempts, max_attempts, next_retry_at, created_at, updated_at)
+     VALUES (?, ?, ?, ?, 'queued', 0, ?, ?, ?, ?)`
+  ).run(provider, jobType, referenceId ? String(referenceId) : null, JSON.stringify(payload || {}), maxAttempts, now, now, now);
+  return Number(result.lastInsertRowid);
+}
+
+async function swiggyRequest(endpointPath, method, body) {
+  if (!SWIGGY_ENABLED) {
+    throw new Error('Swiggy integration is disabled');
+  }
+  if (!SWIGGY_API_BASE_URL || !SWIGGY_API_TOKEN) {
+    throw new Error('Swiggy API credentials are missing');
+  }
+
+  const url = `${SWIGGY_API_BASE_URL}${endpointPath.startsWith('/') ? endpointPath : `/${endpointPath}`}`;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 12000);
+
+  try {
+    const response = await fetch(url, {
+      method,
+      headers: {
+        Authorization: `Bearer ${SWIGGY_API_TOKEN}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(body || {}),
+      signal: controller.signal
+    });
+
+    const text = await response.text();
+    if (!response.ok) {
+      throw new Error(`Swiggy API ${response.status}: ${text.slice(0, 300)}`);
+    }
+    return text ? JSON.parse(text) : { ok: true };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+function buildSwiggyMenuPayload() {
+  const menu = db.prepare(
+    'SELECT id, name, description as description, price, category as category, available FROM menu_items ORDER BY id ASC'
+  ).all();
+
+  return {
+    storeId: SWIGGY_STORE_ID || null,
+    generatedAt: new Date().toISOString(),
+    items: menu.map((item) => ({
+      itemCode: String(item.id),
+      name: item.name,
+      description: item.description,
+      price: Number(item.price),
+      category: item.category,
+      inStock: Number(item.available) === 1
+    }))
+  };
+}
+
+async function processSwiggyJob(job) {
+  const payload = job.payload ? JSON.parse(job.payload) : {};
+
+  if (job.job_type === 'menu_sync_full') {
+    return swiggyRequest('/menu/sync', 'POST', buildSwiggyMenuPayload());
+  }
+
+  if (job.job_type === 'order_status_update') {
+    const localOrderId = Number(job.reference_id || payload.localOrderId || 0);
+    const order = getOrders().find((entry) => entry.id === localOrderId);
+    if (!order) throw new Error(`Order ${localOrderId} not found`);
+
+    const mapped = db.prepare('SELECT external_order_id as externalOrderId FROM swiggy_order_map WHERE local_order_id = ?').get(localOrderId);
+    const externalOrderId = String(payload.externalOrderId || order.externalOrderId || mapped?.externalOrderId || '').trim();
+    if (!externalOrderId) throw new Error(`No Swiggy external order id found for local order ${localOrderId}`);
+
+    return swiggyRequest(`/orders/${encodeURIComponent(externalOrderId)}/status`, 'POST', {
+      storeId: SWIGGY_STORE_ID || null,
+      localOrderId,
+      status: String(payload.status || toSwiggyOrderStatus(order.status)),
+      reason: String(payload.reason || '').trim() || null,
+      updatedAt: new Date().toISOString()
+    });
+  }
+
+  throw new Error(`Unsupported sync job type: ${job.job_type}`);
+}
+
+let integrationWorkerBusy = false;
+
+async function processIntegrationQueue() {
+  if (integrationWorkerBusy) return;
+  integrationWorkerBusy = true;
+
+  try {
+    const now = Date.now();
+    const jobs = db.prepare(
+      `SELECT id, provider, job_type, reference_id, payload, status, attempts, max_attempts
+       FROM integration_sync_jobs
+       WHERE provider = 'swiggy'
+         AND status IN ('queued','failed')
+         AND (next_retry_at IS NULL OR next_retry_at <= ?)
+         AND attempts < max_attempts
+       ORDER BY created_at ASC
+       LIMIT 5`
+    ).all(now);
+
+    for (const job of jobs) {
+      const attemptNumber = Number(job.attempts || 0) + 1;
+      db.prepare(
+        `UPDATE integration_sync_jobs
+         SET status = 'processing', attempts = ?, updated_at = ?
+         WHERE id = ?`
+      ).run(attemptNumber, Date.now(), job.id);
+
+      try {
+        await processSwiggyJob(job);
+        db.prepare(
+          `UPDATE integration_sync_jobs
+           SET status = 'success', last_error = NULL, updated_at = ?
+           WHERE id = ?`
+        ).run(Date.now(), job.id);
+      } catch (error) {
+        const delayMinutes = Math.min(30, 2 ** Math.max(0, attemptNumber - 1));
+        const retryAt = Date.now() + delayMinutes * 60 * 1000;
+        db.prepare(
+          `UPDATE integration_sync_jobs
+           SET status = 'failed', last_error = ?, next_retry_at = ?, updated_at = ?
+           WHERE id = ?`
+        ).run(String(error.message || 'Sync failed').slice(0, 600), retryAt, Date.now(), job.id);
+      }
+    }
+  } finally {
+    integrationWorkerBusy = false;
+  }
+}
+
+function upsertSwiggyOrderMap({ externalOrderId, localOrderId, remoteStatus = null, payload = null }) {
+  const now = Date.now();
+  db.prepare(
+    `INSERT INTO swiggy_order_map (external_order_id, local_order_id, remote_status, last_payload, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?)
+     ON CONFLICT(external_order_id)
+     DO UPDATE SET
+       local_order_id = excluded.local_order_id,
+       remote_status = excluded.remote_status,
+       last_payload = excluded.last_payload,
+       updated_at = excluded.updated_at`
+  ).run(
+    externalOrderId,
+    localOrderId,
+    remoteStatus,
+    payload ? JSON.stringify(payload) : null,
+    now,
+    now
+  );
+}
+
+function parseSwiggyIncomingOrder(payload) {
+  const orderNode = payload?.order || payload;
+  const externalOrderId = String(orderNode?.id || payload?.order_id || payload?.id || '').trim();
+  const remoteStatus = String(orderNode?.status || payload?.status || 'PLACED').trim();
+  const notes = String(orderNode?.instructions || orderNode?.notes || payload?.instructions || '').trim();
+  const rawItems = Array.isArray(orderNode?.items) ? orderNode.items : [];
+
+  const menuByName = getMenuByNameMap();
+  const normalizedItems = rawItems
+    .map((item) => {
+      const name = String(item?.name || item?.item_name || '').trim().toLowerCase();
+      const mappedMenu = menuByName[name];
+      const qty = Math.max(1, Number(item?.qty || item?.quantity || 1));
+      if (!mappedMenu) return null;
+      return { menuItemId: mappedMenu.id, qty };
+    })
+    .filter(Boolean);
+
+  return {
+    externalOrderId,
+    remoteStatus,
+    notes,
+    normalizedItems
+  };
+}
+
+function parseSwiggyPayment(orderNode, payload) {
+  const paymentNode = orderNode?.payment || payload?.payment || payload?.payload?.payment?.entity || {};
+  const rawMethod = String(
+    paymentNode?.method || paymentNode?.mode || orderNode?.payment_mode || orderNode?.paymentMethod || payload?.payment_mode || ''
+  ).trim().toLowerCase();
+  const rawStatus = String(
+    paymentNode?.status || paymentNode?.state || orderNode?.payment_status || orderNode?.paymentStatus || payload?.payment_status || ''
+  ).trim().toLowerCase();
+
+  const normalizedMethod = (() => {
+    if (!rawMethod) return 'swiggy';
+    if (['cod', 'cash', 'cash_on_delivery', 'cashondelivery'].includes(rawMethod)) return 'cash';
+    if (['upi', 'card', 'netbanking', 'wallet'].includes(rawMethod)) return rawMethod;
+    return `swiggy_${rawMethod}`;
+  })();
+
+  const isPaid = Boolean(
+    paymentNode?.paid === true
+      || paymentNode?.is_paid === true
+      || orderNode?.is_prepaid === true
+      || ['paid', 'captured', 'success', 'completed', 'prepaid'].includes(rawStatus)
+  );
+
+  return {
+    isPaid,
+    paymentMethod: normalizedMethod,
+    paymentGatewayOrderId: String(paymentNode?.order_id || orderNode?.id || '').trim() || null,
+    paymentGatewayPaymentId: String(paymentNode?.id || paymentNode?.payment_id || '').trim() || null,
+    paymentStatusRaw: rawStatus || null
+  };
+}
+
+function verifySwiggyWebhookSignature(rawBuffer, signature) {
+  if (!SWIGGY_WEBHOOK_STRICT) return true;
+  if (!SWIGGY_WEBHOOK_SECRET) return false;
+  const expected = crypto.createHmac('sha256', SWIGGY_WEBHOOK_SECRET).update(rawBuffer).digest('hex');
+  if (!signature) return false;
+
+  const expectedBuffer = Buffer.from(expected, 'hex');
+  const signatureBuffer = Buffer.from(signature, 'hex');
+  if (expectedBuffer.length !== signatureBuffer.length) return false;
+  return crypto.timingSafeEqual(expectedBuffer, signatureBuffer);
+}
+
 function broadcastState() {
   io.emit('state:update', getState());
 }
@@ -476,7 +798,7 @@ seedDatabase();
 
 const jsonParser = express.json();
 app.use((req, res, next) => {
-  if (req.path === '/api/payments/razorpay/webhook') return next();
+  if (req.path === '/api/payments/razorpay/webhook' || req.path === '/api/integrations/swiggy/webhook') return next();
   return jsonParser(req, res, next);
 });
 app.use(express.static(__dirname));
@@ -525,6 +847,208 @@ app.get('/api/health', (_req, res) => {
 
 app.get('/api/state', (_req, res) => {
   res.json(getState());
+});
+
+app.get('/api/integrations/swiggy/config', (_req, res) => {
+  return res.json({
+    enabled: SWIGGY_ENABLED,
+    swiggyOnlyMode: SWIGGY_ONLY_MODE,
+    apiBaseUrlConfigured: Boolean(SWIGGY_API_BASE_URL),
+    apiTokenConfigured: Boolean(SWIGGY_API_TOKEN),
+    webhookSecretConfigured: Boolean(SWIGGY_WEBHOOK_SECRET),
+    webhookStrict: SWIGGY_WEBHOOK_STRICT,
+    storeIdConfigured: Boolean(SWIGGY_STORE_ID),
+    syncIntervalMs: SWIGGY_SYNC_INTERVAL_MS
+  });
+});
+
+app.post('/api/integrations/swiggy/menu/sync', (req, res) => {
+  const actor = getActor(req);
+  const jobId = enqueueIntegrationJob({
+    provider: 'swiggy',
+    jobType: 'menu_sync_full',
+    referenceId: SWIGGY_STORE_ID || null,
+    payload: { actor }
+  });
+
+  logAudit({
+    action: 'swiggy_menu_sync_queued',
+    entityType: 'integration_job',
+    entityId: jobId,
+    actor,
+    details: { provider: 'swiggy' }
+  });
+
+  processIntegrationQueue();
+  return res.status(202).json({ ok: true, jobId });
+});
+
+app.post('/api/integrations/swiggy/orders/:id/status/sync', (req, res) => {
+  const orderId = Number(req.params.id);
+  const actor = getActor(req);
+  const order = getOrders().find((entry) => entry.id === orderId);
+  if (!order) return res.status(404).json({ error: 'Order not found' });
+
+  const status = String(req.body?.status || toSwiggyOrderStatus(order.status)).trim();
+  const reason = String(req.body?.reason || '').trim();
+  const mapped = db.prepare('SELECT external_order_id as externalOrderId FROM swiggy_order_map WHERE local_order_id = ?').get(orderId);
+  const externalOrderId = String(req.body?.externalOrderId || order.externalOrderId || mapped?.externalOrderId || '').trim();
+
+  if (!externalOrderId) {
+    return res.status(400).json({ error: 'No Swiggy external order id is mapped for this order' });
+  }
+
+  const jobId = enqueueIntegrationJob({
+    provider: 'swiggy',
+    jobType: 'order_status_update',
+    referenceId: orderId,
+    payload: { localOrderId: orderId, externalOrderId, status, reason, actor }
+  });
+
+  logAudit({
+    action: 'swiggy_order_status_sync_queued',
+    entityType: 'integration_job',
+    entityId: jobId,
+    actor,
+    details: { localOrderId: orderId, externalOrderId, status }
+  });
+
+  processIntegrationQueue();
+  return res.status(202).json({ ok: true, jobId });
+});
+
+app.get('/api/integrations/swiggy/jobs', (req, res) => {
+  const limit = Math.max(1, Math.min(200, Number(req.query.limit || 50)));
+  const rows = db.prepare(
+    `SELECT id, provider, job_type as jobType, reference_id as referenceId, status, attempts, max_attempts as maxAttempts,
+            last_error as lastError, next_retry_at as nextRetryAt, created_at as createdAt, updated_at as updatedAt, payload
+     FROM integration_sync_jobs
+     WHERE provider = 'swiggy'
+     ORDER BY created_at DESC
+     LIMIT ?`
+  ).all(limit).map((row) => ({
+    ...row,
+    payload: row.payload ? JSON.parse(row.payload) : null
+  }));
+
+  return res.json({ jobs: rows });
+});
+
+app.post('/api/integrations/swiggy/jobs/:id/retry', (req, res) => {
+  const jobId = Number(req.params.id);
+  const actor = getActor(req);
+  const existing = db.prepare('SELECT id, provider FROM integration_sync_jobs WHERE id = ?').get(jobId);
+  if (!existing || existing.provider !== 'swiggy') return res.status(404).json({ error: 'Swiggy job not found' });
+
+  db.prepare(
+    `UPDATE integration_sync_jobs
+     SET status = 'queued', next_retry_at = ?, updated_at = ?
+     WHERE id = ?`
+  ).run(Date.now(), Date.now(), jobId);
+
+  logAudit({
+    action: 'swiggy_job_retried',
+    entityType: 'integration_job',
+    entityId: jobId,
+    actor,
+    details: { provider: 'swiggy' }
+  });
+
+  processIntegrationQueue();
+  return res.json({ ok: true, jobId });
+});
+
+app.post('/api/integrations/swiggy/webhook', express.raw({ type: 'application/json' }), (req, res) => {
+  try {
+    const signature = String(req.headers['x-swiggy-signature'] || req.headers['x-signature'] || '').trim();
+    const rawBuffer = Buffer.isBuffer(req.body) ? req.body : Buffer.from(req.body || '');
+    if (!verifySwiggyWebhookSignature(rawBuffer, signature)) {
+      return res.status(400).json({ error: 'Invalid Swiggy webhook signature' });
+    }
+
+    const payload = JSON.parse(rawBuffer.toString('utf8') || '{}');
+    const eventType = String(payload?.event || payload?.eventType || 'order.placed').trim().toLowerCase();
+    const incoming = parseSwiggyIncomingOrder(payload);
+    const paymentInfo = parseSwiggyPayment(payload?.order || payload, payload);
+    if (!incoming.externalOrderId) {
+      return res.status(400).json({ error: 'Missing external order id' });
+    }
+
+    const mapped = db.prepare(
+      'SELECT external_order_id as externalOrderId, local_order_id as localOrderId FROM swiggy_order_map WHERE external_order_id = ?'
+    ).get(incoming.externalOrderId);
+
+    let localOrderId = mapped?.localOrderId || null;
+    const localStatus = normalizeSwiggyStatus(incoming.remoteStatus);
+
+    if (!localOrderId) {
+      if (!incoming.normalizedItems.length) {
+        return res.status(400).json({ error: 'No mappable menu items found for incoming Swiggy order' });
+      }
+
+      localOrderId = createOrder({
+        orderType: 'takeaway',
+        notes: incoming.notes,
+        items: incoming.normalizedItems,
+        status: localStatus || 'new',
+        source: 'swiggy',
+        externalOrderId: incoming.externalOrderId,
+        etaMinutes: 25
+      });
+
+      logAudit({
+        action: 'swiggy_order_ingested',
+        entityType: 'order',
+        entityId: localOrderId,
+        actor: 'swiggy-webhook',
+        details: { externalOrderId: incoming.externalOrderId, eventType, remoteStatus: incoming.remoteStatus }
+      });
+    } else if (localStatus) {
+      db.prepare('UPDATE orders SET status = ?, updated_at = ? WHERE id = ?').run(localStatus, Date.now(), localOrderId);
+      logAudit({
+        action: 'swiggy_order_status_ingested',
+        entityType: 'order',
+        entityId: localOrderId,
+        actor: 'swiggy-webhook',
+        details: { externalOrderId: incoming.externalOrderId, eventType, remoteStatus: incoming.remoteStatus, mappedStatus: localStatus }
+      });
+    }
+
+    const localOrder = getOrders().find((entry) => entry.id === localOrderId);
+    if (paymentInfo.isPaid && localOrder && Number(localOrder.paid) !== 1) {
+      markOrderPaid({
+        orderId: localOrderId,
+        actor: 'swiggy-webhook',
+        paymentMethod: paymentInfo.paymentMethod,
+        paymentGatewayOrderId: paymentInfo.paymentGatewayOrderId,
+        paymentGatewayPaymentId: paymentInfo.paymentGatewayPaymentId
+      });
+
+      logAudit({
+        action: 'swiggy_payment_ingested',
+        entityType: 'order',
+        entityId: localOrderId,
+        actor: 'swiggy-webhook',
+        details: {
+          externalOrderId: incoming.externalOrderId,
+          paymentMethod: paymentInfo.paymentMethod,
+          paymentStatusRaw: paymentInfo.paymentStatusRaw
+        }
+      });
+    }
+
+    upsertSwiggyOrderMap({
+      externalOrderId: incoming.externalOrderId,
+      localOrderId,
+      remoteStatus: incoming.remoteStatus,
+      payload
+    });
+
+    broadcastState();
+    return res.json({ ok: true, localOrderId, externalOrderId: incoming.externalOrderId });
+  } catch (error) {
+    return res.status(400).json({ error: error.message || 'Swiggy webhook processing failed' });
+  }
 });
 
 app.post('/api/menu/:id/availability', (req, res) => {
@@ -631,6 +1155,10 @@ app.get('/api/share-qr', async (req, res) => {
 
 app.post('/api/orders', (req, res) => {
   try {
+    if (SWIGGY_ONLY_MODE) {
+      return res.status(403).json({ error: 'Direct order creation is disabled in Swiggy-only mode' });
+    }
+
     const actor = getActor(req);
     const { orderType, tableNumber, notes, items } = req.body || {};
     if (!['dine', 'takeaway', 'preorder'].includes(orderType)) {
@@ -682,7 +1210,9 @@ app.post('/api/orders/:id/status', (req, res) => {
     return res.status(400).json({ error: 'Invalid status' });
   }
 
-  const order = db.prepare('SELECT id, order_type as orderType, table_number as tableNumber, status FROM orders WHERE id = ?').get(orderId);
+  const order = db.prepare(
+    'SELECT id, order_type as orderType, table_number as tableNumber, status, source, external_order_id as externalOrderId FROM orders WHERE id = ?'
+  ).get(orderId);
   if (!order) return res.status(404).json({ error: 'Order not found' });
 
   db.prepare('UPDATE orders SET status = ?, updated_at = ? WHERE id = ?').run(status, Date.now(), orderId);
@@ -704,16 +1234,50 @@ app.post('/api/orders/:id/status', (req, res) => {
     details: { from: order.status, to: status, orderType: order.orderType, tableNumber: order.tableNumber }
   });
 
+  if (SWIGGY_ENABLED && order.source === 'swiggy') {
+    const mapped = db.prepare('SELECT external_order_id as externalOrderId FROM swiggy_order_map WHERE local_order_id = ?').get(orderId);
+    const externalOrderId = String(order.externalOrderId || mapped?.externalOrderId || '').trim();
+    if (externalOrderId) {
+      const jobId = enqueueIntegrationJob({
+        provider: 'swiggy',
+        jobType: 'order_status_update',
+        referenceId: orderId,
+        payload: {
+          localOrderId: orderId,
+          externalOrderId,
+          status: toSwiggyOrderStatus(status),
+          reason: 'Updated from management status pipeline',
+          actor
+        }
+      });
+
+      logAudit({
+        action: 'swiggy_order_status_sync_queued',
+        entityType: 'integration_job',
+        entityId: jobId,
+        actor,
+        details: { localOrderId: orderId, externalOrderId, status: toSwiggyOrderStatus(status) }
+      });
+
+      processIntegrationQueue();
+    }
+  }
+
   broadcastState();
   return res.json({ ok: true });
 });
 
 app.get('/api/payments/razorpay/config', (_req, res) => {
-  return res.json({ enabled: RAZORPAY_ENABLED, keyId: RAZORPAY_ENABLED ? RAZORPAY_KEY_ID : null });
+  const enabled = SWIGGY_ONLY_MODE ? false : RAZORPAY_ENABLED;
+  return res.json({ enabled, keyId: enabled ? RAZORPAY_KEY_ID : null });
 });
 
 app.post('/api/orders/:id/razorpay-order', async (req, res) => {
   try {
+    if (SWIGGY_ONLY_MODE) {
+      return res.status(403).json({ error: 'Razorpay checkout is disabled in Swiggy-only mode' });
+    }
+
     if (!RAZORPAY_ENABLED || !razorpay) {
       return res.status(400).json({ error: 'Razorpay is not configured' });
     }
@@ -766,6 +1330,10 @@ app.post('/api/orders/:id/razorpay-order', async (req, res) => {
 
 app.post('/api/orders/:id/razorpay/verify', async (req, res) => {
   try {
+    if (SWIGGY_ONLY_MODE) {
+      return res.status(403).json({ error: 'Razorpay verification is disabled in Swiggy-only mode' });
+    }
+
     if (!RAZORPAY_ENABLED || !razorpay) {
       return res.status(400).json({ error: 'Razorpay is not configured' });
     }
@@ -825,6 +1393,10 @@ app.post('/api/orders/:id/razorpay/verify', async (req, res) => {
 
 app.post('/api/payments/razorpay/webhook', express.raw({ type: 'application/json' }), (req, res) => {
   try {
+    if (SWIGGY_ONLY_MODE) {
+      return res.json({ ok: true, ignored: true, reason: 'swiggy_only_mode' });
+    }
+
     if (!RAZORPAY_ENABLED || !RAZORPAY_WEBHOOK_SECRET) {
       return res.status(400).json({ error: 'Razorpay webhook is not configured' });
     }
@@ -865,6 +1437,10 @@ app.post('/api/payments/razorpay/webhook', express.raw({ type: 'application/json
 });
 
 app.post('/api/orders/:id/pay', (req, res) => {
+  if (SWIGGY_ONLY_MODE) {
+    return res.status(403).json({ error: 'Direct payment endpoint is disabled in Swiggy-only mode' });
+  }
+
   const orderId = Number(req.params.id);
   const actor = getActor(req);
   const paymentMethod = String(req.body?.paymentMethod || 'card').trim().toLowerCase();
@@ -1001,3 +1577,7 @@ if (DB_BACKUP_ENABLED) {
     runDatabaseBackup('interval');
   }, DB_BACKUP_INTERVAL_MINUTES * 60 * 1000).unref();
 }
+
+setInterval(() => {
+  processIntegrationQueue();
+}, SWIGGY_SYNC_INTERVAL_MS).unref();

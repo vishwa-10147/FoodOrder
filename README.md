@@ -63,6 +63,7 @@ FoodOrdering/
 - `/api/health` endpoint
 - In-memory API rate limiting for `/api/*`
 - Automatic SQLite backups with retention policy
+- Swiggy-ready integration module with webhook ingestion + retry queue
 
 ---
 
@@ -95,6 +96,13 @@ Copy values from `.env.example` and override as needed:
 - `DB_BACKUP_ENABLED` (default: `true`)
 - `DB_BACKUP_INTERVAL_MINUTES` (default: `60`)
 - `DB_BACKUP_RETENTION_COUNT` (default: `48`)
+- `SWIGGY_ENABLED` (default: `false`)
+- `SWIGGY_API_BASE_URL`
+- `SWIGGY_API_TOKEN`
+- `SWIGGY_WEBHOOK_SECRET`
+- `SWIGGY_STORE_ID`
+- `SWIGGY_WEBHOOK_STRICT` (default: `true`)
+- `SWIGGY_SYNC_INTERVAL_MS` (default: `15000`)
 
 PowerShell example:
 
@@ -106,6 +114,9 @@ $env:RATE_LIMIT_MAX='240'
 $env:DB_BACKUP_ENABLED='true'
 $env:DB_BACKUP_INTERVAL_MINUTES='60'
 $env:DB_BACKUP_RETENTION_COUNT='48'
+$env:SWIGGY_ENABLED='false'
+$env:SWIGGY_WEBHOOK_STRICT='true'
+$env:SWIGGY_SYNC_INTERVAL_MS='15000'
 npm start
 ```
 
@@ -139,6 +150,14 @@ npm start
 ### Payments
 - `GET /api/payments/razorpay/config` – online payment availability for frontend
 - `POST /api/payments/razorpay/webhook` – webhook capture sync from Razorpay
+
+### Swiggy Integration (Official Partner)
+- `GET /api/integrations/swiggy/config` – check if credentials and strict mode are configured
+- `POST /api/integrations/swiggy/webhook` – ingest order/status webhooks from Swiggy
+- `POST /api/integrations/swiggy/menu/sync` – enqueue full menu sync job
+- `POST /api/integrations/swiggy/orders/:id/status/sync` – enqueue single order status sync
+- `GET /api/integrations/swiggy/jobs?limit=50` – list recent sync jobs with retry/error state
+- `POST /api/integrations/swiggy/jobs/:id/retry` – manually retry failed/queued job
 
 ### Tables
 - `POST /api/tables/:tableNumber/toggle` – cycle table state
@@ -190,6 +209,8 @@ Tables in DB:
 - `orders`
 - `order_items`
 - `audit_logs`
+- `swiggy_order_map`
+- `integration_sync_jobs`
 
 ---
 
@@ -239,6 +260,16 @@ This is the lowest-risk option for low traffic because no DB rewrite is needed.
 Cash payments continue to work through internal backend validation.
 
 For small single-location setups, local SQLite is recommended.
+
+### Swiggy integration notes
+
+- This project now includes a Swiggy adapter-ready backend that supports:
+  - Incoming Swiggy order webhooks -> local order creation
+  - Incoming status webhooks -> local status updates
+  - Outbound queue for menu + order status sync with exponential retry
+  - Manual retry endpoint for failed jobs
+- Use only official Swiggy partner docs/credentials.
+- Keep `SWIGGY_ENABLED=false` until credentials are shared.
 
 ---
 
