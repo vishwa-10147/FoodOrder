@@ -35,6 +35,7 @@ const DB_BACKUP_RETENTION_COUNT = Math.max(1, Number(process.env.DB_BACKUP_RETEN
 const MANAGEMENT_AUTH_SECRET = String(process.env.MANAGEMENT_AUTH_SECRET || '').trim() || crypto.randomBytes(32).toString('hex');
 const MANAGEMENT_SETUP_KEY = String(process.env.MANAGEMENT_SETUP_KEY || '').trim();
 const MANAGEMENT_DEFAULT_PASSWORD = String(process.env.MANAGEMENT_DEFAULT_PASSWORD || '').trim();
+const MANAGEMENT_DEV_FALLBACK_PASSWORD = String(process.env.MANAGEMENT_DEV_FALLBACK_PASSWORD || '').trim();
 
 const RAZORPAY_KEY_ID = String(process.env.RAZORPAY_KEY_ID || '').trim();
 const RAZORPAY_KEY_SECRET = String(process.env.RAZORPAY_KEY_SECRET || '').trim();
@@ -520,6 +521,31 @@ function seedDatabase() {
       const credentials = hashPasswordWithSalt(MANAGEMENT_DEFAULT_PASSWORD);
       db.prepare('INSERT INTO restaurant_auth (restaurant_id, password_hash, password_salt, updated_at) VALUES (?, ?, ?, ?)')
         .run(defaultRestaurantRow.id, credentials.hash, credentials.salt, now);
+    }
+  }
+
+  const effectiveBootstrapPassword = MANAGEMENT_DEFAULT_PASSWORD
+    || (NODE_ENV === 'production' ? '' : (MANAGEMENT_DEV_FALLBACK_PASSWORD || 'admin123'));
+
+  if (effectiveBootstrapPassword) {
+    const restaurantsWithoutAuth = db.prepare(
+      `SELECT r.id
+       FROM restaurants r
+       LEFT JOIN restaurant_auth a ON a.restaurant_id = r.id
+       WHERE a.restaurant_id IS NULL`
+    ).all();
+
+    if (restaurantsWithoutAuth.length) {
+      const insertAuth = db.prepare(
+        'INSERT INTO restaurant_auth (restaurant_id, password_hash, password_salt, updated_at) VALUES (?, ?, ?, ?)'
+      );
+      const tx = db.transaction((rows) => {
+        rows.forEach((row) => {
+          const credentials = hashPasswordWithSalt(effectiveBootstrapPassword);
+          insertAuth.run(row.id, credentials.hash, credentials.salt, now);
+        });
+      });
+      tx(restaurantsWithoutAuth);
     }
   }
 
