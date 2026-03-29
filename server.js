@@ -37,17 +37,6 @@ const RAZORPAY_KEY_SECRET = String(process.env.RAZORPAY_KEY_SECRET || '').trim()
 const RAZORPAY_WEBHOOK_SECRET = String(process.env.RAZORPAY_WEBHOOK_SECRET || '').trim();
 const RAZORPAY_ENABLED = Boolean(RAZORPAY_KEY_ID && RAZORPAY_KEY_SECRET);
 
-const SWIGGY_ENABLED = String(process.env.SWIGGY_ENABLED || 'false').toLowerCase() === 'true';
-const SWIGGY_API_BASE_URL = String(process.env.SWIGGY_API_BASE_URL || '').trim().replace(/\/$/, '');
-const SWIGGY_API_TOKEN = String(process.env.SWIGGY_API_TOKEN || '').trim();
-const SWIGGY_WEBHOOK_SECRET = String(process.env.SWIGGY_WEBHOOK_SECRET || '').trim();
-const SWIGGY_STORE_ID = String(process.env.SWIGGY_STORE_ID || '').trim();
-const SWIGGY_WEBHOOK_STRICT = String(process.env.SWIGGY_WEBHOOK_STRICT || 'true').toLowerCase() !== 'false';
-const SWIGGY_SYNC_INTERVAL_MS = Math.max(3000, Number(process.env.SWIGGY_SYNC_INTERVAL_MS || 15 * 1000));
-const SWIGGY_ONLY_MODE = String(process.env.SWIGGY_ONLY_MODE || 'false').toLowerCase() === 'true';
-const SWIGGY_MENU_PULL_ENABLED = String(process.env.SWIGGY_MENU_PULL_ENABLED || 'false').toLowerCase() === 'true';
-const SWIGGY_MENU_PULL_INTERVAL_MS = Math.max(30000, Number(process.env.SWIGGY_MENU_PULL_INTERVAL_MS || 5 * 60 * 1000));
-
 const razorpay = RAZORPAY_ENABLED
   ? new Razorpay({ key_id: RAZORPAY_KEY_ID, key_secret: RAZORPAY_KEY_SECRET })
   : null;
@@ -135,8 +124,17 @@ async function runDatabaseBackup(reason = 'scheduled') {
 }
 
 db.exec(`
+CREATE TABLE IF NOT EXISTS restaurants (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  code TEXT NOT NULL UNIQUE,
+  name TEXT NOT NULL,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS menu_items (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
+  restaurant_id INTEGER NOT NULL DEFAULT 1,
   name TEXT NOT NULL,
   description TEXT NOT NULL,
   price INTEGER NOT NULL,
@@ -146,12 +144,14 @@ CREATE TABLE IF NOT EXISTS menu_items (
 );
 
 CREATE TABLE IF NOT EXISTS table_status (
+  restaurant_id INTEGER NOT NULL DEFAULT 1,
   table_number INTEGER PRIMARY KEY,
   status TEXT NOT NULL CHECK(status IN ('free','ordering','occupied'))
 );
 
 CREATE TABLE IF NOT EXISTS orders (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
+  restaurant_id INTEGER NOT NULL DEFAULT 1,
   order_type TEXT NOT NULL CHECK(order_type IN ('dine','takeaway','preorder')),
   table_number INTEGER,
   notes TEXT DEFAULT '',
@@ -187,34 +187,6 @@ CREATE TABLE IF NOT EXISTS audit_logs (
   details TEXT,
   created_at INTEGER NOT NULL
 );
-
-CREATE TABLE IF NOT EXISTS swiggy_order_map (
-  external_order_id TEXT PRIMARY KEY,
-  local_order_id INTEGER NOT NULL,
-  remote_status TEXT,
-  last_payload TEXT,
-  created_at INTEGER NOT NULL,
-  updated_at INTEGER NOT NULL,
-  FOREIGN KEY(local_order_id) REFERENCES orders(id)
-);
-
-CREATE TABLE IF NOT EXISTS integration_sync_jobs (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  provider TEXT NOT NULL,
-  job_type TEXT NOT NULL,
-  reference_id TEXT,
-  payload TEXT NOT NULL,
-  status TEXT NOT NULL CHECK(status IN ('queued','processing','success','failed')),
-  attempts INTEGER NOT NULL DEFAULT 0,
-  max_attempts INTEGER NOT NULL DEFAULT 5,
-  last_error TEXT,
-  next_retry_at INTEGER,
-  created_at INTEGER NOT NULL,
-  updated_at INTEGER NOT NULL
-);
-
-CREATE INDEX IF NOT EXISTS idx_sync_jobs_poll
-ON integration_sync_jobs(provider, status, next_retry_at, created_at);
 `);
 
 const seedMenu = [
@@ -258,12 +230,139 @@ function getAuditLogs(limit = 30) {
   }));
 }
 
+function normalizeRestaurantCode(input) {
+  const raw = String(input || '').trim().toLowerCase();
+  return raw.replace(/[^a-z0-9_-]/g, '').slice(0, 64);
+}
+
+function resolveRestaurantByCode(restaurantCode, fallbackName = '') {
+  const now = Date.now();
+  const normalizedCode = normalizeRestaurantCode(restaurantCode) || 'default';
+  const existing = db.prepare('SELECT id, code, name FROM restaurants WHERE code = ?').get(normalizedCode);
+  if (existing) return existing;
+
+  const safeName = String(fallbackName || '').trim() || normalizedCode.replace(/[_-]+/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+  db.prepare('INSERT INTO restaurants (code, name, created_at, updated_at) VALUES (?, ?, ?, ?)')
+    .run(normalizedCode, safeName, now, now);
+  return db.prepare('SELECT id, code, name FROM restaurants WHERE code = ?').get(normalizedCode);
+}
+
+function parseCsvLine(line) {
+  const values = [];
+  let current = '';
+  let inQuotes = false;
+
+  for (let i = 0; i < line.length; i += 1) {
+    const char = line[i];
+
+    if (char === '"') {
+      const isEscapedQuote = inQuotes && line[i + 1] === '"';
+      if (isEscapedQuote) {
+        current += '"';
+        i += 1;
+      } else {
+        inQuotes = !inQuotes;
+      }
+      continue;
+    }
+
+    if (char === ',' && !inQuotes) {
+      values.push(current.trim());
+      current = '';
+      continue;
+    }
+
+    current += char;
+  }
+
+  values.push(current.trim());
+  return values;
+}
+
+function parseMenuCsv(csvText) {
+  const text = String(csvText || '').replace(/^\uFEFF/, '');
+  const lines = text
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0);
+
+  if (!lines.length) return { rows: [], invalidRows: [] };
+
+  const headerValues = parseCsvLine(lines[0]).map((cell) => cell.trim().toLowerCase());
+  const hasHeader = headerValues.includes('item') || headerValues.includes('name') || headerValues.includes('price');
+  const dataLines = hasHeader ? lines.slice(1) : lines;
+
+  const rows = [];
+  const invalidRows = [];
+
+  dataLines.forEach((line, index) => {
+    const parsed = parseCsvLine(line);
+    if (parsed.length < 3) {
+      invalidRows.push({ line: index + (hasHeader ? 2 : 1), reason: 'Expected at least 3 columns: Category, Item, Price' });
+      return;
+    }
+
+    const category = String(parsed[0] || '').trim() || 'other';
+    const name = String(parsed[1] || '').trim();
+    const priceText = String(parsed[2] || '').replace(/[^\d.]/g, '');
+    const numericPrice = Number(priceText);
+    const price = Math.round(numericPrice);
+    const description = String(parsed[3] || '').trim() || `${category} menu item`;
+
+    if (!name) {
+      invalidRows.push({ line: index + (hasHeader ? 2 : 1), reason: 'Item name is empty' });
+      return;
+    }
+    if (!Number.isFinite(price) || price <= 0) {
+      invalidRows.push({ line: index + (hasHeader ? 2 : 1), reason: `Invalid price: ${parsed[2] || ''}` });
+      return;
+    }
+
+    rows.push({
+      name,
+      description,
+      price,
+      category: category.toLowerCase(),
+      emoji: '🍽️',
+      available: 1
+    });
+  });
+
+  return { rows, invalidRows };
+}
+
 function seedDatabase() {
+  const now = Date.now();
+  const defaultRestaurant = db.prepare('SELECT id FROM restaurants WHERE code = ?').get('default');
+  if (!defaultRestaurant) {
+    db.prepare('INSERT INTO restaurants (code, name, created_at, updated_at) VALUES (?, ?, ?, ?)')
+      .run('default', 'Default Restaurant', now, now);
+  }
+
   const menuColumns = db.prepare('PRAGMA table_info(menu_items)').all();
   const hasAvailableColumn = menuColumns.some((col) => col.name === 'available');
+  const hasMenuRestaurantIdColumn = menuColumns.some((col) => col.name === 'restaurant_id');
   if (!hasAvailableColumn) {
     db.exec('ALTER TABLE menu_items ADD COLUMN available INTEGER NOT NULL DEFAULT 1');
   }
+  if (!hasMenuRestaurantIdColumn) {
+    db.exec('ALTER TABLE menu_items ADD COLUMN restaurant_id INTEGER NOT NULL DEFAULT 1');
+  }
+  db.exec('UPDATE menu_items SET restaurant_id = 1 WHERE restaurant_id IS NULL OR restaurant_id < 1');
+
+  const tableColumns = db.prepare('PRAGMA table_info(table_status)').all();
+  const hasTableRestaurantIdColumn = tableColumns.some((col) => col.name === 'restaurant_id');
+  if (!hasTableRestaurantIdColumn) {
+    db.exec('ALTER TABLE table_status ADD COLUMN restaurant_id INTEGER NOT NULL DEFAULT 1');
+  }
+  db.exec('UPDATE table_status SET restaurant_id = 1 WHERE restaurant_id IS NULL OR restaurant_id < 1');
+
+  const orderColumnsForRestaurant = db.prepare('PRAGMA table_info(orders)').all();
+  const hasOrderRestaurantIdColumn = orderColumnsForRestaurant.some((col) => col.name === 'restaurant_id');
+  if (!hasOrderRestaurantIdColumn) {
+    db.exec('ALTER TABLE orders ADD COLUMN restaurant_id INTEGER NOT NULL DEFAULT 1');
+  }
+  db.exec('UPDATE orders SET restaurant_id = 1 WHERE restaurant_id IS NULL OR restaurant_id < 1');
 
   const menuCount = db.prepare('SELECT COUNT(*) as count FROM menu_items').get().count;
   if (menuCount === 0) {
@@ -431,7 +530,7 @@ function createOrder({
 
 function getOrders() {
   const orders = db.prepare(
-    `SELECT id, order_type as orderType, table_number as tableNumber, notes, status, source, external_order_id as externalOrderId, paid, payment_method as paymentMethod, payment_gateway_order_id as paymentGatewayOrderId, payment_gateway_payment_id as paymentGatewayPaymentId, paid_at as paidAt, eta_minutes as etaMinutes, created_at as createdAt, updated_at as updatedAt
+    `SELECT id, restaurant_id as restaurantId, order_type as orderType, table_number as tableNumber, notes, status, source, external_order_id as externalOrderId, paid, payment_method as paymentMethod, payment_gateway_order_id as paymentGatewayOrderId, payment_gateway_payment_id as paymentGatewayPaymentId, paid_at as paidAt, eta_minutes as etaMinutes, created_at as createdAt, updated_at as updatedAt
      FROM orders
      ORDER BY created_at DESC`
   ).all();
@@ -495,18 +594,16 @@ function getStats(orders, tables) {
 
 function getState() {
   const menu = db.prepare(
-    'SELECT id, name, description as desc, price, emoji, category as cat, available FROM menu_items ORDER BY id ASC'
+    'SELECT id, restaurant_id as restaurantId, name, description as desc, price, emoji, category as cat, available FROM menu_items ORDER BY id ASC'
   ).all();
-  const tables = db.prepare('SELECT table_number as tableNumber, status FROM table_status ORDER BY table_number ASC').all();
+  const tables = db.prepare('SELECT restaurant_id as restaurantId, table_number as tableNumber, status FROM table_status ORDER BY table_number ASC').all();
   const orders = getOrders();
   const stats = getStats(orders, tables);
   return {
     menu,
     tables,
     orders,
-    stats,
-    swiggyOnlyMode: SWIGGY_ONLY_MODE,
-    swiggyMenuLiveMode: SWIGGY_MENU_PULL_ENABLED
+    stats
   };
 }
 
@@ -536,354 +633,6 @@ function markOrderPaid({ orderId, actor, paymentMethod, paymentGatewayOrderId = 
   return getOrders().find((entry) => entry.id === orderId);
 }
 
-function normalizeSwiggyStatus(rawStatus) {
-  const status = String(rawStatus || '').trim().toLowerCase();
-  if (!status) return null;
-  if (['placed', 'pending', 'created', 'new'].includes(status)) return 'new';
-  if (['accepted', 'confirmed', 'preparing', 'in_kitchen', 'in-progress'].includes(status)) return 'preparing';
-  if (['ready', 'ready_for_pickup', 'picked_up', 'out_for_delivery'].includes(status)) return 'ready';
-  if (['delivered', 'completed', 'cancelled', 'canceled', 'rejected'].includes(status)) return 'delivered';
-  return null;
-}
-
-function toSwiggyOrderStatus(localStatus) {
-  if (localStatus === 'new') return 'PLACED';
-  if (localStatus === 'preparing') return 'ACCEPTED';
-  if (localStatus === 'ready') return 'READY_FOR_PICKUP';
-  if (localStatus === 'delivered') return 'DELIVERED';
-  return 'PLACED';
-}
-
-function enqueueIntegrationJob({ provider, jobType, referenceId = null, payload = {}, maxAttempts = 5 }) {
-  const now = Date.now();
-  const result = db.prepare(
-    `INSERT INTO integration_sync_jobs
-      (provider, job_type, reference_id, payload, status, attempts, max_attempts, next_retry_at, created_at, updated_at)
-     VALUES (?, ?, ?, ?, 'queued', 0, ?, ?, ?, ?)`
-  ).run(provider, jobType, referenceId ? String(referenceId) : null, JSON.stringify(payload || {}), maxAttempts, now, now, now);
-  return Number(result.lastInsertRowid);
-}
-
-async function swiggyRequest(endpointPath, method, body) {
-  if (!SWIGGY_ENABLED) {
-    throw new Error('Swiggy integration is disabled');
-  }
-  if (!SWIGGY_API_BASE_URL || !SWIGGY_API_TOKEN) {
-    throw new Error('Swiggy API credentials are missing');
-  }
-
-  const url = `${SWIGGY_API_BASE_URL}${endpointPath.startsWith('/') ? endpointPath : `/${endpointPath}`}`;
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 12000);
-
-  try {
-    const response = await fetch(url, {
-      method,
-      headers: {
-        Authorization: `Bearer ${SWIGGY_API_TOKEN}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(body || {}),
-      signal: controller.signal
-    });
-
-    const text = await response.text();
-    if (!response.ok) {
-      throw new Error(`Swiggy API ${response.status}: ${text.slice(0, 300)}`);
-    }
-    return text ? JSON.parse(text) : { ok: true };
-  } finally {
-    clearTimeout(timeout);
-  }
-}
-
-function buildSwiggyMenuPayload() {
-  const menu = db.prepare(
-    'SELECT id, name, description as description, price, category as category, available FROM menu_items ORDER BY id ASC'
-  ).all();
-
-  return {
-    storeId: SWIGGY_STORE_ID || null,
-    generatedAt: new Date().toISOString(),
-    items: menu.map((item) => ({
-      itemCode: String(item.id),
-      name: item.name,
-      description: item.description,
-      price: Number(item.price),
-      category: item.category,
-      inStock: Number(item.available) === 1
-    }))
-  };
-}
-
-async function processSwiggyJob(job) {
-  const payload = job.payload ? JSON.parse(job.payload) : {};
-
-  if (job.job_type === 'menu_sync_full') {
-    return swiggyRequest('/menu/sync', 'POST', buildSwiggyMenuPayload());
-  }
-
-  if (job.job_type === 'order_status_update') {
-    const localOrderId = Number(job.reference_id || payload.localOrderId || 0);
-    const order = getOrders().find((entry) => entry.id === localOrderId);
-    if (!order) throw new Error(`Order ${localOrderId} not found`);
-
-    const mapped = db.prepare('SELECT external_order_id as externalOrderId FROM swiggy_order_map WHERE local_order_id = ?').get(localOrderId);
-    const externalOrderId = String(payload.externalOrderId || order.externalOrderId || mapped?.externalOrderId || '').trim();
-    if (!externalOrderId) throw new Error(`No Swiggy external order id found for local order ${localOrderId}`);
-
-    return swiggyRequest(`/orders/${encodeURIComponent(externalOrderId)}/status`, 'POST', {
-      storeId: SWIGGY_STORE_ID || null,
-      localOrderId,
-      status: String(payload.status || toSwiggyOrderStatus(order.status)),
-      reason: String(payload.reason || '').trim() || null,
-      updatedAt: new Date().toISOString()
-    });
-  }
-
-  throw new Error(`Unsupported sync job type: ${job.job_type}`);
-}
-
-let integrationWorkerBusy = false;
-
-async function processIntegrationQueue() {
-  if (integrationWorkerBusy) return;
-  integrationWorkerBusy = true;
-
-  try {
-    const now = Date.now();
-    const jobs = db.prepare(
-      `SELECT id, provider, job_type, reference_id, payload, status, attempts, max_attempts
-       FROM integration_sync_jobs
-       WHERE provider = 'swiggy'
-         AND status IN ('queued','failed')
-         AND (next_retry_at IS NULL OR next_retry_at <= ?)
-         AND attempts < max_attempts
-       ORDER BY created_at ASC
-       LIMIT 5`
-    ).all(now);
-
-    for (const job of jobs) {
-      const attemptNumber = Number(job.attempts || 0) + 1;
-      db.prepare(
-        `UPDATE integration_sync_jobs
-         SET status = 'processing', attempts = ?, updated_at = ?
-         WHERE id = ?`
-      ).run(attemptNumber, Date.now(), job.id);
-
-      try {
-        await processSwiggyJob(job);
-        db.prepare(
-          `UPDATE integration_sync_jobs
-           SET status = 'success', last_error = NULL, updated_at = ?
-           WHERE id = ?`
-        ).run(Date.now(), job.id);
-      } catch (error) {
-        const delayMinutes = Math.min(30, 2 ** Math.max(0, attemptNumber - 1));
-        const retryAt = Date.now() + delayMinutes * 60 * 1000;
-        db.prepare(
-          `UPDATE integration_sync_jobs
-           SET status = 'failed', last_error = ?, next_retry_at = ?, updated_at = ?
-           WHERE id = ?`
-        ).run(String(error.message || 'Sync failed').slice(0, 600), retryAt, Date.now(), job.id);
-      }
-    }
-  } finally {
-    integrationWorkerBusy = false;
-  }
-}
-
-function upsertSwiggyOrderMap({ externalOrderId, localOrderId, remoteStatus = null, payload = null }) {
-  const now = Date.now();
-  db.prepare(
-    `INSERT INTO swiggy_order_map (external_order_id, local_order_id, remote_status, last_payload, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?)
-     ON CONFLICT(external_order_id)
-     DO UPDATE SET
-       local_order_id = excluded.local_order_id,
-       remote_status = excluded.remote_status,
-       last_payload = excluded.last_payload,
-       updated_at = excluded.updated_at`
-  ).run(
-    externalOrderId,
-    localOrderId,
-    remoteStatus,
-    payload ? JSON.stringify(payload) : null,
-    now,
-    now
-  );
-}
-
-function parseSwiggyIncomingOrder(payload) {
-  const orderNode = payload?.order || payload;
-  const externalOrderId = String(orderNode?.id || payload?.order_id || payload?.id || '').trim();
-  const remoteStatus = String(orderNode?.status || payload?.status || 'PLACED').trim();
-  const notes = String(orderNode?.instructions || orderNode?.notes || payload?.instructions || '').trim();
-  const rawItems = Array.isArray(orderNode?.items) ? orderNode.items : [];
-
-  const menuByName = getMenuByNameMap();
-  const normalizedItems = rawItems
-    .map((item) => {
-      const name = String(item?.name || item?.item_name || '').trim().toLowerCase();
-      const mappedMenu = menuByName[name];
-      const qty = Math.max(1, Number(item?.qty || item?.quantity || 1));
-      if (!mappedMenu) return null;
-      return { menuItemId: mappedMenu.id, qty };
-    })
-    .filter(Boolean);
-
-  return {
-    externalOrderId,
-    remoteStatus,
-    notes,
-    normalizedItems
-  };
-}
-
-function parseSwiggyPayment(orderNode, payload) {
-  const paymentNode = orderNode?.payment || payload?.payment || payload?.payload?.payment?.entity || {};
-  const rawMethod = String(
-    paymentNode?.method || paymentNode?.mode || orderNode?.payment_mode || orderNode?.paymentMethod || payload?.payment_mode || ''
-  ).trim().toLowerCase();
-  const rawStatus = String(
-    paymentNode?.status || paymentNode?.state || orderNode?.payment_status || orderNode?.paymentStatus || payload?.payment_status || ''
-  ).trim().toLowerCase();
-
-  const normalizedMethod = (() => {
-    if (!rawMethod) return 'swiggy';
-    if (['cod', 'cash', 'cash_on_delivery', 'cashondelivery'].includes(rawMethod)) return 'cash';
-    if (['upi', 'card', 'netbanking', 'wallet'].includes(rawMethod)) return rawMethod;
-    return `swiggy_${rawMethod}`;
-  })();
-
-  const isPaid = Boolean(
-    paymentNode?.paid === true
-      || paymentNode?.is_paid === true
-      || orderNode?.is_prepaid === true
-      || ['paid', 'captured', 'success', 'completed', 'prepaid'].includes(rawStatus)
-  );
-
-  return {
-    isPaid,
-    paymentMethod: normalizedMethod,
-    paymentGatewayOrderId: String(paymentNode?.order_id || orderNode?.id || '').trim() || null,
-    paymentGatewayPaymentId: String(paymentNode?.id || paymentNode?.payment_id || '').trim() || null,
-    paymentStatusRaw: rawStatus || null
-  };
-}
-
-function normalizeSwiggyMenuItems(payload) {
-  const root = payload?.data || payload || {};
-  const candidates = [
-    root?.items,
-    root?.menu,
-    root?.catalog,
-    root?.catalog?.items,
-    root?.menu?.items,
-    root?.payload?.items
-  ].find((entry) => Array.isArray(entry));
-
-  const rows = Array.isArray(candidates) ? candidates : [];
-  const byName = new Map();
-
-  rows.forEach((row) => {
-    const name = String(row?.name || row?.title || row?.item_name || '').trim();
-    if (!name) return;
-
-    const pricePaise = Number(row?.pricePaise || row?.price_paise || row?.price_in_paise || 0);
-    const rawPrice = Number(row?.price || row?.amount || 0);
-    const price = pricePaise > 0
-      ? Math.round(pricePaise / 100)
-      : Math.round(rawPrice);
-    if (!Number.isFinite(price) || price <= 0) return;
-
-    const category = String(row?.category || row?.category_name || row?.group || 'other').trim().toLowerCase() || 'other';
-    const description = String(row?.description || row?.desc || '').trim() || 'Swiggy synced item';
-    const available = row?.inStock === false || row?.available === false || row?.isAvailable === false ? 0 : 1;
-    const itemCode = String(row?.itemCode || row?.id || row?.item_id || '').trim() || null;
-    byName.set(name.toLowerCase(), { name, description, price, category, available, itemCode });
-  });
-
-  return Array.from(byName.values());
-}
-
-async function fetchSwiggyMenuPayload() {
-  try {
-    return await swiggyRequest('/menu', 'GET');
-  } catch (_error) {
-    return swiggyRequest('/menu/live', 'GET');
-  }
-}
-
-async function pullSwiggyMenuIntoLocal({ actor = 'system', reason = 'manual' } = {}) {
-  if (!SWIGGY_ENABLED) throw new Error('Swiggy integration is disabled');
-
-  const payload = await fetchSwiggyMenuPayload();
-  const items = normalizeSwiggyMenuItems(payload);
-  if (!items.length) throw new Error('No menu items found in Swiggy response');
-
-  const now = Date.now();
-  const findByName = db.prepare('SELECT id FROM menu_items WHERE lower(name) = lower(?)');
-  const updateItem = db.prepare(
-    'UPDATE menu_items SET description = ?, price = ?, category = ?, available = ? WHERE id = ?'
-  );
-  const insertItem = db.prepare(
-    'INSERT INTO menu_items (name, description, price, emoji, category, available) VALUES (?, ?, ?, ?, ?, ?)'
-  );
-
-  const tx = db.transaction(() => {
-    let inserted = 0;
-    let updated = 0;
-    for (const item of items) {
-      const existing = findByName.get(item.name);
-      if (existing?.id) {
-        updateItem.run(item.description, item.price, item.category, item.available, existing.id);
-        updated += 1;
-      } else {
-        insertItem.run(item.name, item.description, item.price, '🍽️', item.category, item.available);
-        inserted += 1;
-      }
-    }
-    return { inserted, updated };
-  });
-
-  const summary = tx();
-
-  logAudit({
-    action: 'swiggy_menu_pulled',
-    entityType: 'menu',
-    actor,
-    details: {
-      reason,
-      pulledAt: now,
-      totalFromSwiggy: items.length,
-      inserted: summary.inserted,
-      updated: summary.updated
-    }
-  });
-
-  broadcastState();
-  return {
-    ok: true,
-    reason,
-    totalFromSwiggy: items.length,
-    inserted: summary.inserted,
-    updated: summary.updated
-  };
-}
-
-function verifySwiggyWebhookSignature(rawBuffer, signature) {
-  if (!SWIGGY_WEBHOOK_STRICT) return true;
-  if (!SWIGGY_WEBHOOK_SECRET) return false;
-  const expected = crypto.createHmac('sha256', SWIGGY_WEBHOOK_SECRET).update(rawBuffer).digest('hex');
-  if (!signature) return false;
-
-  const expectedBuffer = Buffer.from(expected, 'hex');
-  const signatureBuffer = Buffer.from(signature, 'hex');
-  if (expectedBuffer.length !== signatureBuffer.length) return false;
-  return crypto.timingSafeEqual(expectedBuffer, signatureBuffer);
-}
-
 function broadcastState() {
   io.emit('state:update', getState());
 }
@@ -907,7 +656,7 @@ seedDatabase();
 
 const jsonParser = express.json();
 app.use((req, res, next) => {
-  if (req.path === '/api/payments/razorpay/webhook' || req.path === '/api/integrations/swiggy/webhook') return next();
+  if (req.path === '/api/payments/razorpay/webhook') return next();
   return jsonParser(req, res, next);
 });
 app.use(express.static(__dirname));
@@ -956,220 +705,6 @@ app.get('/api/health', (_req, res) => {
 
 app.get('/api/state', (_req, res) => {
   res.json(getState());
-});
-
-app.get('/api/integrations/swiggy/config', (_req, res) => {
-  return res.json({
-    enabled: SWIGGY_ENABLED,
-    swiggyOnlyMode: SWIGGY_ONLY_MODE,
-    swiggyMenuPullEnabled: SWIGGY_MENU_PULL_ENABLED,
-    swiggyMenuPullIntervalMs: SWIGGY_MENU_PULL_INTERVAL_MS,
-    apiBaseUrlConfigured: Boolean(SWIGGY_API_BASE_URL),
-    apiTokenConfigured: Boolean(SWIGGY_API_TOKEN),
-    webhookSecretConfigured: Boolean(SWIGGY_WEBHOOK_SECRET),
-    webhookStrict: SWIGGY_WEBHOOK_STRICT,
-    storeIdConfigured: Boolean(SWIGGY_STORE_ID),
-    syncIntervalMs: SWIGGY_SYNC_INTERVAL_MS
-  });
-});
-
-app.post('/api/integrations/swiggy/menu/sync', (req, res) => {
-  const actor = getActor(req);
-  const jobId = enqueueIntegrationJob({
-    provider: 'swiggy',
-    jobType: 'menu_sync_full',
-    referenceId: SWIGGY_STORE_ID || null,
-    payload: { actor }
-  });
-
-  logAudit({
-    action: 'swiggy_menu_sync_queued',
-    entityType: 'integration_job',
-    entityId: jobId,
-    actor,
-    details: { provider: 'swiggy' }
-  });
-
-  processIntegrationQueue();
-  return res.status(202).json({ ok: true, jobId });
-});
-
-app.post('/api/integrations/swiggy/menu/pull', async (req, res) => {
-  try {
-    const actor = getActor(req);
-    const result = await pullSwiggyMenuIntoLocal({ actor, reason: 'manual' });
-    return res.json(result);
-  } catch (error) {
-    return res.status(400).json({ error: error.message || 'Swiggy menu pull failed' });
-  }
-});
-
-app.post('/api/integrations/swiggy/orders/:id/status/sync', (req, res) => {
-  const orderId = Number(req.params.id);
-  const actor = getActor(req);
-  const order = getOrders().find((entry) => entry.id === orderId);
-  if (!order) return res.status(404).json({ error: 'Order not found' });
-
-  const status = String(req.body?.status || toSwiggyOrderStatus(order.status)).trim();
-  const reason = String(req.body?.reason || '').trim();
-  const mapped = db.prepare('SELECT external_order_id as externalOrderId FROM swiggy_order_map WHERE local_order_id = ?').get(orderId);
-  const externalOrderId = String(req.body?.externalOrderId || order.externalOrderId || mapped?.externalOrderId || '').trim();
-
-  if (!externalOrderId) {
-    return res.status(400).json({ error: 'No Swiggy external order id is mapped for this order' });
-  }
-
-  const jobId = enqueueIntegrationJob({
-    provider: 'swiggy',
-    jobType: 'order_status_update',
-    referenceId: orderId,
-    payload: { localOrderId: orderId, externalOrderId, status, reason, actor }
-  });
-
-  logAudit({
-    action: 'swiggy_order_status_sync_queued',
-    entityType: 'integration_job',
-    entityId: jobId,
-    actor,
-    details: { localOrderId: orderId, externalOrderId, status }
-  });
-
-  processIntegrationQueue();
-  return res.status(202).json({ ok: true, jobId });
-});
-
-app.get('/api/integrations/swiggy/jobs', (req, res) => {
-  const limit = Math.max(1, Math.min(200, Number(req.query.limit || 50)));
-  const rows = db.prepare(
-    `SELECT id, provider, job_type as jobType, reference_id as referenceId, status, attempts, max_attempts as maxAttempts,
-            last_error as lastError, next_retry_at as nextRetryAt, created_at as createdAt, updated_at as updatedAt, payload
-     FROM integration_sync_jobs
-     WHERE provider = 'swiggy'
-     ORDER BY created_at DESC
-     LIMIT ?`
-  ).all(limit).map((row) => ({
-    ...row,
-    payload: row.payload ? JSON.parse(row.payload) : null
-  }));
-
-  return res.json({ jobs: rows });
-});
-
-app.post('/api/integrations/swiggy/jobs/:id/retry', (req, res) => {
-  const jobId = Number(req.params.id);
-  const actor = getActor(req);
-  const existing = db.prepare('SELECT id, provider FROM integration_sync_jobs WHERE id = ?').get(jobId);
-  if (!existing || existing.provider !== 'swiggy') return res.status(404).json({ error: 'Swiggy job not found' });
-
-  db.prepare(
-    `UPDATE integration_sync_jobs
-     SET status = 'queued', next_retry_at = ?, updated_at = ?
-     WHERE id = ?`
-  ).run(Date.now(), Date.now(), jobId);
-
-  logAudit({
-    action: 'swiggy_job_retried',
-    entityType: 'integration_job',
-    entityId: jobId,
-    actor,
-    details: { provider: 'swiggy' }
-  });
-
-  processIntegrationQueue();
-  return res.json({ ok: true, jobId });
-});
-
-app.post('/api/integrations/swiggy/webhook', express.raw({ type: 'application/json' }), (req, res) => {
-  try {
-    const signature = String(req.headers['x-swiggy-signature'] || req.headers['x-signature'] || '').trim();
-    const rawBuffer = Buffer.isBuffer(req.body) ? req.body : Buffer.from(req.body || '');
-    if (!verifySwiggyWebhookSignature(rawBuffer, signature)) {
-      return res.status(400).json({ error: 'Invalid Swiggy webhook signature' });
-    }
-
-    const payload = JSON.parse(rawBuffer.toString('utf8') || '{}');
-    const eventType = String(payload?.event || payload?.eventType || 'order.placed').trim().toLowerCase();
-    const incoming = parseSwiggyIncomingOrder(payload);
-    const paymentInfo = parseSwiggyPayment(payload?.order || payload, payload);
-    if (!incoming.externalOrderId) {
-      return res.status(400).json({ error: 'Missing external order id' });
-    }
-
-    const mapped = db.prepare(
-      'SELECT external_order_id as externalOrderId, local_order_id as localOrderId FROM swiggy_order_map WHERE external_order_id = ?'
-    ).get(incoming.externalOrderId);
-
-    let localOrderId = mapped?.localOrderId || null;
-    const localStatus = normalizeSwiggyStatus(incoming.remoteStatus);
-
-    if (!localOrderId) {
-      if (!incoming.normalizedItems.length) {
-        return res.status(400).json({ error: 'No mappable menu items found for incoming Swiggy order' });
-      }
-
-      localOrderId = createOrder({
-        orderType: 'takeaway',
-        notes: incoming.notes,
-        items: incoming.normalizedItems,
-        status: localStatus || 'new',
-        source: 'swiggy',
-        externalOrderId: incoming.externalOrderId,
-        etaMinutes: 25
-      });
-
-      logAudit({
-        action: 'swiggy_order_ingested',
-        entityType: 'order',
-        entityId: localOrderId,
-        actor: 'swiggy-webhook',
-        details: { externalOrderId: incoming.externalOrderId, eventType, remoteStatus: incoming.remoteStatus }
-      });
-    } else if (localStatus) {
-      db.prepare('UPDATE orders SET status = ?, updated_at = ? WHERE id = ?').run(localStatus, Date.now(), localOrderId);
-      logAudit({
-        action: 'swiggy_order_status_ingested',
-        entityType: 'order',
-        entityId: localOrderId,
-        actor: 'swiggy-webhook',
-        details: { externalOrderId: incoming.externalOrderId, eventType, remoteStatus: incoming.remoteStatus, mappedStatus: localStatus }
-      });
-    }
-
-    const localOrder = getOrders().find((entry) => entry.id === localOrderId);
-    if (paymentInfo.isPaid && localOrder && Number(localOrder.paid) !== 1) {
-      markOrderPaid({
-        orderId: localOrderId,
-        actor: 'swiggy-webhook',
-        paymentMethod: paymentInfo.paymentMethod,
-        paymentGatewayOrderId: paymentInfo.paymentGatewayOrderId,
-        paymentGatewayPaymentId: paymentInfo.paymentGatewayPaymentId
-      });
-
-      logAudit({
-        action: 'swiggy_payment_ingested',
-        entityType: 'order',
-        entityId: localOrderId,
-        actor: 'swiggy-webhook',
-        details: {
-          externalOrderId: incoming.externalOrderId,
-          paymentMethod: paymentInfo.paymentMethod,
-          paymentStatusRaw: paymentInfo.paymentStatusRaw
-        }
-      });
-    }
-
-    upsertSwiggyOrderMap({
-      externalOrderId: incoming.externalOrderId,
-      localOrderId,
-      remoteStatus: incoming.remoteStatus,
-      payload
-    });
-
-    broadcastState();
-    return res.json({ ok: true, localOrderId, externalOrderId: incoming.externalOrderId });
-  } catch (error) {
-    return res.status(400).json({ error: error.message || 'Swiggy webhook processing failed' });
-  }
 });
 
 app.post('/api/menu/:id/availability', (req, res) => {
@@ -1248,6 +783,85 @@ app.delete('/api/menu/:id', (req, res) => {
   return res.json({ ok: true });
 });
 
+app.post('/api/menu/import-csv', (req, res) => {
+  try {
+    const actor = getActor(req);
+    const csvText = String(req.body?.csvText || '');
+    const replaceExisting = req.body?.replaceExisting === true;
+    const restaurantCode = String(req.body?.restaurantCode || 'default');
+    const restaurantName = String(req.body?.restaurantName || '').trim();
+
+    if (!csvText.trim()) {
+      return res.status(400).json({ error: 'CSV content is required' });
+    }
+
+    const restaurant = resolveRestaurantByCode(restaurantCode, restaurantName);
+    const { rows, invalidRows } = parseMenuCsv(csvText);
+
+    if (!rows.length) {
+      return res.status(400).json({ error: 'No valid menu rows found in CSV', invalidRows });
+    }
+
+    const insertItem = db.prepare(
+      'INSERT INTO menu_items (restaurant_id, name, description, price, emoji, category, available) VALUES (?, ?, ?, ?, ?, ?, ?)'
+    );
+    const deleteExisting = db.prepare('DELETE FROM menu_items WHERE restaurant_id = ?');
+
+    const tx = db.transaction(() => {
+      if (replaceExisting) {
+        deleteExisting.run(restaurant.id);
+      }
+
+      let inserted = 0;
+      rows.forEach((row) => {
+        insertItem.run(
+          restaurant.id,
+          row.name,
+          row.description,
+          row.price,
+          row.emoji,
+          row.category,
+          row.available
+        );
+        inserted += 1;
+      });
+
+      return { inserted };
+    });
+
+    const result = tx();
+
+    logAudit({
+      action: 'menu_csv_imported',
+      entityType: 'menu',
+      actor,
+      details: {
+        restaurantId: restaurant.id,
+        restaurantCode: restaurant.code,
+        restaurantName: restaurant.name,
+        inserted: result.inserted,
+        invalidRows: invalidRows.length,
+        replaceExisting
+      }
+    });
+
+    broadcastState();
+    return res.json({
+      ok: true,
+      restaurant: {
+        id: restaurant.id,
+        code: restaurant.code,
+        name: restaurant.name
+      },
+      inserted: result.inserted,
+      invalidRows,
+      replaceExisting
+    });
+  } catch (error) {
+    return res.status(400).json({ error: error.message || 'Failed to import CSV' });
+  }
+});
+
 app.get('/api/audit-logs', (req, res) => {
   const limit = Number(req.query.limit || 30);
   res.json({ logs: getAuditLogs(limit) });
@@ -1276,10 +890,6 @@ app.get('/api/share-qr', async (req, res) => {
 
 app.post('/api/orders', (req, res) => {
   try {
-    if (SWIGGY_ONLY_MODE) {
-      return res.status(403).json({ error: 'Direct order creation is disabled in Swiggy-only mode' });
-    }
-
     const actor = getActor(req);
     const { orderType, tableNumber, notes, items } = req.body || {};
     if (!['dine', 'takeaway', 'preorder'].includes(orderType)) {
@@ -1355,50 +965,17 @@ app.post('/api/orders/:id/status', (req, res) => {
     details: { from: order.status, to: status, orderType: order.orderType, tableNumber: order.tableNumber }
   });
 
-  if (SWIGGY_ENABLED && order.source === 'swiggy') {
-    const mapped = db.prepare('SELECT external_order_id as externalOrderId FROM swiggy_order_map WHERE local_order_id = ?').get(orderId);
-    const externalOrderId = String(order.externalOrderId || mapped?.externalOrderId || '').trim();
-    if (externalOrderId) {
-      const jobId = enqueueIntegrationJob({
-        provider: 'swiggy',
-        jobType: 'order_status_update',
-        referenceId: orderId,
-        payload: {
-          localOrderId: orderId,
-          externalOrderId,
-          status: toSwiggyOrderStatus(status),
-          reason: 'Updated from management status pipeline',
-          actor
-        }
-      });
-
-      logAudit({
-        action: 'swiggy_order_status_sync_queued',
-        entityType: 'integration_job',
-        entityId: jobId,
-        actor,
-        details: { localOrderId: orderId, externalOrderId, status: toSwiggyOrderStatus(status) }
-      });
-
-      processIntegrationQueue();
-    }
-  }
-
   broadcastState();
   return res.json({ ok: true });
 });
 
 app.get('/api/payments/razorpay/config', (_req, res) => {
-  const enabled = SWIGGY_ONLY_MODE ? false : RAZORPAY_ENABLED;
+  const enabled = RAZORPAY_ENABLED;
   return res.json({ enabled, keyId: enabled ? RAZORPAY_KEY_ID : null });
 });
 
 app.post('/api/orders/:id/razorpay-order', async (req, res) => {
   try {
-    if (SWIGGY_ONLY_MODE) {
-      return res.status(403).json({ error: 'Razorpay checkout is disabled in Swiggy-only mode' });
-    }
-
     if (!RAZORPAY_ENABLED || !razorpay) {
       return res.status(400).json({ error: 'Razorpay is not configured' });
     }
@@ -1451,10 +1028,6 @@ app.post('/api/orders/:id/razorpay-order', async (req, res) => {
 
 app.post('/api/orders/:id/razorpay/verify', async (req, res) => {
   try {
-    if (SWIGGY_ONLY_MODE) {
-      return res.status(403).json({ error: 'Razorpay verification is disabled in Swiggy-only mode' });
-    }
-
     if (!RAZORPAY_ENABLED || !razorpay) {
       return res.status(400).json({ error: 'Razorpay is not configured' });
     }
@@ -1514,10 +1087,6 @@ app.post('/api/orders/:id/razorpay/verify', async (req, res) => {
 
 app.post('/api/payments/razorpay/webhook', express.raw({ type: 'application/json' }), (req, res) => {
   try {
-    if (SWIGGY_ONLY_MODE) {
-      return res.json({ ok: true, ignored: true, reason: 'swiggy_only_mode' });
-    }
-
     if (!RAZORPAY_ENABLED || !RAZORPAY_WEBHOOK_SECRET) {
       return res.status(400).json({ error: 'Razorpay webhook is not configured' });
     }
@@ -1558,10 +1127,6 @@ app.post('/api/payments/razorpay/webhook', express.raw({ type: 'application/json
 });
 
 app.post('/api/orders/:id/pay', (req, res) => {
-  if (SWIGGY_ONLY_MODE) {
-    return res.status(403).json({ error: 'Direct payment endpoint is disabled in Swiggy-only mode' });
-  }
-
   const orderId = Number(req.params.id);
   const actor = getActor(req);
   const paymentMethod = String(req.body?.paymentMethod || 'card').trim().toLowerCase();
@@ -1697,15 +1262,4 @@ if (DB_BACKUP_ENABLED) {
   setInterval(() => {
     runDatabaseBackup('interval');
   }, DB_BACKUP_INTERVAL_MINUTES * 60 * 1000).unref();
-}
-
-setInterval(() => {
-  processIntegrationQueue();
-}, SWIGGY_SYNC_INTERVAL_MS).unref();
-
-if (SWIGGY_ENABLED && SWIGGY_MENU_PULL_ENABLED) {
-  setInterval(() => {
-    pullSwiggyMenuIntoLocal({ actor: 'system', reason: 'scheduled' }).catch((_error) => {
-    });
-  }, SWIGGY_MENU_PULL_INTERVAL_MS).unref();
 }

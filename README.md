@@ -63,7 +63,6 @@ FoodOrdering/
 - `/api/health` endpoint
 - In-memory API rate limiting for `/api/*`
 - Automatic SQLite backups with retention policy
-- Swiggy-ready integration module with webhook ingestion + retry queue
 
 ---
 
@@ -96,13 +95,6 @@ Copy values from `.env.example` and override as needed:
 - `DB_BACKUP_ENABLED` (default: `true`)
 - `DB_BACKUP_INTERVAL_MINUTES` (default: `60`)
 - `DB_BACKUP_RETENTION_COUNT` (default: `48`)
-- `SWIGGY_ENABLED` (default: `false`)
-- `SWIGGY_API_BASE_URL`
-- `SWIGGY_API_TOKEN`
-- `SWIGGY_WEBHOOK_SECRET`
-- `SWIGGY_STORE_ID`
-- `SWIGGY_WEBHOOK_STRICT` (default: `true`)
-- `SWIGGY_SYNC_INTERVAL_MS` (default: `15000`)
 
 PowerShell example:
 
@@ -114,9 +106,6 @@ $env:RATE_LIMIT_MAX='240'
 $env:DB_BACKUP_ENABLED='true'
 $env:DB_BACKUP_INTERVAL_MINUTES='60'
 $env:DB_BACKUP_RETENTION_COUNT='48'
-$env:SWIGGY_ENABLED='false'
-$env:SWIGGY_WEBHOOK_STRICT='true'
-$env:SWIGGY_SYNC_INTERVAL_MS='15000'
 npm start
 ```
 

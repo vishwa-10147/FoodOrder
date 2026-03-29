@@ -287,21 +287,6 @@
 
       <section class="content" id="view-menu">
         <div class="section">
-          <h3>Hybrid channel controls</h3>
-          <div class="menu-admin-form">
-            <div class="menu-admin-form-actions">
-              <div class="menu-admin-meta" id="swiggy-config-line">Swiggy config: loading...</div>
-              <div style="display:flex; gap:6px;">
-                <button class="small-btn" onclick="refreshSwiggyConfig()">Refresh status</button>
-                <button class="small-btn" onclick="pullSwiggyMenuNow()">Pull menu from Swiggy</button>
-                <button class="small-btn" onclick="queueSwiggyMenuSync()">Sync menu to Swiggy</button>
-              </div>
-            </div>
-            <div class="hybrid-meta" id="swiggy-job-line">Latest sync job: none</div>
-          </div>
-        </div>
-
-        <div class="section">
           <h3>Menu availability</h3>
           <div class="menu-admin-form">
             <div class="menu-admin-form-grid">
@@ -311,13 +296,22 @@
               <input id="menu-emoji" class="menu-admin-input" placeholder="Emoji (optional)" />
               <input id="menu-desc" class="menu-admin-input" placeholder="Description (optional)" />
               <input id="menu-delete-id" class="menu-admin-input" type="number" min="1" placeholder="Delete item ID" />
+              <input id="menu-csv-file" class="menu-admin-input" type="file" accept=".csv,text/csv" />
+              <input id="menu-restaurant-code" class="menu-admin-input" placeholder="Restaurant code (default)" />
             </div>
             <div class="menu-admin-form-actions">
               <div class="menu-admin-meta">Customize menu by adding/removing items.</div>
               <div style="display:flex; gap:6px;">
                 <button class="small-btn" onclick="addMenuItem()">+ Add item</button>
                 <button class="small-btn" onclick="deleteMenuItemByInput()">- Delete item</button>
+                <button class="small-btn" onclick="importMenuCsv()">Import CSV</button>
               </div>
+            </div>
+            <div class="menu-admin-form-actions" style="justify-content:flex-start;">
+              <label class="menu-admin-meta" style="display:flex; align-items:center; gap:6px;">
+                <input id="menu-csv-replace" type="checkbox" />
+                Replace existing menu for this restaurant while importing
+              </label>
             </div>
           </div>
           <div class="menu-admin-list" id="menu-admin-list"></div>
@@ -359,8 +353,6 @@
     let autoPrintEnabled = false;
     let knownOrderIds = new Set();
     const tableOrderDrafts = {};
-    let swiggyConfig = null;
-    let swiggyJobs = [];
 
     function money(v) { return `₹${Number(v || 0).toLocaleString('en-IN')}`; }
 
@@ -446,13 +438,13 @@
 
     function sourceBadge(order) {
       const source = String(order?.source || 'direct').toLowerCase();
-      if (source === 'swiggy') return '<span class="tag source-swiggy">Swiggy</span>';
+      if (source === 'swiggy') return '<span class="tag source-swiggy">Partner</span>';
       return '<span class="tag source-direct">Direct</span>';
     }
 
     function sourceLabel(order) {
       const source = String(order?.source || 'direct').toLowerCase();
-      return source === 'swiggy' ? 'Swiggy' : 'Direct';
+      return source === 'swiggy' ? 'Partner' : 'Direct';
     }
 
     function eta(order) {
@@ -717,7 +709,6 @@
       renderDashboard();
       renderKitchen();
       renderTracking();
-      renderSwiggyIntegrationPanel();
       renderMenuManagement();
       renderMenuOrders();
       renderTableStatusSwitch();
@@ -1048,6 +1039,39 @@
       document.getElementById('menu-delete-id').value = '';
     }
 
+    async function importMenuCsv() {
+      const fileInput = document.getElementById('menu-csv-file');
+      const restaurantCodeInput = document.getElementById('menu-restaurant-code');
+      const replaceExisting = document.getElementById('menu-csv-replace').checked;
+      const file = fileInput.files && fileInput.files[0];
+
+      if (!file) {
+        alert('Choose a CSV file first.');
+        return;
+      }
+
+      try {
+        const csvText = await file.text();
+        const result = await api('/api/menu/import-csv', 'POST', {
+          csvText,
+          replaceExisting,
+          restaurantCode: String(restaurantCodeInput.value || 'default').trim() || 'default'
+        });
+
+        const invalidCount = Array.isArray(result.invalidRows) ? result.invalidRows.length : 0;
+        const summary = [
+          `Imported ${Number(result.inserted || 0)} items`,
+          `Restaurant: ${result.restaurant?.code || 'default'}`,
+          invalidCount ? `Skipped rows: ${invalidCount}` : 'Skipped rows: 0'
+        ].join('\n');
+        alert(summary);
+
+        fileInput.value = '';
+      } catch (e) {
+        alert(e.message);
+      }
+    }
+
     async function changeStatus(orderId, status) {
       try {
         await api(`/api/orders/${orderId}/status`, 'POST', { status });
@@ -1118,78 +1142,6 @@
       }
     }
 
-    function renderSwiggyIntegrationPanel() {
-      const configLine = document.getElementById('swiggy-config-line');
-      const jobLine = document.getElementById('swiggy-job-line');
-      if (!configLine || !jobLine) return;
-
-      if (!swiggyConfig) {
-        configLine.textContent = 'Swiggy config: unavailable';
-      } else {
-        const enabledText = swiggyConfig.enabled ? 'enabled' : 'disabled';
-        const tokenText = swiggyConfig.apiTokenConfigured ? 'token set' : 'token missing';
-        const baseUrlText = swiggyConfig.apiBaseUrlConfigured ? 'base URL set' : 'base URL missing';
-        const menuModeText = swiggyConfig.swiggyMenuPullEnabled
-          ? `menu live pull on (${Math.round(Number(swiggyConfig.swiggyMenuPullIntervalMs || 0) / 1000)}s)`
-          : 'menu live pull off';
-        configLine.textContent = `Swiggy config: ${enabledText} · ${baseUrlText} · ${tokenText} · ${menuModeText}`;
-      }
-
-      if (!swiggyJobs.length) {
-        jobLine.textContent = 'Latest sync job: none';
-      } else {
-        const latest = swiggyJobs[0];
-        jobLine.textContent = `Latest sync job: #${latest.id} · ${latest.jobType} · ${latest.status} · attempts ${latest.attempts}/${latest.maxAttempts}`;
-      }
-    }
-
-    async function refreshSwiggyConfig() {
-      try {
-        swiggyConfig = await api('/api/integrations/swiggy/config');
-      } catch (_error) {
-        swiggyConfig = {
-          enabled: false,
-          apiBaseUrlConfigured: false,
-          apiTokenConfigured: false,
-          webhookSecretConfigured: false,
-          webhookStrict: true,
-          storeIdConfigured: false
-        };
-      }
-      renderSwiggyIntegrationPanel();
-    }
-
-    async function loadSwiggyJobs() {
-      try {
-        const data = await api('/api/integrations/swiggy/jobs?limit=5');
-        swiggyJobs = Array.isArray(data?.jobs) ? data.jobs : [];
-      } catch (_error) {
-        swiggyJobs = [];
-      }
-      renderSwiggyIntegrationPanel();
-    }
-
-    async function queueSwiggyMenuSync() {
-      try {
-        await api('/api/integrations/swiggy/menu/sync', 'POST', {});
-        await loadSwiggyJobs();
-        alert('Swiggy menu sync job queued.');
-      } catch (e) {
-        alert(e.message);
-      }
-    }
-
-    async function pullSwiggyMenuNow() {
-      try {
-        const result = await api('/api/integrations/swiggy/menu/pull', 'POST', {});
-        const inserted = Number(result?.inserted || 0);
-        const updated = Number(result?.updated || 0);
-        alert(`Swiggy menu pulled successfully. Inserted: ${inserted}, Updated: ${updated}`);
-      } catch (e) {
-        alert(e.message);
-      }
-    }
-
     function selectOrder(orderId) {
       selectedOrderId = orderId;
       renderTracking();
@@ -1234,8 +1186,6 @@
       }
 
       await loadAuditLogs();
-      await refreshSwiggyConfig();
-      await loadSwiggyJobs();
       renderAll();
     })();
   </script>
