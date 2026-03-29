@@ -214,9 +214,15 @@
     .auth-card { width:min(420px, 100%); border:var(--border); border-radius:var(--border-radius-lg); background:var(--color-background-primary); padding:16px; }
     .auth-title { font-size:18px; color:var(--color-text-primary); font-weight:600; margin-bottom:6px; }
     .auth-sub { font-size:12px; color:var(--color-text-secondary); margin-bottom:12px; }
+    .auth-tabs { display:flex; gap:6px; margin-bottom:12px; background:var(--color-background-secondary); border-radius:var(--border-radius-md); padding:4px; }
+    .auth-tab { flex:1; border:var(--border); border-radius:var(--border-radius-md); background:var(--color-background-primary); color:var(--color-text-secondary); font-size:12px; padding:7px 8px; cursor:pointer; }
+    .auth-tab.active { background:var(--accent-light); color:var(--accent-dark); border-color:#9FE1CB; font-weight:600; }
+    .auth-panel { display:none; }
+    .auth-panel.active { display:block; }
     .auth-input { width:100%; border:var(--border); border-radius:var(--border-radius-md); padding:10px 12px; font-size:13px; color:var(--color-text-primary); background:var(--color-background-primary); margin-bottom:8px; }
     .auth-btn { width:100%; border:var(--border); border-radius:var(--border-radius-md); background:var(--accent-light); color:var(--accent-dark); font-size:13px; padding:10px 12px; font-weight:600; cursor:pointer; }
     .auth-error { font-size:12px; color:#B42318; min-height:16px; margin-top:8px; }
+    .auth-note { font-size:11px; color:var(--color-text-secondary); margin-top:8px; min-height:16px; }
     .topbar-right { display:flex; align-items:center; gap:8px; }
     .rest-chip { font-size:11px; border:var(--border); border-radius:999px; padding:4px 8px; color:var(--color-text-secondary); background:var(--color-background-secondary); }
     .outlet-card { border:var(--border); border-radius:var(--border-radius-md); background:var(--color-background-primary); padding:10px 12px; margin-bottom:12px; }
@@ -232,12 +238,30 @@
 <body>
   <div id="auth-gate" class="auth-gate">
     <div class="auth-card">
-      <div class="auth-title">Management Login</div>
-      <div class="auth-sub">Enter your restaurant name/code and password.</div>
-      <input id="login-restaurant" class="auth-input" placeholder="Restaurant name or code" />
-      <input id="login-password" class="auth-input" type="password" placeholder="Password" />
-      <button class="auth-btn" onclick="loginManagement()">Login</button>
-      <div class="auth-error" id="login-error"></div>
+      <div class="auth-title">Management Access</div>
+      <div class="auth-sub">Login or register a restaurant account.</div>
+      <div class="auth-tabs">
+        <button class="auth-tab active" id="auth-tab-login" onclick="setAuthMode('login')">Login</button>
+        <button class="auth-tab" id="auth-tab-register" onclick="setAuthMode('register')">Register</button>
+      </div>
+
+      <div class="auth-panel active" id="auth-panel-login">
+        <input id="login-restaurant" class="auth-input" placeholder="Restaurant name or code" />
+        <input id="login-password" class="auth-input" type="password" placeholder="Password" />
+        <button class="auth-btn" onclick="loginManagement()">Login</button>
+        <div class="auth-error" id="login-error"></div>
+      </div>
+
+      <div class="auth-panel" id="auth-panel-register">
+        <input id="register-restaurant" class="auth-input" placeholder="Restaurant username/code (e.g. gandikotadosa)" />
+        <input id="register-restaurant-name" class="auth-input" placeholder="Restaurant display name (e.g. Gandikota Dosa)" />
+        <input id="register-password" class="auth-input" type="password" placeholder="Password" />
+        <input id="register-confirm-password" class="auth-input" type="password" placeholder="Confirm password" />
+        <input id="register-setup-key" class="auth-input" type="password" placeholder="Setup key (required after first account)" />
+        <button class="auth-btn" onclick="registerManagement()">Register & Login</button>
+        <div class="auth-error" id="register-error"></div>
+        <div class="auth-note" id="register-note"></div>
+      </div>
     </div>
   </div>
 
@@ -499,6 +523,8 @@
       const authGate = document.getElementById('auth-gate');
       const app = document.getElementById('app');
       const error = document.getElementById('login-error');
+      const registerError = document.getElementById('register-error');
+      const registerNote = document.getElementById('register-note');
       if (statePollTimer) {
         clearInterval(statePollTimer);
         statePollTimer = null;
@@ -506,7 +532,10 @@
       managementAuth = null;
       authGate.style.display = 'flex';
       app.style.display = 'none';
+      setAuthMode('login');
       error.textContent = errorMessage;
+      if (registerError) registerError.textContent = '';
+      if (registerNote) registerNote.textContent = '';
     }
 
     function showApp() {
@@ -517,11 +546,23 @@
       document.getElementById('rest-chip').textContent = managementAuth?.restaurant?.name || 'Restaurant';
     }
 
+    function setAuthMode(mode) {
+      const safeMode = mode === 'register' ? 'register' : 'login';
+      document.getElementById('auth-tab-login').classList.toggle('active', safeMode === 'login');
+      document.getElementById('auth-tab-register').classList.toggle('active', safeMode === 'register');
+      document.getElementById('auth-panel-login').classList.toggle('active', safeMode === 'login');
+      document.getElementById('auth-panel-register').classList.toggle('active', safeMode === 'register');
+    }
+
     async function loginManagement() {
       const restaurant = String(document.getElementById('login-restaurant').value || '').trim();
       const password = String(document.getElementById('login-password').value || '').trim();
       const error = document.getElementById('login-error');
+      const registerError = document.getElementById('register-error');
+      const registerNote = document.getElementById('register-note');
       error.textContent = '';
+      if (registerError) registerError.textContent = '';
+      if (registerNote) registerNote.textContent = '';
 
       if (!restaurant || !password) {
         error.textContent = 'Restaurant and password are required.';
@@ -545,6 +586,58 @@
         await startManagementSession();
       } catch (e) {
         error.textContent = e.message || 'Login failed';
+      }
+    }
+
+    async function registerManagement() {
+      const restaurant = String(document.getElementById('register-restaurant').value || '').trim();
+      const restaurantName = String(document.getElementById('register-restaurant-name').value || '').trim();
+      const password = String(document.getElementById('register-password').value || '').trim();
+      const confirmPassword = String(document.getElementById('register-confirm-password').value || '').trim();
+      const setupKey = String(document.getElementById('register-setup-key').value || '').trim();
+      const error = document.getElementById('register-error');
+      const note = document.getElementById('register-note');
+      error.textContent = '';
+      note.textContent = '';
+
+      if (!restaurant || !password || !confirmPassword) {
+        error.textContent = 'Restaurant code, password, and confirm password are required.';
+        return;
+      }
+      if (password.length < 6) {
+        error.textContent = 'Password must be at least 6 characters.';
+        return;
+      }
+      if (password !== confirmPassword) {
+        error.textContent = 'Password and confirm password do not match.';
+        return;
+      }
+
+      try {
+        const payload = {
+          restaurant,
+          restaurantName: restaurantName || restaurant,
+          password
+        };
+        if (setupKey) payload.setupKey = setupKey;
+
+        const result = await fetch('/api/management/register', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        const data = await result.json().catch(() => ({}));
+        if (!result.ok) {
+          throw new Error(data.error || 'Registration failed');
+        }
+
+        note.textContent = 'Registration successful. Logging you in...';
+        document.getElementById('login-restaurant').value = restaurant;
+        document.getElementById('login-password').value = password;
+        setAuthMode('login');
+        await loginManagement();
+      } catch (e) {
+        error.textContent = e.message || 'Registration failed';
       }
     }
 
