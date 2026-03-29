@@ -16,6 +16,7 @@ Set these in Render service settings:
 - `RAZORPAY_KEY_SECRET=<your_live_key_secret>`
 - `RAZORPAY_WEBHOOK_SECRET=<your_webhook_secret>`
 - `MANAGEMENT_AUTH_SECRET=<long_random_secret>`
+- `REQUIRE_PERSISTENT_DB=true`
 
 Recommended operational settings:
 
@@ -25,6 +26,12 @@ Recommended operational settings:
 - `DB_BACKUP_INTERVAL_MINUTES=60`
 - `DB_BACKUP_RETENTION_COUNT=48`
 - `MANAGEMENT_SETUP_KEY=<admin_setup_key>`
+
+Optional explicit path settings (if your platform mount path differs):
+
+- `DATA_DIR=/opt/render/project/src/data`
+- `DB_FILE=/opt/render/project/src/data/restaurant.db`
+- `DB_BACKUP_DIR=/opt/render/project/src/data/backups`
 
 ## 2.1) Management Login Bootstrap
 Management now requires login using restaurant name/code + password.
@@ -85,6 +92,7 @@ In Razorpay dashboard:
 - Primary DB: `data/restaurant.db`
 - Backups: `data/backups/restaurant-YYYYMMDDTHHMMSSZ.db`
 - Backups run at startup and at interval
+- With `REQUIRE_PERSISTENT_DB=true`, production startup fails fast if DB file is missing (prevents silent fresh DB creation and lost logins).
 
 ## 7) Operational Notes
 - Render free tiers may sleep when idle.

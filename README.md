@@ -94,6 +94,10 @@ Copy values from `.env.example` and override as needed:
 - `DB_BACKUP_ENABLED` (default: `true`)
 - `DB_BACKUP_INTERVAL_MINUTES` (default: `60`)
 - `DB_BACKUP_RETENTION_COUNT` (default: `48`)
+- `REQUIRE_PERSISTENT_DB` (default: `false`; recommended `true` in production)
+- `DATA_DIR` (optional explicit data directory)
+- `DB_FILE` (optional explicit sqlite file path)
+- `DB_BACKUP_DIR` (optional explicit backup directory)
 
 PowerShell example:
 

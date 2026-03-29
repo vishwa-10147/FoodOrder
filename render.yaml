@@ -11,12 +11,26 @@ services:
         value: production
       - key: PORT
         value: "10000"
+      - key: DATA_DIR
+        value: /opt/render/project/src/data
+      - key: DB_FILE
+        value: /opt/render/project/src/data/restaurant.db
+      - key: DB_BACKUP_DIR
+        value: /opt/render/project/src/data/backups
+      - key: REQUIRE_PERSISTENT_DB
+        value: "true"
       - key: DB_BACKUP_ENABLED
         value: "true"
       - key: DB_BACKUP_INTERVAL_MINUTES
         value: "120"
       - key: DB_BACKUP_RETENTION_COUNT
         value: "72"
+      - key: MANAGEMENT_AUTH_SECRET
+        sync: false
+      - key: MANAGEMENT_SETUP_KEY
+        sync: false
+      - key: MANAGEMENT_DEFAULT_PASSWORD
+        sync: false
       - key: RAZORPAY_KEY_ID
         sync: false
       - key: RAZORPAY_KEY_SECRET

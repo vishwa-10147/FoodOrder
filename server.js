@@ -14,13 +14,21 @@ const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
 
-const DATA_DIR = path.join(__dirname, 'data');
+const DATA_DIR = process.env.DATA_DIR
+  ? path.resolve(String(process.env.DATA_DIR))
+  : path.join(__dirname, 'data');
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 const UPLOADS_DIR = path.join(DATA_DIR, 'uploads');
 if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 
-const DB_FILE = path.join(DATA_DIR, 'restaurant.db');
-const BACKUP_DIR = path.join(DATA_DIR, 'backups');
+const DB_FILE = process.env.DB_FILE
+  ? path.resolve(String(process.env.DB_FILE))
+  : path.join(DATA_DIR, 'restaurant.db');
+const DB_DIR = path.dirname(DB_FILE);
+if (!fs.existsSync(DB_DIR)) fs.mkdirSync(DB_DIR, { recursive: true });
+const BACKUP_DIR = process.env.DB_BACKUP_DIR
+  ? path.resolve(String(process.env.DB_BACKUP_DIR))
+  : path.join(DATA_DIR, 'backups');
 
 const APP_START_TIME = Date.now();
 const PORT = Number(process.env.PORT || 3000);
@@ -32,6 +40,9 @@ const RATE_LIMIT_MAX = Math.max(1, Number(process.env.RATE_LIMIT_MAX || 240));
 const DB_BACKUP_ENABLED = String(process.env.DB_BACKUP_ENABLED || 'true') !== 'false';
 const DB_BACKUP_INTERVAL_MINUTES = Math.max(1, Number(process.env.DB_BACKUP_INTERVAL_MINUTES || 60));
 const DB_BACKUP_RETENTION_COUNT = Math.max(1, Number(process.env.DB_BACKUP_RETENTION_COUNT || 48));
+const REQUIRE_PERSISTENT_DB = process.env.REQUIRE_PERSISTENT_DB == null
+  ? NODE_ENV === 'production'
+  : String(process.env.REQUIRE_PERSISTENT_DB) === 'true';
 const MANAGEMENT_AUTH_SECRET = String(process.env.MANAGEMENT_AUTH_SECRET || '').trim() || crypto.randomBytes(32).toString('hex');
 const MANAGEMENT_SETUP_KEY = String(process.env.MANAGEMENT_SETUP_KEY || '').trim();
 const MANAGEMENT_DEFAULT_PASSWORD = String(process.env.MANAGEMENT_DEFAULT_PASSWORD || '').trim();
@@ -47,6 +58,15 @@ const razorpay = RAZORPAY_ENABLED
   : null;
 
 let lastBackupAt = null;
+
+const dbFileExistsBeforeBoot = fs.existsSync(DB_FILE);
+if (NODE_ENV === 'production' && REQUIRE_PERSISTENT_DB && !dbFileExistsBeforeBoot) {
+  // eslint-disable-next-line no-console
+  console.error(`[startup] Refusing to start: DB file missing at ${DB_FILE}. Check persistent disk mount or DB_FILE.`);
+  process.exit(1);
+}
+// eslint-disable-next-line no-console
+console.log(`[startup] SQLite file: ${DB_FILE} (${dbFileExistsBeforeBoot ? 'existing' : 'new'})`);
 
 const db = new Database(DB_FILE);
 db.pragma('journal_mode = WAL');
@@ -925,6 +945,7 @@ app.get('/api/health', (_req, res) => {
       db: {
         engine: 'sqlite',
         file: DB_FILE,
+        existedOnBoot: dbFileExistsBeforeBoot,
         backupEnabled: DB_BACKUP_ENABLED,
         backupIntervalMinutes: DB_BACKUP_INTERVAL_MINUTES,
         lastBackupAt
