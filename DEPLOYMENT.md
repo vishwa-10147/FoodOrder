@@ -93,6 +93,7 @@ In Razorpay dashboard:
 - Backups: `data/backups/restaurant-YYYYMMDDTHHMMSSZ.db`
 - Backups run at startup and at interval
 - With `REQUIRE_PERSISTENT_DB=true`, production startup fails fast if DB file is missing (prevents silent fresh DB creation and lost logins).
+- If DB file is missing but backups exist, startup now auto-restores from the latest backup before starting.
 
 ## 7) Operational Notes
 - Render free tiers may sleep when idle.

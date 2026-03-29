@@ -59,14 +59,37 @@ const razorpay = RAZORPAY_ENABLED
 
 let lastBackupAt = null;
 
-const dbFileExistsBeforeBoot = fs.existsSync(DB_FILE);
+let dbFileExistsBeforeBoot = fs.existsSync(DB_FILE);
+let dbRestoredFromBackupOnBoot = false;
+if (NODE_ENV === 'production' && REQUIRE_PERSISTENT_DB && !dbFileExistsBeforeBoot) {
+  try {
+    if (fs.existsSync(BACKUP_DIR)) {
+      const backupFiles = fs.readdirSync(BACKUP_DIR)
+        .filter((name) => /^restaurant-\d{8}T\d{6}Z\.db$/.test(name))
+        .sort((a, b) => b.localeCompare(a));
+      if (backupFiles.length) {
+        const latestBackup = path.join(BACKUP_DIR, backupFiles[0]);
+        fs.copyFileSync(latestBackup, DB_FILE);
+        dbFileExistsBeforeBoot = fs.existsSync(DB_FILE);
+        dbRestoredFromBackupOnBoot = dbFileExistsBeforeBoot;
+        if (dbRestoredFromBackupOnBoot) {
+          // eslint-disable-next-line no-console
+          console.log(`[startup] Restored DB from backup: ${latestBackup}`);
+        }
+      }
+    }
+  } catch (error) {
+    // eslint-disable-next-line no-console
+    console.error('[startup] Backup restore attempt failed', error.message);
+  }
+}
 if (NODE_ENV === 'production' && REQUIRE_PERSISTENT_DB && !dbFileExistsBeforeBoot) {
   // eslint-disable-next-line no-console
   console.error(`[startup] Refusing to start: DB file missing at ${DB_FILE}. Check persistent disk mount or DB_FILE.`);
   process.exit(1);
 }
 // eslint-disable-next-line no-console
-console.log(`[startup] SQLite file: ${DB_FILE} (${dbFileExistsBeforeBoot ? 'existing' : 'new'})`);
+console.log(`[startup] SQLite file: ${DB_FILE} (${dbFileExistsBeforeBoot ? 'existing' : 'new'})${dbRestoredFromBackupOnBoot ? ' [restored]' : ''}`);
 
 const db = new Database(DB_FILE);
 db.pragma('journal_mode = WAL');
@@ -946,6 +969,7 @@ app.get('/api/health', (_req, res) => {
         engine: 'sqlite',
         file: DB_FILE,
         existedOnBoot: dbFileExistsBeforeBoot,
+        restoredFromBackupOnBoot: dbRestoredFromBackupOnBoot,
         backupEnabled: DB_BACKUP_ENABLED,
         backupIntervalMinutes: DB_BACKUP_INTERVAL_MINUTES,
         lastBackupAt
