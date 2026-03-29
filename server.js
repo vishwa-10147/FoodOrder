@@ -1233,6 +1233,37 @@ app.post('/api/menu/:id/image', requireManagementAuth, (req, res) => {
   });
 });
 
+app.delete('/api/menu/:id/image', requireManagementAuth, (req, res) => {
+  const menuItemId = Number(req.params.id);
+  const actor = `${getActor(req)}:${req.management.restaurantCode}`;
+  const restaurantId = req.management.restaurantId;
+  const item = db.prepare('SELECT id, name, image_url as imageUrl FROM menu_items WHERE id = ? AND restaurant_id = ?').get(menuItemId, restaurantId);
+  if (!item) return res.status(404).json({ error: 'Menu item not found' });
+
+  if (item.imageUrl && String(item.imageUrl).startsWith('/data/uploads/')) {
+    const filePath = path.normalize(path.join(__dirname, String(item.imageUrl).replace(/^\//, '')));
+    if (filePath.startsWith(UPLOADS_DIR) && fs.existsSync(filePath)) {
+      try {
+        fs.unlinkSync(filePath);
+      } catch (_err) {
+      }
+    }
+  }
+
+  db.prepare('UPDATE menu_items SET image_url = NULL WHERE id = ? AND restaurant_id = ?').run(menuItemId, restaurantId);
+
+  logAudit({
+    action: 'menu_image_cleared',
+    entityType: 'menu_item',
+    entityId: menuItemId,
+    actor,
+    details: { name: item.name }
+  });
+
+  broadcastState();
+  return res.json({ ok: true });
+});
+
 app.post('/api/menu/import-csv', requireManagementAuth, (req, res) => {
   try {
     const actor = `${getActor(req)}:${req.management.restaurantCode}`;
