@@ -200,10 +200,31 @@
     .modal-title { font-size:14px; font-weight:500; color:var(--color-text-primary); margin-bottom:6px; }
     .modal-desc { font-size:12px; color:var(--color-text-secondary); margin-bottom:12px; }
     .modal-actions { display:flex; justify-content:flex-end; gap:8px; }
+
+    .auth-gate { min-height: 100vh; display:flex; align-items:center; justify-content:center; background: var(--color-background-primary); padding: 16px; }
+    .auth-card { width:min(420px, 100%); border:var(--border); border-radius:var(--border-radius-lg); background:var(--color-background-primary); padding:16px; }
+    .auth-title { font-size:18px; color:var(--color-text-primary); font-weight:600; margin-bottom:6px; }
+    .auth-sub { font-size:12px; color:var(--color-text-secondary); margin-bottom:12px; }
+    .auth-input { width:100%; border:var(--border); border-radius:var(--border-radius-md); padding:10px 12px; font-size:13px; color:var(--color-text-primary); background:var(--color-background-primary); margin-bottom:8px; }
+    .auth-btn { width:100%; border:var(--border); border-radius:var(--border-radius-md); background:var(--accent-light); color:var(--accent-dark); font-size:13px; padding:10px 12px; font-weight:600; cursor:pointer; }
+    .auth-error { font-size:12px; color:#B42318; min-height:16px; margin-top:8px; }
+    .topbar-right { display:flex; align-items:center; gap:8px; }
+    .rest-chip { font-size:11px; border:var(--border); border-radius:999px; padding:4px 8px; color:var(--color-text-secondary); background:var(--color-background-secondary); }
   </style>
 </head>
 <body>
-  <div id="app">
+  <div id="auth-gate" class="auth-gate">
+    <div class="auth-card">
+      <div class="auth-title">Management Login</div>
+      <div class="auth-sub">Enter your restaurant name/code and password.</div>
+      <input id="login-restaurant" class="auth-input" placeholder="Restaurant name or code" />
+      <input id="login-password" class="auth-input" type="password" placeholder="Password" />
+      <button class="auth-btn" onclick="loginManagement()">Login</button>
+      <div class="auth-error" id="login-error"></div>
+    </div>
+  </div>
+
+  <div id="app" style="display:none;">
     <aside id="sidebar">
       <div class="logo">
         <h1>Tableside</h1>
@@ -220,7 +241,11 @@
     <main id="main">
       <div class="topbar">
         <div class="title" id="title">Dashboard</div>
-        <div class="time" id="time">Live</div>
+        <div class="topbar-right">
+          <div class="rest-chip" id="rest-chip">Restaurant</div>
+          <div class="time" id="time">Live</div>
+          <button class="small-btn" onclick="logoutManagement()">Logout</button>
+        </div>
       </div>
 
       <section class="content active" id="view-dashboard">
@@ -297,7 +322,6 @@
               <input id="menu-desc" class="menu-admin-input" placeholder="Description (optional)" />
               <input id="menu-delete-id" class="menu-admin-input" type="number" min="1" placeholder="Delete item ID" />
               <input id="menu-csv-file" class="menu-admin-input" type="file" accept=".csv,text/csv" />
-              <input id="menu-restaurant-code" class="menu-admin-input" placeholder="Restaurant code (default)" />
             </div>
             <div class="menu-admin-form-actions">
               <div class="menu-admin-meta">Customize menu by adding/removing items.</div>
@@ -342,11 +366,12 @@
     </div>
   </div>
 
-  <script src="/socket.io/socket.io.js"></script>
   <script>
-    const socket = io();
+    const MANAGEMENT_TOKEN_KEY = 'management_auth_token';
     let state = { menu: [], tables: [], orders: [], stats: {} };
     let auditLogs = [];
+    let managementAuth = null;
+    let statePollTimer = null;
     let selectedOrderId = null;
     let pendingRemoveTableNumber = null;
     let selectedOrderingTableNumber = null;
@@ -416,12 +441,107 @@
       document.getElementById('title').textContent = view.charAt(0).toUpperCase() + view.slice(1);
     }
 
+    function showLoginGate(errorMessage = '') {
+      const authGate = document.getElementById('auth-gate');
+      const app = document.getElementById('app');
+      const error = document.getElementById('login-error');
+      if (statePollTimer) {
+        clearInterval(statePollTimer);
+        statePollTimer = null;
+      }
+      managementAuth = null;
+      authGate.style.display = 'flex';
+      app.style.display = 'none';
+      error.textContent = errorMessage;
+    }
+
+    function showApp() {
+      const authGate = document.getElementById('auth-gate');
+      const app = document.getElementById('app');
+      authGate.style.display = 'none';
+      app.style.display = 'flex';
+      document.getElementById('rest-chip').textContent = managementAuth?.restaurant?.name || 'Restaurant';
+    }
+
+    async function loginManagement() {
+      const restaurant = String(document.getElementById('login-restaurant').value || '').trim();
+      const password = String(document.getElementById('login-password').value || '').trim();
+      const error = document.getElementById('login-error');
+      error.textContent = '';
+
+      if (!restaurant || !password) {
+        error.textContent = 'Restaurant and password are required.';
+        return;
+      }
+
+      try {
+        const result = await fetch('/api/management/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ restaurant, password })
+        });
+        const data = await result.json().catch(() => ({}));
+        if (!result.ok) {
+          throw new Error(data.error || 'Login failed');
+        }
+
+        managementAuth = { token: data.token, restaurant: data.restaurant };
+        localStorage.setItem(MANAGEMENT_TOKEN_KEY, JSON.stringify(managementAuth));
+        document.getElementById('login-password').value = '';
+        await startManagementSession();
+      } catch (e) {
+        error.textContent = e.message || 'Login failed';
+      }
+    }
+
+    function logoutManagement() {
+      localStorage.removeItem(MANAGEMENT_TOKEN_KEY);
+      showLoginGate('Logged out.');
+    }
+
+    async function fetchManagementState() {
+      const data = await api('/api/management/state');
+      state = data;
+      renderAll();
+      knownOrderIds = new Set((data.orders || []).map((order) => order.id));
+    }
+
+    async function startManagementSession() {
+      showApp();
+      await fetchManagementState();
+      await loadAuditLogs();
+
+      if (statePollTimer) clearInterval(statePollTimer);
+      statePollTimer = setInterval(async () => {
+        const previousIds = knownOrderIds;
+        try {
+          await fetchManagementState();
+          await loadAuditLogs();
+
+          if (autoPrintEnabled) {
+            const newOrders = (state.orders || []).filter((order) => !previousIds.has(order.id));
+            if (newOrders.length) printOrder(newOrders[0]);
+          }
+        } catch (_error) {
+        }
+      }, 4000);
+    }
+
     async function api(path, method = 'GET', body) {
+      const headers = { 'Content-Type': 'application/json', 'X-Actor': 'management-ui' };
+      if (managementAuth?.token) {
+        headers.Authorization = `Bearer ${managementAuth.token}`;
+      }
+
       const res = await fetch(path, {
         method,
-        headers: { 'Content-Type': 'application/json', 'X-Actor': 'management-ui' },
+        headers,
         body: body ? JSON.stringify(body) : undefined
       });
+      if (res.status === 401) {
+        showLoginGate('Session expired. Please login again.');
+        throw new Error('Unauthorized');
+      }
       if (!res.ok) {
         const err = await res.json().catch(() => ({ error: 'Request failed' }));
         throw new Error(err.error || 'Request failed');
@@ -1041,7 +1161,6 @@
 
     async function importMenuCsv() {
       const fileInput = document.getElementById('menu-csv-file');
-      const restaurantCodeInput = document.getElementById('menu-restaurant-code');
       const replaceExisting = document.getElementById('menu-csv-replace').checked;
       const file = fileInput.files && fileInput.files[0];
 
@@ -1054,14 +1173,13 @@
         const csvText = await file.text();
         const result = await api('/api/menu/import-csv', 'POST', {
           csvText,
-          replaceExisting,
-          restaurantCode: String(restaurantCodeInput.value || 'default').trim() || 'default'
+          replaceExisting
         });
 
         const invalidCount = Array.isArray(result.invalidRows) ? result.invalidRows.length : 0;
         const summary = [
           `Imported ${Number(result.inserted || 0)} items`,
-          `Restaurant: ${result.restaurant?.code || 'default'}`,
+          `Restaurant: ${result.restaurant?.name || result.restaurant?.code || 'current'}`,
           invalidCount ? `Skipped rows: ${invalidCount}` : 'Skipped rows: 0'
         ].join('\n');
         alert(summary);
@@ -1152,29 +1270,9 @@
       document.getElementById('time').textContent = `Live · ${now.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}`;
     }
 
-    socket.on('state:update', (newState) => {
-      const previousIds = knownOrderIds;
-      const nextIds = new Set((newState.orders || []).map((order) => order.id));
-      state = newState;
-      renderAll();
-      loadAuditLogs();
-
-      if (autoPrintEnabled) {
-        const newOrders = (newState.orders || []).filter((order) => !previousIds.has(order.id));
-        if (newOrders.length) {
-          printOrder(newOrders[0]);
-        }
-      }
-
-      knownOrderIds = nextIds;
-    });
-
     (async function init() {
       updateTime();
       setInterval(updateTime, 30000);
-      const data = await api('/api/state');
-      state = data;
-      knownOrderIds = new Set((data.orders || []).map((order) => order.id));
 
       const exportDateInput = document.getElementById('order-export-date');
       if (exportDateInput) {
@@ -1185,8 +1283,26 @@
         exportDateInput.value = `${yyyy}-${mm}-${dd}`;
       }
 
-      await loadAuditLogs();
-      renderAll();
+      const persisted = localStorage.getItem(MANAGEMENT_TOKEN_KEY);
+      if (persisted) {
+        try {
+          managementAuth = JSON.parse(persisted);
+        } catch (_error) {
+          managementAuth = null;
+        }
+      }
+
+      if (!managementAuth?.token) {
+        showLoginGate();
+        return;
+      }
+
+      try {
+        await startManagementSession();
+      } catch (_error) {
+        localStorage.removeItem(MANAGEMENT_TOKEN_KEY);
+        showLoginGate('Please login to continue.');
+      }
     })();
   </script>
 </body>

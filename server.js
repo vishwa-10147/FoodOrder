@@ -29,6 +29,9 @@ const RATE_LIMIT_MAX = Math.max(1, Number(process.env.RATE_LIMIT_MAX || 240));
 const DB_BACKUP_ENABLED = String(process.env.DB_BACKUP_ENABLED || 'true') !== 'false';
 const DB_BACKUP_INTERVAL_MINUTES = Math.max(1, Number(process.env.DB_BACKUP_INTERVAL_MINUTES || 60));
 const DB_BACKUP_RETENTION_COUNT = Math.max(1, Number(process.env.DB_BACKUP_RETENTION_COUNT || 48));
+const MANAGEMENT_AUTH_SECRET = String(process.env.MANAGEMENT_AUTH_SECRET || '').trim() || crypto.randomBytes(32).toString('hex');
+const MANAGEMENT_SETUP_KEY = String(process.env.MANAGEMENT_SETUP_KEY || '').trim();
+const MANAGEMENT_DEFAULT_PASSWORD = String(process.env.MANAGEMENT_DEFAULT_PASSWORD || '').trim();
 
 const RAZORPAY_KEY_ID = String(process.env.RAZORPAY_KEY_ID || '').trim();
 const RAZORPAY_KEY_SECRET = String(process.env.RAZORPAY_KEY_SECRET || '').trim();
@@ -143,8 +146,9 @@ CREATE TABLE IF NOT EXISTS menu_items (
 
 CREATE TABLE IF NOT EXISTS table_status (
   restaurant_id INTEGER NOT NULL DEFAULT 1,
-  table_number INTEGER PRIMARY KEY,
-  status TEXT NOT NULL CHECK(status IN ('free','ordering','occupied'))
+  table_number INTEGER NOT NULL,
+  status TEXT NOT NULL CHECK(status IN ('free','ordering','occupied')),
+  PRIMARY KEY (restaurant_id, table_number)
 );
 
 CREATE TABLE IF NOT EXISTS orders (
@@ -185,6 +189,14 @@ CREATE TABLE IF NOT EXISTS audit_logs (
   details TEXT,
   created_at INTEGER NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS restaurant_auth (
+  restaurant_id INTEGER PRIMARY KEY,
+  password_hash TEXT NOT NULL,
+  password_salt TEXT NOT NULL,
+  updated_at INTEGER NOT NULL,
+  FOREIGN KEY(restaurant_id) REFERENCES restaurants(id)
+);
 `);
 
 const seedMenu = [
@@ -213,6 +225,70 @@ function logAudit({ action, entityType, entityId = null, actor = 'system', detai
   ).run(action, entityType, entityId ? String(entityId) : null, actor, details ? JSON.stringify(details) : null, Date.now());
 }
 
+function hashPasswordWithSalt(password, saltHex = crypto.randomBytes(16).toString('hex')) {
+  const normalizedPassword = String(password || '');
+  const normalizedSalt = String(saltHex || '').trim();
+  const hash = crypto.pbkdf2Sync(normalizedPassword, normalizedSalt, 120000, 64, 'sha512').toString('hex');
+  return { salt: normalizedSalt, hash };
+}
+
+function verifyPassword(password, saltHex, expectedHashHex) {
+  const computed = hashPasswordWithSalt(password, saltHex).hash;
+  const computedBuffer = Buffer.from(computed, 'hex');
+  const expectedBuffer = Buffer.from(String(expectedHashHex || ''), 'hex');
+  if (computedBuffer.length !== expectedBuffer.length) return false;
+  return crypto.timingSafeEqual(computedBuffer, expectedBuffer);
+}
+
+function createManagementToken({ restaurantId, restaurantCode, restaurantName }) {
+  const payload = {
+    restaurantId: Number(restaurantId),
+    restaurantCode: String(restaurantCode || ''),
+    restaurantName: String(restaurantName || ''),
+    iat: Date.now(),
+    exp: Date.now() + (24 * 60 * 60 * 1000)
+  };
+  const base = Buffer.from(JSON.stringify(payload)).toString('base64url');
+  const signature = crypto.createHmac('sha256', MANAGEMENT_AUTH_SECRET).update(base).digest('base64url');
+  return `${base}.${signature}`;
+}
+
+function parseManagementToken(token) {
+  const text = String(token || '').trim();
+  const [base, signature] = text.split('.');
+  if (!base || !signature) return null;
+
+  const expected = crypto.createHmac('sha256', MANAGEMENT_AUTH_SECRET).update(base).digest('base64url');
+  const expectedBuffer = Buffer.from(expected);
+  const signatureBuffer = Buffer.from(signature);
+  if (expectedBuffer.length !== signatureBuffer.length) return null;
+  if (!crypto.timingSafeEqual(expectedBuffer, signatureBuffer)) return null;
+
+  const payload = JSON.parse(Buffer.from(base, 'base64url').toString('utf8'));
+  if (!payload?.restaurantId || !payload?.exp || Date.now() > Number(payload.exp)) return null;
+  return {
+    restaurantId: Number(payload.restaurantId),
+    restaurantCode: String(payload.restaurantCode || ''),
+    restaurantName: String(payload.restaurantName || '')
+  };
+}
+
+function getManagementSession(req) {
+  const header = String(req.headers.authorization || '').trim();
+  if (!header.toLowerCase().startsWith('bearer ')) return null;
+  const token = header.slice(7).trim();
+  return parseManagementToken(token);
+}
+
+function requireManagementAuth(req, res, next) {
+  const session = getManagementSession(req);
+  if (!session?.restaurantId) {
+    return res.status(401).json({ error: 'Management login required' });
+  }
+  req.management = session;
+  return next();
+}
+
 function getAuditLogs(limit = 30) {
   const safeLimit = Number(limit) > 0 ? Math.min(Number(limit), 200) : 30;
   const rows = db.prepare(
@@ -226,6 +302,33 @@ function getAuditLogs(limit = 30) {
     ...row,
     details: row.details ? JSON.parse(row.details) : null
   }));
+}
+
+function getAuditLogsForRestaurant(restaurantId, limit = 30) {
+  const safeRestaurantId = Number(restaurantId) || 1;
+  const rows = getAuditLogs(Math.max(50, Number(limit || 30) * 6));
+  const menuOwner = db.prepare('SELECT restaurant_id as restaurantId FROM menu_items WHERE id = ?');
+  const orderOwner = db.prepare('SELECT restaurant_id as restaurantId FROM orders WHERE id = ?');
+  const tableOwner = db.prepare('SELECT restaurant_id as restaurantId FROM table_status WHERE table_number = ?');
+
+  const filtered = rows.filter((row) => {
+    const entityId = Number(row.entityId || 0);
+    if (row.entityType === 'menu_item' && entityId > 0) {
+      return Number(menuOwner.get(entityId)?.restaurantId || 0) === safeRestaurantId;
+    }
+    if (row.entityType === 'order' && entityId > 0) {
+      return Number(orderOwner.get(entityId)?.restaurantId || 0) === safeRestaurantId;
+    }
+    if (row.entityType === 'table' && entityId > 0) {
+      return Number(tableOwner.get(entityId)?.restaurantId || 0) === safeRestaurantId;
+    }
+
+    const detailsRestaurantId = Number(row?.details?.restaurantId || 0);
+    if (detailsRestaurantId > 0) return detailsRestaurantId === safeRestaurantId;
+    return false;
+  });
+
+  return filtered.slice(0, Math.max(1, Math.min(Number(limit || 30), 200)));
 }
 
 function normalizeRestaurantCode(input) {
@@ -336,6 +439,16 @@ function seedDatabase() {
     db.prepare('INSERT INTO restaurants (code, name, created_at, updated_at) VALUES (?, ?, ?, ?)')
       .run('default', 'Default Restaurant', now, now);
   }
+  const defaultRestaurantRow = db.prepare('SELECT id, code, name FROM restaurants WHERE code = ?').get('default');
+
+  if (MANAGEMENT_DEFAULT_PASSWORD && defaultRestaurantRow?.id) {
+    const existingAuth = db.prepare('SELECT restaurant_id FROM restaurant_auth WHERE restaurant_id = ?').get(defaultRestaurantRow.id);
+    if (!existingAuth) {
+      const credentials = hashPasswordWithSalt(MANAGEMENT_DEFAULT_PASSWORD);
+      db.prepare('INSERT INTO restaurant_auth (restaurant_id, password_hash, password_salt, updated_at) VALUES (?, ?, ?, ?)')
+        .run(defaultRestaurantRow.id, credentials.hash, credentials.salt, now);
+    }
+  }
 
   const menuColumns = db.prepare('PRAGMA table_info(menu_items)').all();
   const hasAvailableColumn = menuColumns.some((col) => col.name === 'available');
@@ -354,6 +467,26 @@ function seedDatabase() {
     db.exec('ALTER TABLE table_status ADD COLUMN restaurant_id INTEGER NOT NULL DEFAULT 1');
   }
   db.exec('UPDATE table_status SET restaurant_id = 1 WHERE restaurant_id IS NULL OR restaurant_id < 1');
+
+  const tableSchemaSql = db.prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'table_status'").get()?.sql || '';
+  const usesCompositePrimaryKey = /PRIMARY KEY\s*\(\s*restaurant_id\s*,\s*table_number\s*\)/i.test(tableSchemaSql);
+  if (!usesCompositePrimaryKey) {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS table_status_new (
+        restaurant_id INTEGER NOT NULL DEFAULT 1,
+        table_number INTEGER NOT NULL,
+        status TEXT NOT NULL CHECK(status IN ('free','ordering','occupied')),
+        PRIMARY KEY (restaurant_id, table_number)
+      );
+
+      INSERT OR IGNORE INTO table_status_new (restaurant_id, table_number, status)
+      SELECT COALESCE(restaurant_id, 1), table_number, status
+      FROM table_status;
+
+      DROP TABLE table_status;
+      ALTER TABLE table_status_new RENAME TO table_status;
+    `);
+  }
 
   const orderColumnsForRestaurant = db.prepare('PRAGMA table_info(orders)').all();
   const hasOrderRestaurantIdColumn = orderColumnsForRestaurant.some((col) => col.name === 'restaurant_id');
@@ -408,11 +541,11 @@ function seedDatabase() {
 
   const tableCount = db.prepare('SELECT COUNT(*) as count FROM table_status').get().count;
   if (tableCount === 0) {
-    const insertTable = db.prepare('INSERT INTO table_status (table_number, status) VALUES (?, ?)');
+    const insertTable = db.prepare('INSERT INTO table_status (restaurant_id, table_number, status) VALUES (?, ?, ?)');
     const tx = db.transaction(() => {
       for (let i = 1; i <= 14; i += 1) {
         const defaultStatus = [1, 3, 5, 7].includes(i) ? 'occupied' : [4].includes(i) ? 'ordering' : 'free';
-        insertTable.run(i, defaultStatus);
+        insertTable.run(1, i, defaultStatus);
       }
     });
     tx();
@@ -420,7 +553,7 @@ function seedDatabase() {
 
   const orderCount = db.prepare('SELECT COUNT(*) as count FROM orders').get().count;
   if (orderCount === 0) {
-    const tableNumbers = db.prepare('SELECT table_number as tableNumber FROM table_status ORDER BY table_number ASC').all();
+    const tableNumbers = db.prepare('SELECT table_number as tableNumber FROM table_status WHERE restaurant_id = 1 ORDER BY table_number ASC').all();
     if (!tableNumbers.length) return;
 
     const preferredDineTable = tableNumbers.find((row) => row.tableNumber === 4)?.tableNumber || tableNumbers[0].tableNumber;
@@ -437,7 +570,8 @@ function seedDatabase() {
       ],
       status: 'preparing',
       paid: 0,
-      etaMinutes: 12
+      etaMinutes: 12,
+      restaurantId: 1
     });
     createOrder({
       orderType: 'preorder',
@@ -450,22 +584,23 @@ function seedDatabase() {
       ],
       status: 'new',
       paid: 0,
-      etaMinutes: 18
+      etaMinutes: 18,
+      restaurantId: 1
     });
   }
 
 }
 
-function getMenuMap() {
-  const rows = db.prepare('SELECT id, name, price FROM menu_items WHERE available = 1').all();
+function getMenuMap(restaurantId = 1) {
+  const rows = db.prepare('SELECT id, name, price FROM menu_items WHERE available = 1 AND restaurant_id = ?').all(restaurantId);
   return rows.reduce((acc, row) => {
     acc[row.id] = row;
     return acc;
   }, {});
 }
 
-function getMenuByNameMap() {
-  const rows = db.prepare('SELECT id, name, price FROM menu_items').all();
+function getMenuByNameMap(restaurantId = 1) {
+  const rows = db.prepare('SELECT id, name, price FROM menu_items WHERE restaurant_id = ?').all(restaurantId);
   return rows.reduce((acc, row) => {
     acc[String(row.name || '').trim().toLowerCase()] = row;
     return acc;
@@ -481,13 +616,14 @@ function createOrder({
   paid = 0,
   etaMinutes = 15,
   source = 'direct',
-  externalOrderId = null
+  externalOrderId = null,
+  restaurantId = 1
 }) {
   if (!Array.isArray(items) || items.length === 0) {
     throw new Error('Order must contain items');
   }
 
-  const menuMap = getMenuMap();
+  const menuMap = getMenuMap(restaurantId);
   const normalizedItems = items
     .map((item) => ({ menu: menuMap[item.menuItemId], qty: Number(item.qty) || 0, menuItemId: item.menuItemId }))
     .filter((item) => item.menu && item.qty > 0);
@@ -497,14 +633,14 @@ function createOrder({
   }
 
   if (orderType === 'dine' || orderType === 'preorder') {
-    const exists = db.prepare('SELECT table_number FROM table_status WHERE table_number = ?').get(tableNumber);
+    const exists = db.prepare('SELECT table_number FROM table_status WHERE table_number = ? AND restaurant_id = ?').get(tableNumber, restaurantId);
     if (!exists) throw new Error('Selected table does not exist');
   }
 
   const now = Date.now();
   const insertOrder = db.prepare(
-     `INSERT INTO orders (order_type, table_number, notes, status, source, external_order_id, paid, eta_minutes, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+     `INSERT INTO orders (restaurant_id, order_type, table_number, notes, status, source, external_order_id, paid, eta_minutes, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   );
   const insertItem = db.prepare(
     `INSERT INTO order_items (order_id, menu_item_id, item_name, item_price, qty)
@@ -512,13 +648,13 @@ function createOrder({
   );
 
   const tx = db.transaction(() => {
-    const result = insertOrder.run(orderType, tableNumber, notes, status, source, externalOrderId, paid, etaMinutes, now, now);
+    const result = insertOrder.run(restaurantId, orderType, tableNumber, notes, status, source, externalOrderId, paid, etaMinutes, now, now);
     normalizedItems.forEach((item) => {
       insertItem.run(result.lastInsertRowid, item.menuItemId, item.menu.name, item.menu.price, item.qty);
     });
     if ((orderType === 'dine' || orderType === 'preorder') && tableNumber) {
       const initialStatus = orderType === 'preorder' ? 'ordering' : 'occupied';
-      db.prepare('UPDATE table_status SET status = ? WHERE table_number = ?').run(initialStatus, tableNumber);
+      db.prepare('UPDATE table_status SET status = ? WHERE table_number = ? AND restaurant_id = ?').run(initialStatus, tableNumber, restaurantId);
     }
     return result.lastInsertRowid;
   });
@@ -526,12 +662,14 @@ function createOrder({
   return tx();
 }
 
-function getOrders() {
+function getOrders(restaurantId = null) {
+  const restaurantFilter = Number(restaurantId) > 0 ? 'WHERE restaurant_id = ?' : '';
   const orders = db.prepare(
     `SELECT id, restaurant_id as restaurantId, order_type as orderType, table_number as tableNumber, notes, status, source, external_order_id as externalOrderId, paid, payment_method as paymentMethod, payment_gateway_order_id as paymentGatewayOrderId, payment_gateway_payment_id as paymentGatewayPaymentId, paid_at as paidAt, eta_minutes as etaMinutes, created_at as createdAt, updated_at as updatedAt
      FROM orders
+     ${restaurantFilter}
      ORDER BY created_at DESC`
-  ).all();
+  ).all(...(restaurantFilter ? [Number(restaurantId)] : []));
 
   const items = db.prepare(
     `SELECT order_id as orderId, item_name as name, item_price as price, qty
@@ -590,12 +728,12 @@ function getStats(orders, tables) {
   };
 }
 
-function getState() {
+function getState(restaurantId = 1) {
   const menu = db.prepare(
-    'SELECT id, restaurant_id as restaurantId, name, description as desc, price, emoji, category as cat, available FROM menu_items ORDER BY id ASC'
-  ).all();
-  const tables = db.prepare('SELECT restaurant_id as restaurantId, table_number as tableNumber, status FROM table_status ORDER BY table_number ASC').all();
-  const orders = getOrders();
+    'SELECT id, restaurant_id as restaurantId, name, description as desc, price, emoji, category as cat, available FROM menu_items WHERE restaurant_id = ? ORDER BY id ASC'
+  ).all(restaurantId);
+  const tables = db.prepare('SELECT restaurant_id as restaurantId, table_number as tableNumber, status FROM table_status WHERE restaurant_id = ? ORDER BY table_number ASC').all(restaurantId);
+  const orders = getOrders(restaurantId);
   const stats = getStats(orders, tables);
   return {
     menu,
@@ -606,7 +744,9 @@ function getState() {
 }
 
 function markOrderPaid({ orderId, actor, paymentMethod, paymentGatewayOrderId = null, paymentGatewayPaymentId = null }) {
-  const order = db.prepare('SELECT id, order_type as orderType, table_number as tableNumber, paid FROM orders WHERE id = ?').get(orderId);
+  const order = db.prepare(
+    'SELECT id, restaurant_id as restaurantId, order_type as orderType, table_number as tableNumber, paid FROM orders WHERE id = ?'
+  ).get(orderId);
   if (!order) throw new Error('Order not found');
   if (Number(order.paid) === 1) throw new Error('Order is already paid');
 
@@ -616,7 +756,8 @@ function markOrderPaid({ orderId, actor, paymentMethod, paymentGatewayOrderId = 
   ).run(paymentMethod, paymentGatewayOrderId, paymentGatewayPaymentId, paidAt, paidAt, orderId);
 
   if ((order.orderType === 'dine' || order.orderType === 'preorder') && order.tableNumber) {
-    db.prepare('UPDATE table_status SET status = ? WHERE table_number = ?').run('occupied', order.tableNumber);
+    db.prepare('UPDATE table_status SET status = ? WHERE table_number = ? AND restaurant_id = ?')
+      .run('occupied', order.tableNumber, order.restaurantId);
   }
 
   logAudit({
@@ -628,7 +769,7 @@ function markOrderPaid({ orderId, actor, paymentMethod, paymentGatewayOrderId = 
   });
 
   broadcastState();
-  return getOrders().find((entry) => entry.id === orderId);
+  return getOrders(order.restaurantId).find((entry) => entry.id === orderId);
 }
 
 function broadcastState() {
@@ -687,25 +828,108 @@ app.get('/api/health', (_req, res) => {
 });
 
 app.get('/api/state', (_req, res) => {
-  res.json(getState());
+  res.json(getState(1));
 });
 
-app.post('/api/menu/:id/availability', (req, res) => {
+app.post('/api/management/register', (req, res) => {
+  const authCount = Number(db.prepare('SELECT COUNT(*) as count FROM restaurant_auth').get().count || 0);
+  const setupKey = String(req.body?.setupKey || '').trim();
+  const firstBootstrap = authCount === 0;
+  if (!firstBootstrap) {
+    if (!MANAGEMENT_SETUP_KEY) {
+      return res.status(403).json({ error: 'Management setup key is not configured' });
+    }
+    if (setupKey !== MANAGEMENT_SETUP_KEY) {
+      return res.status(403).json({ error: 'Invalid setup key' });
+    }
+  }
+
+  const restaurantInput = String(req.body?.restaurant || req.body?.restaurantCode || '').trim();
+  const restaurantName = String(req.body?.restaurantName || restaurantInput || '').trim();
+  const password = String(req.body?.password || '').trim();
+  if (!restaurantInput) return res.status(400).json({ error: 'Restaurant name or code is required' });
+  if (password.length < 6) return res.status(400).json({ error: 'Password must be at least 6 characters' });
+
+  const restaurantCode = normalizeRestaurantCode(restaurantInput);
+  if (!restaurantCode) return res.status(400).json({ error: 'Invalid restaurant code' });
+
+  const restaurant = resolveRestaurantByCode(restaurantCode, restaurantName || restaurantInput);
+  const credentials = hashPasswordWithSalt(password);
+  db.prepare(
+    `INSERT INTO restaurant_auth (restaurant_id, password_hash, password_salt, updated_at)
+     VALUES (?, ?, ?, ?)
+     ON CONFLICT(restaurant_id)
+     DO UPDATE SET password_hash = excluded.password_hash, password_salt = excluded.password_salt, updated_at = excluded.updated_at`
+  ).run(restaurant.id, credentials.hash, credentials.salt, Date.now());
+
+  return res.json({ ok: true, restaurant: { id: restaurant.id, code: restaurant.code, name: restaurant.name } });
+});
+
+app.post('/api/management/login', (req, res) => {
+  const restaurantInput = String(req.body?.restaurant || '').trim();
+  const password = String(req.body?.password || '').trim();
+  if (!restaurantInput || !password) {
+    return res.status(400).json({ error: 'Restaurant and password are required' });
+  }
+
+  const normalizedCode = normalizeRestaurantCode(restaurantInput);
+  const restaurant = db.prepare(
+    `SELECT id, code, name
+     FROM restaurants
+     WHERE lower(code) = lower(?) OR lower(name) = lower(?)
+     LIMIT 1`
+  ).get(normalizedCode || restaurantInput, restaurantInput);
+  if (!restaurant) return res.status(401).json({ error: 'Invalid restaurant or password' });
+
+  const authRow = db.prepare(
+    'SELECT restaurant_id as restaurantId, password_hash as passwordHash, password_salt as passwordSalt FROM restaurant_auth WHERE restaurant_id = ?'
+  ).get(restaurant.id);
+  if (!authRow) return res.status(401).json({ error: 'Invalid restaurant or password' });
+
+  const valid = verifyPassword(password, authRow.passwordSalt, authRow.passwordHash);
+  if (!valid) return res.status(401).json({ error: 'Invalid restaurant or password' });
+
+  const token = createManagementToken({
+    restaurantId: restaurant.id,
+    restaurantCode: restaurant.code,
+    restaurantName: restaurant.name
+  });
+
+  return res.json({
+    ok: true,
+    token,
+    restaurant: { id: restaurant.id, code: restaurant.code, name: restaurant.name }
+  });
+});
+
+app.get('/api/management/state', requireManagementAuth, (req, res) => {
+  return res.json({
+    ...getState(req.management.restaurantId),
+    restaurant: {
+      id: req.management.restaurantId,
+      code: req.management.restaurantCode,
+      name: req.management.restaurantName
+    }
+  });
+});
+
+app.post('/api/menu/:id/availability', requireManagementAuth, (req, res) => {
   const menuItemId = Number(req.params.id);
   const availableValue = req.body?.available;
   const available = availableValue === true || availableValue === 1 || availableValue === '1'
     ? 1
     : 0;
-  const actor = getActor(req);
+  const actor = `${getActor(req)}:${req.management.restaurantCode}`;
+  const restaurantId = req.management.restaurantId;
 
-  const item = db.prepare('SELECT id, name, available FROM menu_items WHERE id = ?').get(menuItemId);
+  const item = db.prepare('SELECT id, name, available FROM menu_items WHERE id = ? AND restaurant_id = ?').get(menuItemId, restaurantId);
   if (!item) return res.status(404).json({ error: 'Menu item not found' });
 
   if (Number(item.available) === available) {
     return res.json({ ok: true, available });
   }
 
-  db.prepare('UPDATE menu_items SET available = ? WHERE id = ?').run(available, menuItemId);
+  db.prepare('UPDATE menu_items SET available = ? WHERE id = ? AND restaurant_id = ?').run(available, menuItemId, restaurantId);
   logAudit({
     action: 'menu_availability_changed',
     entityType: 'menu_item',
@@ -718,7 +942,7 @@ app.post('/api/menu/:id/availability', (req, res) => {
   return res.json({ ok: true, available });
 });
 
-app.post('/api/menu', (req, res) => {
+app.post('/api/menu', requireManagementAuth, (req, res) => {
   const name = String(req.body?.name || '').trim();
   const description = String(req.body?.desc || req.body?.description || '').trim();
   const price = Number(req.body?.price || 0);
@@ -726,14 +950,15 @@ app.post('/api/menu', (req, res) => {
   const cat = String(req.body?.cat || req.body?.category || 'other').trim().toLowerCase() || 'other';
   const availableValue = req.body?.available;
   const available = availableValue === false || availableValue === 0 || availableValue === '0' ? 0 : 1;
-  const actor = getActor(req);
+  const actor = `${getActor(req)}:${req.management.restaurantCode}`;
+  const restaurantId = req.management.restaurantId;
 
   if (!name) return res.status(400).json({ error: 'Menu item name is required' });
   if (!Number.isFinite(price) || price <= 0) return res.status(400).json({ error: 'Price must be greater than 0' });
 
   const result = db.prepare(
-    'INSERT INTO menu_items (name, description, price, emoji, category, available) VALUES (?, ?, ?, ?, ?, ?)'
-  ).run(name, description || 'Custom menu item', Math.round(price), emoji, cat, available);
+    'INSERT INTO menu_items (restaurant_id, name, description, price, emoji, category, available) VALUES (?, ?, ?, ?, ?, ?, ?)'
+  ).run(restaurantId, name, description || 'Custom menu item', Math.round(price), emoji, cat, available);
 
   logAudit({
     action: 'menu_item_added',
@@ -747,13 +972,14 @@ app.post('/api/menu', (req, res) => {
   return res.status(201).json({ id: result.lastInsertRowid });
 });
 
-app.delete('/api/menu/:id', (req, res) => {
+app.delete('/api/menu/:id', requireManagementAuth, (req, res) => {
   const menuItemId = Number(req.params.id);
-  const actor = getActor(req);
-  const item = db.prepare('SELECT id, name, price, category FROM menu_items WHERE id = ?').get(menuItemId);
+  const actor = `${getActor(req)}:${req.management.restaurantCode}`;
+  const restaurantId = req.management.restaurantId;
+  const item = db.prepare('SELECT id, name, price, category FROM menu_items WHERE id = ? AND restaurant_id = ?').get(menuItemId, restaurantId);
   if (!item) return res.status(404).json({ error: 'Menu item not found' });
 
-  db.prepare('DELETE FROM menu_items WHERE id = ?').run(menuItemId);
+  db.prepare('DELETE FROM menu_items WHERE id = ? AND restaurant_id = ?').run(menuItemId, restaurantId);
   logAudit({
     action: 'menu_item_deleted',
     entityType: 'menu_item',
@@ -766,13 +992,13 @@ app.delete('/api/menu/:id', (req, res) => {
   return res.json({ ok: true });
 });
 
-app.post('/api/menu/import-csv', (req, res) => {
+app.post('/api/menu/import-csv', requireManagementAuth, (req, res) => {
   try {
-    const actor = getActor(req);
+    const actor = `${getActor(req)}:${req.management.restaurantCode}`;
     const csvText = String(req.body?.csvText || '');
     const replaceExisting = req.body?.replaceExisting === true;
-    const restaurantCode = String(req.body?.restaurantCode || 'default');
-    const restaurantName = String(req.body?.restaurantName || '').trim();
+    const restaurantCode = String(req.management.restaurantCode || 'default');
+    const restaurantName = String(req.management.restaurantName || '').trim();
 
     if (!csvText.trim()) {
       return res.status(400).json({ error: 'CSV content is required' });
@@ -845,14 +1071,16 @@ app.post('/api/menu/import-csv', (req, res) => {
   }
 });
 
-app.get('/api/audit-logs', (req, res) => {
+app.get('/api/audit-logs', requireManagementAuth, (req, res) => {
   const limit = Number(req.query.limit || 30);
-  res.json({ logs: getAuditLogs(limit) });
+  res.json({ logs: getAuditLogsForRestaurant(req.management.restaurantId, limit) });
 });
 
 app.post('/api/orders', (req, res) => {
   try {
-    const actor = getActor(req);
+    const session = getManagementSession(req);
+    const restaurantId = session?.restaurantId || 1;
+    const actor = session ? `${getActor(req)}:${session.restaurantCode}` : getActor(req);
     const { orderType, tableNumber, notes, items } = req.body || {};
     if (!['dine', 'takeaway', 'preorder'].includes(orderType)) {
       return res.status(400).json({ error: 'Invalid order type' });
@@ -871,10 +1099,11 @@ app.post('/api/orders', (req, res) => {
       items,
       status: 'new',
       paid: 0,
-      etaMinutes: orderType === 'preorder' ? 25 : 15
+      etaMinutes: orderType === 'preorder' ? 25 : 15,
+      restaurantId
     });
 
-    const createdOrder = getOrders().find((order) => order.id === orderId);
+    const createdOrder = getOrders(restaurantId).find((order) => order.id === orderId);
 
     logAudit({
       action: 'order_created',
@@ -895,27 +1124,28 @@ app.post('/api/orders', (req, res) => {
   }
 });
 
-app.post('/api/orders/:id/status', (req, res) => {
+app.post('/api/orders/:id/status', requireManagementAuth, (req, res) => {
   const orderId = Number(req.params.id);
-  const actor = getActor(req);
+  const actor = `${getActor(req)}:${req.management.restaurantCode}`;
+  const restaurantId = req.management.restaurantId;
   const { status } = req.body || {};
   if (!['new', 'preparing', 'ready', 'delivered'].includes(status)) {
     return res.status(400).json({ error: 'Invalid status' });
   }
 
   const order = db.prepare(
-    'SELECT id, order_type as orderType, table_number as tableNumber, status, source, external_order_id as externalOrderId FROM orders WHERE id = ?'
-  ).get(orderId);
+    'SELECT id, order_type as orderType, table_number as tableNumber, status, source, external_order_id as externalOrderId FROM orders WHERE id = ? AND restaurant_id = ?'
+  ).get(orderId, restaurantId);
   if (!order) return res.status(404).json({ error: 'Order not found' });
 
-  db.prepare('UPDATE orders SET status = ?, updated_at = ? WHERE id = ?').run(status, Date.now(), orderId);
+  db.prepare('UPDATE orders SET status = ?, updated_at = ? WHERE id = ? AND restaurant_id = ?').run(status, Date.now(), orderId, restaurantId);
   if ((order.orderType === 'dine' || order.orderType === 'preorder') && order.tableNumber) {
     let nextTableStatus = null;
     if (status === 'new') nextTableStatus = 'ordering';
     if (status === 'preparing' || status === 'ready') nextTableStatus = 'occupied';
     if (status === 'delivered') nextTableStatus = 'free';
     if (nextTableStatus) {
-      db.prepare('UPDATE table_status SET status = ? WHERE table_number = ?').run(nextTableStatus, order.tableNumber);
+      db.prepare('UPDATE table_status SET status = ? WHERE table_number = ? AND restaurant_id = ?').run(nextTableStatus, order.tableNumber, restaurantId);
     }
   }
 
@@ -1112,10 +1342,11 @@ app.post('/api/orders/:id/pay', (req, res) => {
   return res.json({ ok: true, order: updatedOrder });
 });
 
-app.post('/api/tables/:tableNumber/toggle', (req, res) => {
+app.post('/api/tables/:tableNumber/toggle', requireManagementAuth, (req, res) => {
   const tableNumber = Number(req.params.tableNumber);
-  const actor = getActor(req);
-  const table = db.prepare('SELECT status FROM table_status WHERE table_number = ?').get(tableNumber);
+  const actor = `${getActor(req)}:${req.management.restaurantCode}`;
+  const restaurantId = req.management.restaurantId;
+  const table = db.prepare('SELECT status FROM table_status WHERE table_number = ? AND restaurant_id = ?').get(tableNumber, restaurantId);
   if (!table) return res.status(404).json({ error: 'Table not found' });
 
   const cycle = { free: 'ordering', ordering: 'occupied', occupied: 'free' };
@@ -1123,13 +1354,13 @@ app.post('/api/tables/:tableNumber/toggle', (req, res) => {
   if (next === 'free') {
     const activeUndelivered = db.prepare(
       `SELECT COUNT(*) as count FROM orders
-        WHERE order_type IN ('dine','preorder') AND table_number = ? AND status != 'delivered'`
-    ).get(tableNumber).count;
+        WHERE restaurant_id = ? AND order_type IN ('dine','preorder') AND table_number = ? AND status != 'delivered'`
+    ).get(restaurantId, tableNumber).count;
     if (activeUndelivered > 0) {
       return res.status(400).json({ error: 'Table can be set to free only after all dine/pre-order orders are delivered' });
     }
   }
-  db.prepare('UPDATE table_status SET status = ? WHERE table_number = ?').run(next, tableNumber);
+  db.prepare('UPDATE table_status SET status = ? WHERE table_number = ? AND restaurant_id = ?').run(next, tableNumber, restaurantId);
 
   logAudit({ action: 'table_status_toggled', entityType: 'table', entityId: tableNumber, actor, details: { from: table.status, to: next } });
 
@@ -1137,15 +1368,16 @@ app.post('/api/tables/:tableNumber/toggle', (req, res) => {
   return res.json({ status: next });
 });
 
-app.post('/api/tables/:tableNumber/status', (req, res) => {
+app.post('/api/tables/:tableNumber/status', requireManagementAuth, (req, res) => {
   const tableNumber = Number(req.params.tableNumber);
-  const actor = getActor(req);
+  const actor = `${getActor(req)}:${req.management.restaurantCode}`;
+  const restaurantId = req.management.restaurantId;
   const status = String(req.body?.status || '').trim();
   if (!['free', 'ordering', 'occupied'].includes(status)) {
     return res.status(400).json({ error: 'Invalid table status' });
   }
 
-  const table = db.prepare('SELECT status FROM table_status WHERE table_number = ?').get(tableNumber);
+  const table = db.prepare('SELECT status FROM table_status WHERE table_number = ? AND restaurant_id = ?').get(tableNumber, restaurantId);
   if (!table) return res.status(404).json({ error: 'Table not found' });
 
   if (table.status === status) return res.json({ status });
@@ -1154,56 +1386,58 @@ app.post('/api/tables/:tableNumber/status', (req, res) => {
     // Prevent freeing a table while it still has active dine/pre-order work.
     const activeUndelivered = db.prepare(
       `SELECT COUNT(*) as count FROM orders
-        WHERE order_type IN ('dine','preorder') AND table_number = ? AND status != 'delivered'`
-    ).get(tableNumber).count;
+        WHERE restaurant_id = ? AND order_type IN ('dine','preorder') AND table_number = ? AND status != 'delivered'`
+    ).get(restaurantId, tableNumber).count;
     if (activeUndelivered > 0) {
       return res.status(400).json({ error: 'Table can be set to free only after all dine/pre-order orders are delivered' });
     }
   }
 
-  db.prepare('UPDATE table_status SET status = ? WHERE table_number = ?').run(status, tableNumber);
+  db.prepare('UPDATE table_status SET status = ? WHERE table_number = ? AND restaurant_id = ?').run(status, tableNumber, restaurantId);
   logAudit({ action: 'table_status_set', entityType: 'table', entityId: tableNumber, actor, details: { from: table.status, to: status } });
 
   broadcastState();
   return res.json({ status });
 });
 
-app.post('/api/tables', (req, res) => {
-  const actor = getActor(req);
+app.post('/api/tables', requireManagementAuth, (req, res) => {
+  const actor = `${getActor(req)}:${req.management.restaurantCode}`;
+  const restaurantId = req.management.restaurantId;
   const requested = Number(req.body?.tableNumber || 0);
   const nextTableNumber = requested > 0
     ? requested
-    : (db.prepare('SELECT COALESCE(MAX(table_number), 0) as maxTable FROM table_status').get().maxTable + 1);
+    : (db.prepare('SELECT COALESCE(MAX(table_number), 0) as maxTable FROM table_status WHERE restaurant_id = ?').get(restaurantId).maxTable + 1);
 
-  const exists = db.prepare('SELECT table_number FROM table_status WHERE table_number = ?').get(nextTableNumber);
+  const exists = db.prepare('SELECT table_number FROM table_status WHERE table_number = ? AND restaurant_id = ?').get(nextTableNumber, restaurantId);
   if (exists) return res.status(400).json({ error: 'Table already exists' });
 
-  db.prepare('INSERT INTO table_status (table_number, status) VALUES (?, ?)').run(nextTableNumber, 'free');
+  db.prepare('INSERT INTO table_status (restaurant_id, table_number, status) VALUES (?, ?, ?)').run(restaurantId, nextTableNumber, 'free');
   logAudit({ action: 'table_added', entityType: 'table', entityId: nextTableNumber, actor, details: { status: 'free' } });
 
   broadcastState();
   return res.status(201).json({ tableNumber: nextTableNumber, status: 'free' });
 });
 
-app.delete('/api/tables/:tableNumber', (req, res) => {
+app.delete('/api/tables/:tableNumber', requireManagementAuth, (req, res) => {
   const tableNumber = Number(req.params.tableNumber);
-  const actor = getActor(req);
-  const table = db.prepare('SELECT status FROM table_status WHERE table_number = ?').get(tableNumber);
+  const actor = `${getActor(req)}:${req.management.restaurantCode}`;
+  const restaurantId = req.management.restaurantId;
+  const table = db.prepare('SELECT status FROM table_status WHERE table_number = ? AND restaurant_id = ?').get(tableNumber, restaurantId);
   if (!table) return res.status(404).json({ error: 'Table not found' });
 
-  const tableCount = db.prepare('SELECT COUNT(*) as count FROM table_status').get().count;
+  const tableCount = db.prepare('SELECT COUNT(*) as count FROM table_status WHERE restaurant_id = ?').get(restaurantId).count;
   if (tableCount <= 1) return res.status(400).json({ error: 'At least one table must remain' });
   if (table.status !== 'free') return res.status(400).json({ error: 'Only free tables can be removed' });
 
   const activeDineOrders = db.prepare(
     `SELECT COUNT(*) as count FROM orders
-      WHERE order_type IN ('dine','preorder') AND table_number = ? AND status != 'delivered'`
-  ).get(tableNumber).count;
+      WHERE restaurant_id = ? AND order_type IN ('dine','preorder') AND table_number = ? AND status != 'delivered'`
+  ).get(restaurantId, tableNumber).count;
   if (activeDineOrders > 0) {
     return res.status(400).json({ error: 'Table has active dine-in orders' });
   }
 
-  db.prepare('DELETE FROM table_status WHERE table_number = ?').run(tableNumber);
+  db.prepare('DELETE FROM table_status WHERE table_number = ? AND restaurant_id = ?').run(tableNumber, restaurantId);
   logAudit({ action: 'table_removed', entityType: 'table', entityId: tableNumber, actor, details: { previousStatus: table.status } });
 
   broadcastState();

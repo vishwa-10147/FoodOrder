@@ -15,6 +15,7 @@ Set these in Render service settings:
 - `RAZORPAY_KEY_ID=<your_live_key_id>`
 - `RAZORPAY_KEY_SECRET=<your_live_key_secret>`
 - `RAZORPAY_WEBHOOK_SECRET=<your_webhook_secret>`
+- `MANAGEMENT_AUTH_SECRET=<long_random_secret>`
 
 Recommended operational settings:
 
@@ -23,6 +24,39 @@ Recommended operational settings:
 - `DB_BACKUP_ENABLED=true`
 - `DB_BACKUP_INTERVAL_MINUTES=60`
 - `DB_BACKUP_RETENTION_COUNT=48`
+- `MANAGEMENT_SETUP_KEY=<admin_setup_key>`
+
+## 2.1) Management Login Bootstrap
+Management now requires login using restaurant name/code + password.
+
+Create first account (first bootstrap does not require setup key):
+
+- `POST /api/management/register`
+- Body:
+   - `restaurant`: `gandikota`
+   - `restaurantName`: `Gandikota`
+   - `password`: `yourStrongPassword`
+
+Create/update additional restaurant passwords (requires setup key):
+
+- `POST /api/management/register`
+- Body:
+   - `setupKey`: must match `MANAGEMENT_SETUP_KEY`
+   - `restaurant`: `branch_b`
+   - `restaurantName`: `Branch B`
+   - `password`: `anotherStrongPassword`
+
+Management login endpoint:
+
+- `POST /api/management/login`
+- Body:
+   - `restaurant`
+   - `password`
+
+Password storage:
+
+- Passwords are stored in SQLite table `restaurant_auth`.
+- Stored as salted PBKDF2 hashes (`password_hash`, `password_salt`), not plain text.
 
 ## 3) Razorpay Webhook
 In Razorpay dashboard:
