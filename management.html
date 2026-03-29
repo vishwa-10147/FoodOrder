@@ -1033,7 +1033,6 @@
             <div class="menu-admin-actions">
               <input id="menu-image-${item.id}" class="menu-admin-input menu-admin-upload" type="file" accept="image/*" />
               <button class="state-btn" onclick="uploadMenuImage(${item.id})">Upload image</button>
-              <button class="state-btn" onclick="clearMenuImage(${item.id})">Clear image</button>
               <button class="state-btn available ${isAvailable ? 'active available' : ''}" onclick="setMenuAvailability(${item.id}, true)">Available</button>
               <button class="state-btn unavailable ${!isAvailable ? 'active unavailable' : ''}" onclick="setMenuAvailability(${item.id}, false)">Unavailable</button>
               <button class="state-btn" onclick="deleteMenuItem(${item.id})">-</button>
@@ -1264,14 +1263,6 @@
         await apiUploadImage(`/api/menu/${menuItemId}/image`, file);
         input.value = '';
         await fetchManagementState();
-      } catch (e) {
-        alert(e.message);
-      }
-    }
-
-    async function clearMenuImage(menuItemId) {
-      try {
-        await api(`/api/menu/${menuItemId}/image`, 'DELETE');
       } catch (e) {
         alert(e.message);
       }
