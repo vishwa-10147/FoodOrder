@@ -18,56 +18,60 @@
       --radius: var(--border-radius-lg);
     }
     * { box-sizing: border-box; margin: 0; padding: 0; font-family: var(--font-sans); }
-    body { padding: 18px; background: var(--color-background-primary); }
-    #app { display: flex; min-height: 680px; border: var(--border); border-radius: var(--border-radius-xl); overflow: hidden; background: var(--color-background-tertiary); }
+    body { padding: 18px; background: radial-gradient(circle at top right, #f7fafc 0%, var(--color-background-primary) 55%); }
+    #app { display: flex; min-height: 680px; border: 1px solid #e7e9ee; border-radius: var(--border-radius-xl); overflow: hidden; background: var(--color-background-tertiary); box-shadow: 0 8px 30px rgba(2, 6, 23, 0.08); }
 
-    #sidebar { width: 220px; background: var(--color-background-primary); border-right: var(--border); }
-    .logo { padding: 20px 16px; border-bottom: var(--border); }
-    .logo h1 { font-size: 15px; color: var(--color-text-primary); }
-    .logo p { font-size: 11px; color: var(--color-text-secondary); margin-top: 2px; }
+    #sidebar { width: 230px; background: linear-gradient(180deg, #ffffff 0%, #f9fafb 100%); border-right: 1px solid #eceef2; }
+    .logo { padding: 22px 18px; border-bottom: 1px solid #eceef2; }
+    .logo h1 { font-size: 16px; color: var(--color-text-primary); letter-spacing: 0.2px; }
+    .logo p { font-size: 11px; color: var(--color-text-secondary); margin-top: 3px; }
     .nav { padding: 12px 0; }
-    .nav-item { padding: 10px 16px; cursor: pointer; font-size: 13px; color: var(--color-text-secondary); }
-    .nav-item.active { background: var(--accent-light); color: var(--accent-dark); font-weight: 500; }
+    .nav-item { padding: 11px 16px; cursor: pointer; font-size: 13px; color: var(--color-text-secondary); border-left: 3px solid transparent; transition: all 0.2s ease; }
+    .nav-item:hover { background: #f3f6fb; color: var(--color-text-primary); }
+    .nav-item.active { background: #eaf8f3; color: var(--accent-dark); font-weight: 600; border-left-color: var(--accent); }
 
     #main { flex: 1; display: flex; flex-direction: column; }
-    .topbar { height: 52px; padding: 0 20px; border-bottom: var(--border); background: var(--color-background-primary); display: flex; align-items: center; justify-content: space-between; }
-    .title { font-size: 15px; font-weight: 500; color: var(--color-text-primary); }
+    .topbar { height: 56px; padding: 0 22px; border-bottom: 1px solid #eceef2; background: rgba(255, 255, 255, 0.94); display: flex; align-items: center; justify-content: space-between; backdrop-filter: blur(4px); }
+    .title { font-size: 16px; font-weight: 600; color: var(--color-text-primary); }
     .time { font-size: 12px; color: var(--color-text-secondary); }
 
-    .content { display: none; flex: 1; padding: 20px; overflow-y: auto; }
+    .content { display: none; flex: 1; padding: 22px; overflow-y: auto; }
     .content.active { display: block; }
 
     .customer-wrap { display:flex; gap:16px; }
     .menu-panel { flex:1; }
     .cart-panel { width:260px; flex-shrink:0; }
-    .order-type-tabs { display:flex; background:var(--color-background-secondary); border-radius:var(--border-radius-md); padding:3px; margin-bottom:14px; }
-    .order-type-tab { flex:1; text-align:center; padding:6px 4px; font-size:12px; cursor:pointer; color:var(--color-text-secondary); border-radius:6px; }
-    .order-type-tab.active { background:var(--color-background-primary); color:var(--color-text-primary); font-weight:500; }
+    .order-type-tabs { display:flex; background:#eef2f7; border-radius:12px; padding:4px; margin-bottom:14px; }
+    .order-type-tab { flex:1; text-align:center; padding:8px 6px; font-size:12px; cursor:pointer; color:var(--color-text-secondary); border-radius:8px; transition: all 0.2s ease; }
+    .order-type-tab.active { background:var(--color-background-primary); color:var(--color-text-primary); font-weight:600; box-shadow: 0 1px 2px rgba(2, 6, 23, 0.08); }
     .field-label { font-size:11px; color:var(--color-text-secondary); margin-bottom:4px; }
-    .field-input, .notes-input { width:100%; border:var(--border); border-radius:var(--border-radius-md); padding:6px 8px; background:var(--color-background-primary); color:var(--color-text-primary); font-size:12px; }
+    .field-input, .notes-input { width:100%; border:1px solid #d9dee7; border-radius:10px; padding:8px 10px; background:var(--color-background-primary); color:var(--color-text-primary); font-size:12px; }
+    .field-input:focus, .notes-input:focus { outline:none; border-color:#86d8bc; box-shadow:0 0 0 3px rgba(29, 158, 117, 0.12); }
     .schedule-grid { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:10px; }
     .notes-input { resize:none; margin:10px 0 8px; }
     .eta { display:none; align-items:center; gap:6px; font-size:11px; color:var(--accent-dark); background:var(--accent-light); padding:6px 8px; border-radius:var(--border-radius-md); margin-bottom:10px; }
 
     .menu-categories { display:flex; gap:6px; margin-bottom:12px; flex-wrap:wrap; }
-    .cat { padding:4px 11px; border-radius:999px; border:var(--border); font-size:12px; cursor:pointer; color:var(--color-text-secondary); background:var(--color-background-primary); }
+    .cat { padding:5px 12px; border-radius:999px; border:1px solid #dde2eb; font-size:12px; cursor:pointer; color:var(--color-text-secondary); background:var(--color-background-primary); transition: all 0.2s ease; }
+    .cat:hover { border-color:#b8c3d6; color:var(--color-text-primary); }
     .cat.active { background:var(--charcoal); border-color:var(--charcoal); color:white; }
 
-    .menu-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; }
-    .menu-item { border:var(--border); border-radius:var(--border-radius-md); background:var(--color-background-primary); padding:12px; }
+    .menu-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; }
+    .menu-item { border:1px solid #e7e9ee; border-radius:14px; background:var(--color-background-primary); padding:13px; box-shadow:0 1px 2px rgba(2, 6, 23, 0.05); transition: transform 0.2s ease, box-shadow 0.2s ease; }
+    .menu-item:hover { transform: translateY(-2px); box-shadow:0 6px 14px rgba(2, 6, 23, 0.1); }
     .menu-item.unavailable { opacity:0.65; }
-    .menu-photo { width:100%; height:120px; border-radius:10px; object-fit:cover; display:block; margin-bottom:8px; border:var(--border); background:var(--color-background-secondary); }
+    .menu-photo { width:100%; height:124px; border-radius:12px; object-fit:cover; display:block; margin-bottom:9px; border:1px solid #e7e9ee; background:var(--color-background-secondary); }
     .emoji { font-size:24px; display:block; margin-bottom:6px; }
     .name { font-size:13px; color:var(--color-text-primary); font-weight:500; }
     .desc { font-size:11px; color:var(--color-text-secondary); margin:2px 0 6px; }
     .foot { display:flex; justify-content:space-between; align-items:center; }
     .price { font-size:13px; color:var(--color-text-primary); font-weight:500; }
-    .add { width:22px; height:22px; border-radius:50%; background:var(--charcoal); color:white; border:none; cursor:pointer; font-size:16px; }
+    .add { width:26px; height:26px; border-radius:50%; background:linear-gradient(180deg, #24323a 0%, #151f25 100%); color:white; border:none; cursor:pointer; font-size:16px; box-shadow:0 2px 4px rgba(2, 6, 23, 0.2); }
     .add:disabled { background:var(--color-background-secondary); color:var(--color-text-tertiary); cursor:not-allowed; }
     .unavailable-badge { display:inline-block; margin-top:4px; font-size:10px; padding:2px 7px; border-radius:999px; background:var(--warn-light); color:var(--warn); }
 
-    .box { border:var(--border); border-radius:var(--border-radius-md); background:var(--color-background-primary); padding:14px; }
-    .box h3 { font-size:13px; color:var(--color-text-primary); margin-bottom:12px; }
+    .box { border:1px solid #e7e9ee; border-radius:14px; background:var(--color-background-primary); padding:15px; box-shadow:0 2px 10px rgba(2, 6, 23, 0.06); }
+    .box h3 { font-size:14px; color:var(--color-text-primary); margin-bottom:12px; font-weight:600; }
     .cart-items { min-height:80px; margin-bottom:12px; }
     .cart-item { display:flex; gap:8px; align-items:center; padding:6px 0; border-bottom:var(--border); }
     .cart-item:last-child { border-bottom:none; }
@@ -75,41 +79,46 @@
     .nm { flex:1; font-size:12px; color:var(--color-text-primary); }
     .pr { font-size:12px; color:var(--color-text-secondary); }
     .empty { font-size:12px; color:var(--color-text-tertiary); text-align:center; padding:20px 0; }
-    .row { display:flex; justify-content:space-between; font-size:12px; color:var(--color-text-secondary); margin-bottom:4px; }
-    .row.total { font-size:14px; font-weight:500; color:var(--color-text-primary); margin-top:6px; }
-    .btn { width:100%; background:var(--charcoal); color:white; border:none; border-radius:var(--border-radius-md); padding:9px; font-size:13px; font-weight:500; cursor:pointer; }
+    .row { display:flex; justify-content:space-between; font-size:12px; color:var(--color-text-secondary); margin-bottom:5px; }
+    .row.total { font-size:15px; font-weight:700; color:var(--color-text-primary); margin-top:8px; }
+    .btn { width:100%; background:linear-gradient(180deg, #1f2a31 0%, #111920 100%); color:white; border:none; border-radius:11px; padding:10px; font-size:13px; font-weight:600; cursor:pointer; box-shadow:0 3px 8px rgba(2, 6, 23, 0.24); }
+    .btn:hover { filter: brightness(1.03); }
 
     .track-pills { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px; }
-    .pill { font-size:12px; border:var(--border); border-radius:999px; padding:5px 12px; cursor:pointer; color:var(--color-text-secondary); background:var(--color-background-primary); }
+    .pill { font-size:12px; border:1px solid #dde2eb; border-radius:999px; padding:6px 12px; cursor:pointer; color:var(--color-text-secondary); background:var(--color-background-primary); transition: all 0.2s ease; }
     .pill.active { background:var(--charcoal); color:white; border-color:var(--charcoal); }
-    .track-card { border:var(--border); border-radius:var(--border-radius-md); background:var(--color-background-primary); padding:14px; }
+    .track-card { border:1px solid #e7e9ee; border-radius:14px; background:var(--color-background-primary); padding:15px; box-shadow:0 2px 10px rgba(2, 6, 23, 0.06); }
     .progress { height:5px; border-radius:999px; background:var(--color-background-secondary); overflow:hidden; margin:8px 0; }
     .fill { height:100%; background:var(--accent); }
 
     .payment-wrap { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
-    .pay-card { border:var(--border); border-radius:var(--border-radius-md); background:var(--color-background-primary); padding:18px; }
-    .pay-card h3 { font-size:13px; color:var(--color-text-primary); margin-bottom:14px; }
+    .pay-card { border:1px solid #e7e9ee; border-radius:14px; background:var(--color-background-primary); padding:18px; box-shadow:0 2px 10px rgba(2, 6, 23, 0.06); }
+    .pay-card h3 { font-size:14px; color:var(--color-text-primary); margin-bottom:14px; font-weight:600; }
     .methods { display:flex; gap:6px; margin-bottom:12px; }
-    .method { flex:1; font-size:12px; border:var(--border); border-radius:var(--border-radius-md); padding:8px; text-align:center; color:var(--color-text-secondary); cursor:pointer; transition: all 0.2s ease; }
+    .method { flex:1; font-size:12px; border:1px solid #dbe1ec; border-radius:10px; padding:8px; text-align:center; color:var(--color-text-secondary); cursor:pointer; transition: all 0.2s ease; }
     .method:hover { border-color:var(--accent); color:var(--accent-dark); background:var(--accent-light); }
     .method.active { border-color:var(--accent); background:var(--accent-light); color:var(--accent-dark); font-weight:600; }
     .upi-id-group { margin-bottom:12px; }
     .upi-id-help { font-size:11px; color:var(--color-text-secondary); margin-top:4px; }
     .sum-row { display:flex; justify-content:space-between; font-size:13px; color:var(--color-text-secondary); padding:5px 0; border-bottom:var(--border); }
     .sum-row.total { border-bottom:none; font-size:15px; font-weight:500; color:var(--color-text-primary); padding-top:8px; }
-    .receipt { border:var(--border); border-radius:var(--border-radius-md); padding:10px; background:var(--color-background-primary); }
-    .receipt-title { font-size:13px; font-weight:600; color:var(--color-text-primary); letter-spacing:0.6px; }
-    .receipt-bill { font-size:12px; color:var(--color-text-primary); margin-top:2px; }
-    .receipt-head-row { display:flex; justify-content:space-between; gap:8px; margin-top:4px; font-size:11px; color:var(--color-text-secondary); }
-    .receipt-divider { border-top:var(--border); margin:8px 0; }
-    .receipt-grid-head, .receipt-grid-row { display:grid; grid-template-columns:minmax(0, 1fr) 52px 72px 84px; gap:8px; align-items:center; }
-    .receipt-grid-head { font-size:11px; color:var(--color-text-secondary); }
-    .receipt-grid-row { font-size:12px; color:var(--color-text-primary); margin-top:4px; }
+    .receipt { border:1px solid #e7e9ee; border-radius:14px; padding:13px; background:var(--color-background-primary); box-shadow:0 2px 10px rgba(2, 6, 23, 0.06); }
+    .receipt-title { font-size:16px; font-weight:700; color:var(--color-text-primary); letter-spacing:0.1px; line-height:1.2; }
+    .receipt-subtitle { font-size:11px; color:#fc8019; text-transform:uppercase; letter-spacing:0.7px; margin-top:2px; font-weight:600; }
+    .receipt-bill { font-size:12px; color:var(--color-text-secondary); margin-top:2px; line-height:1.3; }
+    .receipt-meta { margin-top:6px; background:var(--color-background-secondary); border-radius:10px; padding:7px 8px; }
+    .receipt-meta-row { display:flex; justify-content:space-between; gap:8px; font-size:12px; color:var(--color-text-secondary); margin-top:3px; }
+    .receipt-meta-row:first-child { margin-top:0; }
+    .receipt-meta-row span:last-child { color:var(--color-text-primary); font-weight:600; }
+    .receipt-divider { border-top:1px solid #ebecef; margin:8px 0; }
+    .receipt-grid-head, .receipt-grid-row { display:grid; grid-template-columns:minmax(0, 1fr) 54px 76px 90px; gap:8px; align-items:center; }
+    .receipt-grid-head { font-size:11px; color:var(--color-text-tertiary); text-transform:uppercase; letter-spacing:0.5px; font-weight:600; }
+    .receipt-grid-row { font-size:13px; color:var(--color-text-primary); margin-top:5px; }
     .receipt-grid-row span:nth-child(2), .receipt-grid-row span:nth-child(3), .receipt-grid-row span:nth-child(4),
     .receipt-grid-head span:nth-child(2), .receipt-grid-head span:nth-child(3), .receipt-grid-head span:nth-child(4) { text-align:right; }
-    .receipt-total-line { display:flex; justify-content:space-between; font-size:12px; color:var(--color-text-primary); margin-top:4px; }
-    .receipt-total-line.grand { font-size:14px; font-weight:600; }
-    .receipt-foot { margin-top:8px; font-size:11px; color:var(--color-text-secondary); }
+    .receipt-total-line { display:flex; justify-content:space-between; font-size:13px; color:var(--color-text-primary); margin-top:5px; }
+    .receipt-total-line.grand { margin-top:7px; padding:8px 10px; border-radius:10px; background:#fff4ea; color:#9a4b00; font-size:15px; font-weight:700; }
+    .receipt-foot { margin-top:9px; font-size:12px; color:var(--color-text-secondary); border-top:1px solid #ebecef; padding-top:7px; }
     .mode-note { margin-bottom:12px; border:var(--border); border-radius:var(--border-radius-md); background:var(--warn-light); color:var(--warn); padding:10px; font-size:12px; }
     .restaurant-selector-wrap { margin-bottom: 12px; }
     .restaurant-selector-label { font-size: 12px; color: var(--color-text-secondary); margin-bottom: 6px; }
@@ -215,8 +224,9 @@
               <div class="cart-items" id="cart-items"><div class="empty">Nothing added yet</div></div>
               <textarea id="notes" class="notes-input" rows="2" placeholder="Add notes (allergies, spice level...)"></textarea>
               <div class="row"><span>Subtotal</span><span id="sub">₹0</span></div>
-              <div class="row"><span>Tax (5%)</span><span id="tax">₹0</span></div>
-              <div class="row total"><span>Total</span><span id="total">₹0</span></div>
+              <div class="row"><span>CGST (2.5%)</span><span id="cgst">₹0</span></div>
+              <div class="row"><span>SGST (2.5%)</span><span id="sgst">₹0</span></div>
+              <div class="row total"><span>Grand Total</span><span id="total">₹0</span></div>
               <button class="btn" id="place-btn" onclick="placeOrder()">Place order & checkout →</button>
             </div>
           </div>
@@ -273,7 +283,7 @@
     const CLIENT_UPI_ID_KEY = 'foodorder_upi_id';
     let clientOrderIds = new Set();
 
-    function money(v) { return `₹${Number(v || 0).toLocaleString('en-IN')}`; }
+    function money(v) { return `₹${Number(v || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`; }
 
     function loadStoredNumberArray(key) {
       try {
@@ -339,19 +349,27 @@
       const createdAt = new Date(order.createdAt || Date.now());
       const dateText = createdAt.toLocaleDateString('en-GB');
       const timeText = createdAt.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: false });
+      const restaurantName = String(state.restaurant?.name || selectedRestaurant()?.name || 'Restaurant');
       const subtotal = orderSubtotal(order);
-      const tax = Number(order.tax || 0);
-      const service = Number(order.service || 0);
-      const total = Number(order.total || (subtotal + tax + service));
+      const totalQty = (order.items || []).reduce((sum, item) => sum + Number(item.qty || 0), 0);
+      const gst = Number(order.gst || order.tax || 0);
+      const cgst = Number(order.cgst || (gst / 2));
+      const sgst = Number(order.sgst || (gst - cgst));
+      const total = Number(order.total || (subtotal + cgst + sgst));
+      const paymentMethodText = escapeHtml((order.paymentMethod || selectedPaymentMethod || '-').toUpperCase());
 
       return `
         <div class="receipt">
-          <div class="receipt-title">RESTAURANT</div>
-          <div class="receipt-bill">Bill : ${escapeHtml(order.label || '-')}</div>
-          <div class="receipt-head-row"><span>Date : ${dateText}</span><span>Time : ${timeText}</span></div>
-          <div class="receipt-head-row"><span>Table : ${order.tableNumber ? `T${order.tableNumber}` : '-'}</span><span>${escapeHtml(order.orderType || '-')}</span></div>
+          <div class="receipt-title">${escapeHtml(restaurantName)}</div>
+          <div class="receipt-subtitle">Tax Invoice</div>
+          <div class="receipt-meta">
+            <div class="receipt-meta-row"><span>Order ID</span><span>${escapeHtml(order.label || '-')}</span></div>
+            <div class="receipt-meta-row"><span>Date</span><span>${dateText}</span></div>
+            <div class="receipt-meta-row"><span>Time</span><span>${timeText}</span></div>
+            <div class="receipt-meta-row"><span>${order.orderType === 'dine' ? 'Table' : 'Order Type'}</span><span>${order.orderType === 'dine' ? (order.tableNumber ? `T${order.tableNumber}` : '-') : escapeHtml(order.orderType || '-')}</span></div>
+          </div>
           <div class="receipt-divider"></div>
-          <div class="receipt-grid-head"><span>Item Name</span><span>Qty.</span><span>Rate</span><span>Amount</span></div>
+          <div class="receipt-grid-head"><span>Item</span><span>Qty</span><span>Rate</span><span>Amount</span></div>
           ${(order.items || []).map((item) => `
             <div class="receipt-grid-row">
               <span>${escapeHtml(item.name)}</span>
@@ -361,12 +379,13 @@
             </div>
           `).join('')}
           <div class="receipt-divider"></div>
+          <div class="receipt-total-line"><span>Total Qty</span><span>${totalQty}</span></div>
           <div class="receipt-total-line"><span>Sub Total</span><span>${money(subtotal)}</span></div>
-          <div class="receipt-total-line"><span>Tax</span><span>${money(tax)}</span></div>
-          <div class="receipt-total-line"><span>Service</span><span>${money(service)}</span></div>
+          <div class="receipt-total-line"><span>CGST @2.5%</span><span>${money(cgst)}</span></div>
+          <div class="receipt-total-line"><span>SGST @2.5%</span><span>${money(sgst)}</span></div>
           <div class="receipt-divider"></div>
-          <div class="receipt-total-line grand"><span>Gross Amount</span><span>${money(total)}</span></div>
-          <div class="receipt-foot">${escapeHtml(order.paid ? 'Paid' : 'Payment pending')} · ${escapeHtml(order.status || '-')} · ${escapeHtml((order.paymentMethod || selectedPaymentMethod || '-').toUpperCase())}</div>
+          <div class="receipt-total-line grand"><span>Grand Total</span><span>${money(total)}</span></div>
+          <div class="receipt-foot">${order.paid ? `Paid via ${paymentMethodText}` : 'Payment pending'} | Status: ${escapeHtml(order.status || '-')}</div>
         </div>
       `;
     }
@@ -625,10 +644,13 @@
     }
 
     function updateTotals(subtotal) {
-      const tax = Math.round(subtotal * 0.05);
+      const gst = Number((subtotal * 0.05).toFixed(2));
+      const cgst = Number((gst / 2).toFixed(2));
+      const sgst = Number((gst - cgst).toFixed(2));
       document.getElementById('sub').textContent = money(subtotal);
-      document.getElementById('tax').textContent = money(tax);
-      document.getElementById('total').textContent = money(subtotal + tax);
+      document.getElementById('cgst').textContent = money(cgst);
+      document.getElementById('sgst').textContent = money(sgst);
+      document.getElementById('total').textContent = money(subtotal + cgst + sgst);
     }
 
     async function placeOrder() {

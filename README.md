@@ -41,7 +41,7 @@ FoodOrdering/
 ### Core Ordering
 - Dine-in, takeaway, and pre-order flows
 - Live menu categories and item availability
-- Cart with subtotal, tax, service, and total
+- Cart with subtotal, CGST, SGST, and grand total
 - Receipt-style bill UI in client and management views
 
 ### Table & Kitchen Operations

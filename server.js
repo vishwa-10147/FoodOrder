@@ -789,16 +789,20 @@ function getOrders(restaurantId = null) {
   return orders.map((order) => {
     const orderItems = byOrder[order.id] || [];
     const subtotal = orderItems.reduce((sum, item) => sum + item.price * item.qty, 0);
-    const tax = Math.round(subtotal * 0.05);
-    const service = Math.round(subtotal * 0.04);
-    const total = subtotal + tax + service;
+    const gst = Number((subtotal * 0.05).toFixed(2));
+    const cgst = Number((gst / 2).toFixed(2));
+    const sgst = Number((gst - cgst).toFixed(2));
+    const total = Number((subtotal + cgst + sgst).toFixed(2));
     return {
       ...order,
       label: toOrderLabel(order.id),
       items: orderItems,
       subtotal,
-      tax,
-      service,
+      tax: gst,
+      service: 0,
+      gst,
+      cgst,
+      sgst,
       total,
       progress: order.status === 'new' ? 20 : order.status === 'preparing' ? 56 : order.status === 'ready' ? 82 : 100
     };

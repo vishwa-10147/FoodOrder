@@ -143,20 +143,26 @@
     .menu-order-lines { font-size:12px; color:var(--color-text-primary); line-height:1.6; }
     .menu-order-total { margin-top:6px; font-size:12px; font-weight:500; color:var(--color-text-primary); }
 
-    .receipt { border:var(--border); border-radius:var(--border-radius-md); padding:10px; background:var(--color-background-primary); }
-    .receipt.compact { padding:8px; }
-    .receipt-title { font-size:13px; font-weight:600; color:var(--color-text-primary); letter-spacing:0.6px; }
-    .receipt-bill { font-size:12px; color:var(--color-text-primary); margin-top:2px; }
-    .receipt-head-row { display:flex; justify-content:space-between; gap:8px; margin-top:4px; font-size:11px; color:var(--color-text-secondary); }
-    .receipt-divider { border-top:var(--border); margin:8px 0; }
-    .receipt-grid-head, .receipt-grid-row { display:grid; grid-template-columns:minmax(0, 1fr) 52px 72px 84px; gap:8px; align-items:center; }
-    .receipt-grid-head { font-size:11px; color:var(--color-text-secondary); }
-    .receipt-grid-row { font-size:12px; color:var(--color-text-primary); margin-top:4px; }
+    .receipt { border:1px solid #e8e9ee; border-radius:14px; padding:14px; background:var(--color-background-primary); box-shadow:0 1px 2px rgba(17, 24, 39, 0.06); }
+    .receipt.compact { padding:12px; }
+    .receipt-head { display:flex; align-items:flex-start; justify-content:space-between; gap:8px; }
+    .receipt-title { font-size:17px; font-weight:700; color:var(--color-text-primary); letter-spacing:0.1px; line-height:1.2; }
+    .receipt-subtitle { font-size:11px; color:#fc8019; text-transform:uppercase; letter-spacing:0.7px; margin-top:2px; font-weight:600; }
+    .receipt-source { font-size:11px; font-weight:700; letter-spacing:0.4px; text-transform:uppercase; color:#fc8019; background:#fff4ea; border:1px solid #ffd9b8; border-radius:999px; padding:3px 8px; }
+    .receipt-bill { font-size:12px; color:var(--color-text-secondary); margin-top:2px; line-height:1.35; }
+    .receipt-meta { margin-top:7px; background:var(--color-background-secondary); border-radius:10px; padding:8px 9px; }
+    .receipt-meta-row { display:flex; justify-content:space-between; gap:8px; font-size:12px; color:var(--color-text-secondary); margin-top:3px; }
+    .receipt-meta-row:first-child { margin-top:0; }
+    .receipt-meta-row span:last-child { color:var(--color-text-primary); font-weight:600; }
+    .receipt-divider { border-top:1px solid #ebecef; margin:10px 0; }
+    .receipt-grid-head, .receipt-grid-row { display:grid; grid-template-columns:minmax(0, 1fr) 54px 78px 90px; gap:8px; align-items:center; }
+    .receipt-grid-head { font-size:11px; color:var(--color-text-tertiary); text-transform:uppercase; letter-spacing:0.6px; font-weight:600; }
+    .receipt-grid-row { font-size:13px; color:var(--color-text-primary); margin-top:5px; }
     .receipt-grid-row span:nth-child(2), .receipt-grid-row span:nth-child(3), .receipt-grid-row span:nth-child(4),
     .receipt-grid-head span:nth-child(2), .receipt-grid-head span:nth-child(3), .receipt-grid-head span:nth-child(4) { text-align:right; }
-    .receipt-total-line { display:flex; justify-content:space-between; font-size:12px; color:var(--color-text-primary); margin-top:4px; }
-    .receipt-total-line.grand { font-size:14px; font-weight:600; }
-    .receipt-foot { margin-top:8px; font-size:11px; color:var(--color-text-secondary); }
+    .receipt-total-line { display:flex; justify-content:space-between; font-size:13px; color:var(--color-text-primary); margin-top:5px; }
+    .receipt-total-line.grand { margin-top:7px; padding:9px 11px; border-radius:10px; background:#fff4ea; color:#9a4b00; font-size:16px; font-weight:700; }
+    .receipt-foot { margin-top:9px; font-size:12px; color:var(--color-text-secondary); border-top:1px solid #ebecef; padding-top:8px; }
 
     .table-status-admin-list { border:var(--border); border-radius:var(--border-radius-md); background:var(--color-background-primary); overflow:hidden; }
     .table-status-admin-item { display:flex; align-items:center; justify-content:space-between; gap:8px; padding:10px 12px; border-bottom:var(--border); }
@@ -397,6 +403,7 @@
 
   <script>
     const MANAGEMENT_TOKEN_KEY = 'management_auth_token';
+    const MANAGEMENT_AUTO_PRINT_KEY = 'management_auto_print_enabled';
     let state = { menu: [], tables: [], orders: [], stats: {} };
     let auditLogs = [];
     let managementAuth = null;
@@ -404,12 +411,15 @@
     let selectedOrderId = null;
     let pendingRemoveTableNumber = null;
     let selectedOrderingTableNumber = null;
-    let autoPrintEnabled = false;
+    let autoPrintEnabled = true;
     let knownOrderIds = new Set();
+    let autoPrintQueue = [];
+    let isAutoPrinting = false;
+    let autoPrintPopupBlockedNotified = false;
     const tableOrderDrafts = {};
     let outletOpen = true;
 
-    function money(v) { return `₹${Number(v || 0).toLocaleString('en-IN')}`; }
+    function money(v) { return `₹${Number(v || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`; }
 
     function escapeHtml(value) {
       return String(value || '')
@@ -430,20 +440,33 @@
       const createdAt = new Date(order.createdAt || Date.now());
       const dateText = createdAt.toLocaleDateString('en-GB');
       const timeText = createdAt.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: false });
+      const restaurantName = String(state.restaurant?.name || managementAuth?.restaurant?.name || 'Restaurant');
       const paidTimeText = order.paidAt ? new Date(order.paidAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: false }) : null;
       const subtotal = orderSubtotal(order);
-      const tax = Number(order.tax || 0);
-      const service = Number(order.service || 0);
-      const total = Number(order.total || (subtotal + tax + service));
+      const totalQty = (order.items || []).reduce((sum, item) => sum + Number(item.qty || 0), 0);
+      const gst = Number(order.gst || order.tax || 0);
+      const cgst = Number(order.cgst || (gst / 2));
+      const sgst = Number(order.sgst || (gst - cgst));
+      const total = Number(order.total || (subtotal + cgst + sgst));
+      const paymentMethodText = escapeHtml((order.paymentMethod || '-').toUpperCase());
 
       return `
         <div class="receipt ${compact ? 'compact' : ''}">
-          <div class="receipt-title">RESTAURANT</div>
-          <div class="receipt-bill">Bill : ${escapeHtml(order.label || '-')}</div>
-          <div class="receipt-head-row"><span>Date : ${dateText}</span><span>Time : ${timeText}</span></div>
-          <div class="receipt-head-row"><span>Table : ${order.tableNumber ? `T${order.tableNumber}` : '-'}</span><span>${escapeHtml(order.orderType || '-')}</span></div>
+          <div class="receipt-head">
+            <div>
+              <div class="receipt-title">${escapeHtml(restaurantName)}</div>
+              <div class="receipt-subtitle">Tax Invoice</div>
+            </div>
+            <div class="receipt-source">${escapeHtml(sourceLabel(order))}</div>
+          </div>
+          <div class="receipt-meta">
+            <div class="receipt-meta-row"><span>Order ID</span><span>${escapeHtml(order.label || '-')}</span></div>
+            <div class="receipt-meta-row"><span>Date</span><span>${dateText}</span></div>
+            <div class="receipt-meta-row"><span>Time</span><span>${timeText}</span></div>
+            <div class="receipt-meta-row"><span>${order.orderType === 'dine' ? 'Table' : 'Order Type'}</span><span>${order.orderType === 'dine' ? (order.tableNumber ? `T${order.tableNumber}` : '-') : escapeHtml(order.orderType || '-')}</span></div>
+          </div>
           <div class="receipt-divider"></div>
-          <div class="receipt-grid-head"><span>Item Name</span><span>Qty.</span><span>Rate</span><span>Amount</span></div>
+          <div class="receipt-grid-head"><span>Item</span><span>Qty</span><span>Rate</span><span>Amount</span></div>
           ${(order.items || []).map((item) => `
             <div class="receipt-grid-row">
               <span>${escapeHtml(item.name)}</span>
@@ -453,12 +476,13 @@
             </div>
           `).join('')}
           <div class="receipt-divider"></div>
+          <div class="receipt-total-line"><span>Total Qty</span><span>${totalQty}</span></div>
           <div class="receipt-total-line"><span>Sub Total</span><span>${money(subtotal)}</span></div>
-          <div class="receipt-total-line"><span>Tax</span><span>${money(tax)}</span></div>
-          <div class="receipt-total-line"><span>Service</span><span>${money(service)}</span></div>
+          <div class="receipt-total-line"><span>CGST @2.5%</span><span>${money(cgst)}</span></div>
+          <div class="receipt-total-line"><span>SGST @2.5%</span><span>${money(sgst)}</span></div>
           <div class="receipt-divider"></div>
-          <div class="receipt-total-line grand"><span>Gross Amount</span><span>${money(total)}</span></div>
-          <div class="receipt-foot">${escapeHtml(order.paid ? 'Paid' : 'Payment pending')} · ${escapeHtml(order.status || '-')} · ${escapeHtml((order.paymentMethod || '-').toUpperCase())}${paidTimeText ? ` · ${escapeHtml(paidTimeText)}` : ''}</div>
+          <div class="receipt-total-line grand"><span>Grand Total</span><span>${money(total)}</span></div>
+          <div class="receipt-foot">${order.paid ? `Paid via ${paymentMethodText}` : 'Payment pending'} | Status: ${escapeHtml(order.status || '-')}${paidTimeText ? ` | Paid at ${escapeHtml(paidTimeText)}` : ''}</div>
         </div>
       `;
     }
@@ -548,10 +572,8 @@
           await fetchManagementState();
           await loadAuditLogs();
 
-          if (autoPrintEnabled) {
-            const newOrders = (state.orders || []).filter((order) => !previousIds.has(order.id));
-            if (newOrders.length) printOrder(newOrders[0]);
-          }
+          const newOrders = (state.orders || []).filter((order) => !previousIds.has(order.id));
+          enqueueAutoPrintOrders(newOrders);
         } catch (_error) {
         }
       }, 4000);
@@ -940,57 +962,183 @@
       button.textContent = `Auto print: ${autoPrintEnabled ? 'On' : 'Off'}`;
     }
 
-    function toggleAutoPrint() {
-      autoPrintEnabled = !autoPrintEnabled;
+    function setAutoPrintEnabled(enabled) {
+      autoPrintEnabled = Boolean(enabled);
+      try {
+        localStorage.setItem(MANAGEMENT_AUTO_PRINT_KEY, autoPrintEnabled ? '1' : '0');
+      } catch (_error) {
+      }
       renderPrintControls();
+    }
+
+    function toggleAutoPrint() {
+      setAutoPrintEnabled(!autoPrintEnabled);
+    }
+
+    function enqueueAutoPrintOrders(orders) {
+      if (!autoPrintEnabled) return;
+      const incoming = (orders || [])
+        .slice()
+        .sort((a, b) => Number(a.createdAt || 0) - Number(b.createdAt || 0));
+
+      for (const order of incoming) {
+        const orderId = Number(order?.id || 0);
+        if (!orderId) continue;
+        if (autoPrintQueue.some((queued) => Number(queued.id) === orderId)) continue;
+        autoPrintQueue.push(order);
+      }
+
+      processAutoPrintQueue();
+    }
+
+    function processAutoPrintQueue() {
+      if (isAutoPrinting || !autoPrintEnabled || !autoPrintQueue.length) return;
+
+      isAutoPrinting = true;
+      const nextOrder = autoPrintQueue.shift();
+      const printed = printOrder(nextOrder, { silentPopupError: true });
+
+      if (!printed && !autoPrintPopupBlockedNotified) {
+        autoPrintPopupBlockedNotified = true;
+        alert('Auto print was blocked by browser popup settings. Allow popups for this site to print new orders automatically.');
+      }
+
+      setTimeout(() => {
+        isAutoPrinting = false;
+        processAutoPrintQueue();
+      }, printed ? 700 : 300);
     }
 
     function formatOrderPrintHtml(order) {
       const created = new Date(order.createdAt || Date.now());
-      const rows = (order.items || []).map((item) => `
-        <tr>
-          <td>${item.name}</td>
-          <td style="text-align:right;">${item.qty}</td>
-          <td style="text-align:right;">${money(item.price)}</td>
-          <td style="text-align:right;">${money(item.price * item.qty)}</td>
-        </tr>
-      `).join('');
+      const restaurantName = String(state.restaurant?.name || managementAuth?.restaurant?.name || 'Restaurant');
+      const subtotal = Number(order.subtotal || 0);
+      const gst = Number(order.gst || order.tax || 0);
+      const cgst = Number(order.cgst || (gst / 2));
+      const sgst = Number(order.sgst || (gst - cgst));
+      const total = Number(order.total || (subtotal + cgst + sgst));
+      const totalQty = (order.items || []).reduce((sum, item) => sum + Number(item.qty || 0), 0);
+      const rows = (order.items || []).map((item) => {
+        const qty = Number(item.qty || 0);
+        const rate = Number(item.price || 0);
+        const amount = qty * rate;
+        return `
+          <tr>
+            <td class="c-item">${escapeHtml(String(item.name || ''))}</td>
+            <td class="c-qty">${qty}</td>
+            <td class="c-rate">${money(rate)}</td>
+            <td class="c-amt">${money(amount)}</td>
+          </tr>
+        `;
+      }).join('');
+      const paidText = order.paid ? `Paid via ${(order.paymentMethod || '-').toUpperCase()}` : 'Payment pending';
 
       return `
         <html>
           <head>
-            <title>${order.label}</title>
+            <meta charset="utf-8" />
+            <title>${escapeHtml(order.label || 'Receipt')}</title>
             <style>
-              body { font-family: Arial, sans-serif; padding: 12px; color: #222; }
-              h1 { font-size: 18px; margin: 0 0 8px; }
-              .meta { font-size: 12px; margin-bottom: 8px; }
+              @page { size: 80mm auto; margin: 2.5mm; }
+              * { box-sizing: border-box; }
+              body {
+                margin: 0;
+                width: 75mm;
+                font-family: "Segoe UI", Arial, sans-serif;
+                color: #111;
+                font-size: 12px;
+                line-height: 1.45;
+                background: #fff;
+              }
+              .center { text-align: center; }
+              .title { font-size: 16px; font-weight: 700; letter-spacing: 0.1px; }
+              .sub { font-size: 11px; text-transform: uppercase; letter-spacing: 0.7px; margin-top: 1px; color: #fc8019; font-weight: 700; }
+              .chip {
+                display: inline-block;
+                margin-top: 3px;
+                font-size: 11px;
+                padding: 2px 8px;
+                border-radius: 999px;
+                color: #fc8019;
+                background: #fff4ea;
+                border: 1px solid #ffd9b8;
+                text-transform: uppercase;
+                font-weight: 700;
+                letter-spacing: 0.3px;
+              }
+              .sep { border-top: 1px solid #e8e9ee; margin: 8px 0; }
+              .meta {
+                background: #f7f8fa;
+                border: 1px solid #eceef2;
+                border-radius: 10px;
+                padding: 7px 8px;
+              }
+              .meta-row, .sum-row {
+                display: flex;
+                justify-content: space-between;
+                gap: 6px;
+              }
+              .meta-row span:first-child, .sum-row span:first-child { color: #333; }
+              .meta-row span:last-child, .sum-row span:last-child { text-align: right; font-weight: 600; }
+              .meta-row + .meta-row { margin-top: 3px; }
               table { width: 100%; border-collapse: collapse; }
-              th, td { border-bottom: 1px solid #ddd; padding: 6px 4px; font-size: 12px; }
-              th { text-align: left; }
-              .total { margin-top: 10px; font-size: 14px; font-weight: 700; text-align: right; }
+              th, td { padding: 4px 0; vertical-align: top; }
+              th { font-size: 11px; font-weight: 700; border-bottom: 1px solid #e8e9ee; text-transform: uppercase; letter-spacing: 0.5px; color: #6b7280; }
+              .c-item { width: 42%; }
+              .c-qty { width: 10%; text-align: right; }
+              .c-rate { width: 22%; text-align: right; }
+              .c-amt { width: 26%; text-align: right; }
+              .grand {
+                font-size: 15px;
+                font-weight: 700;
+                border-top: none;
+                margin-top: 6px;
+                padding: 9px 10px;
+                border-radius: 10px;
+                background: #fff4ea;
+                color: #9a4b00;
+              }
+              .foot { margin-top: 7px; font-size: 11px; text-align: center; color: #4b5563; }
             </style>
           </head>
           <body>
-            <h1>FoodOrder</h1>
-            <div class="meta">${order.label} · ${created.toLocaleString('en-IN')} · ${order.orderType}${order.tableNumber ? ` · Table ${order.tableNumber}` : ''}</div>
+            <div class="center title">${escapeHtml(restaurantName)}</div>
+            <div class="center sub">Tax Invoice</div>
+            <div class="center chip">${escapeHtml(sourceLabel(order))}</div>
+            <div class="sep"></div>
+            <div class="meta">
+              <div class="meta-row"><span>Order ID</span><span>${escapeHtml(order.label || '-')}</span></div>
+              <div class="meta-row"><span>Date</span><span>${created.toLocaleDateString('en-GB')}</span></div>
+              <div class="meta-row"><span>Time</span><span>${created.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: false })}</span></div>
+              <div class="meta-row"><span>${order.orderType === 'dine' ? 'Table' : 'Order Type'}</span><span>${order.orderType === 'dine' ? (order.tableNumber ? `T${order.tableNumber}` : '-') : escapeHtml(order.orderType || '-')}</span></div>
+            </div>
+            <div class="sep"></div>
             <table>
               <thead>
                 <tr><th>Item</th><th style="text-align:right;">Qty</th><th style="text-align:right;">Rate</th><th style="text-align:right;">Amount</th></tr>
               </thead>
               <tbody>${rows}</tbody>
             </table>
-            <div class="total">Total: ${money(order.total)}</div>
+            <div class="sep"></div>
+            <div class="sum-row"><span>Total Qty</span><span>${totalQty}</span></div>
+            <div class="sum-row"><span>Sub Total</span><span>${money(subtotal)}</span></div>
+            <div class="sum-row"><span>CGST @2.5%</span><span>${money(cgst)}</span></div>
+            <div class="sum-row"><span>SGST @2.5%</span><span>${money(sgst)}</span></div>
+            <div class="sum-row grand"><span>Grand Total</span><span>${money(total)}</span></div>
+            <div class="sep"></div>
+            <div class="foot">${escapeHtml(paidText)} | Status: ${escapeHtml(order.status || '-')}</div>
+            <div class="foot">Thank you. Visit again.</div>
           </body>
         </html>
       `;
     }
 
-    function printOrder(order) {
-      if (!order) return;
-      const popup = window.open('', '_blank', 'width=420,height=640');
+    function printOrder(order, options = {}) {
+      if (!order) return false;
+      const popup = window.open('', '_blank', 'width=420,height=860');
       if (!popup) {
-        alert('Please allow popups to print orders.');
-        return;
+        if (!options.silentPopupError) alert('Please allow popups to print orders.');
+        return false;
       }
       popup.document.open();
       popup.document.write(formatOrderPrintHtml(order));
@@ -999,6 +1147,7 @@
       setTimeout(() => {
         popup.print();
       }, 250);
+      return true;
     }
 
     function printLatestOrder() {
@@ -1110,19 +1259,24 @@
         return;
       }
 
-      const header = ['Order ID', 'Created At', 'Type', 'Table', 'Status', 'Paid', 'Payment Method', 'Items', 'Subtotal', 'Tax', 'Service', 'Total', 'Notes'];
+      const header = ['Order ID', 'Created At', 'Type', 'Table', 'Status', 'Paid', 'Payment Method', 'Items', 'Subtotal', 'CGST', 'SGST', 'GST Total', 'Total', 'Notes'];
       const lines = [header.join(',')];
       let totalAmount = 0;
-      let totalTax = 0;
-      let totalService = 0;
+      let totalCgst = 0;
+      let totalSgst = 0;
+      let totalGst = 0;
       let totalSubtotal = 0;
       let totalOrders = 0;
 
       const dataRows = rows.map((order) => {
         totalOrders += 1;
         totalAmount += Number(order.total || 0);
-        totalTax += Number(order.tax || 0);
-        totalService += Number(order.service || 0);
+        const gst = Number(order.gst || order.tax || 0);
+        const cgst = Number(order.cgst || (gst / 2));
+        const sgst = Number(order.sgst || (gst - cgst));
+        totalCgst += cgst;
+        totalSgst += sgst;
+        totalGst += gst;
         totalSubtotal += Number(order.subtotal || 0);
 
         const itemsText = (order.items || []).map((item) => `${item.name} x${item.qty}`).join(' | ');
@@ -1137,8 +1291,9 @@
             <td>${htmlEscape(order.paymentMethod || '-')}</td>
             <td>${htmlEscape(itemsText)}</td>
             <td style="mso-number-format:'0';">${Number(order.subtotal || 0)}</td>
-            <td style="mso-number-format:'0';">${Number(order.tax || 0)}</td>
-            <td style="mso-number-format:'0';">${Number(order.service || 0)}</td>
+            <td style="mso-number-format:'0.00';">${cgst.toFixed(2)}</td>
+            <td style="mso-number-format:'0.00';">${sgst.toFixed(2)}</td>
+            <td style="mso-number-format:'0.00';">${gst.toFixed(2)}</td>
             <td style="mso-number-format:'0';">${Number(order.total || 0)}</td>
             <td>${htmlEscape(order.notes || '')}</td>
           </tr>
@@ -1164,10 +1319,10 @@
           </head>
           <body>
             <table border="1">
-              <tr><th colspan="13" style="font-size:16px;">FoodOrder Daily Summary - ${htmlEscape(dateText)}</th></tr>
-              <tr><th colspan="13">Total Orders: ${totalOrders} | Subtotal: ${totalSubtotal} | Tax: ${totalTax} | Service: ${totalService} | Gross Total: ${totalAmount}</th></tr>
+              <tr><th colspan="14" style="font-size:16px;">FoodOrder Daily Summary - ${htmlEscape(dateText)}</th></tr>
+              <tr><th colspan="14">Total Orders: ${totalOrders} | Subtotal: ${totalSubtotal} | CGST: ${totalCgst.toFixed(2)} | SGST: ${totalSgst.toFixed(2)} | GST Total: ${totalGst.toFixed(2)} | Grand Total: ${totalAmount}</th></tr>
               <tr>
-                <th>Order ID</th><th>Created At</th><th>Type</th><th>Table</th><th>Status</th><th>Paid</th><th>Payment Method</th><th>Items</th><th>Subtotal</th><th>Tax</th><th>Service</th><th>Total</th><th>Notes</th>
+                <th>Order ID</th><th>Created At</th><th>Type</th><th>Table</th><th>Status</th><th>Paid</th><th>Payment Method</th><th>Items</th><th>Subtotal</th><th>CGST</th><th>SGST</th><th>GST Total</th><th>Total</th><th>Notes</th>
               </tr>
               ${dataRows}
             </table>
@@ -1400,6 +1555,15 @@
     (async function init() {
       updateTime();
       setInterval(updateTime, 30000);
+
+      try {
+        const storedAutoPrint = localStorage.getItem(MANAGEMENT_AUTO_PRINT_KEY);
+        if (storedAutoPrint === '0' || storedAutoPrint === '1') {
+          autoPrintEnabled = storedAutoPrint === '1';
+        }
+      } catch (_error) {
+      }
+      renderPrintControls();
 
       const exportDateInput = document.getElementById('order-export-date');
       if (exportDateInput) {
