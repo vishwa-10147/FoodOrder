@@ -973,6 +973,19 @@ app.post('/api/management/register', (req, res) => {
     restaurant.id
   );
 
+  const tableCountForRestaurant = Number(
+    db.prepare('SELECT COUNT(*) as count FROM table_status WHERE restaurant_id = ?').get(restaurant.id).count || 0
+  );
+  if (tableCountForRestaurant === 0) {
+    const insertTable = db.prepare('INSERT INTO table_status (restaurant_id, table_number, status) VALUES (?, ?, ?)');
+    const tableTx = db.transaction(() => {
+      for (let i = 1; i <= 14; i += 1) {
+        insertTable.run(restaurant.id, i, 'free');
+      }
+    });
+    tableTx();
+  }
+
   const updatedRestaurant = db.prepare('SELECT id, code, name FROM restaurants WHERE id = ?').get(restaurant.id);
   const credentials = hashPasswordWithSalt(password);
   db.prepare(
