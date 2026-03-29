@@ -5,7 +5,10 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "dev": "node server.js"
+    "dev": "node server.js",
+    "supabase:init": "node scripts/migrate_to_supabase.js --schema-only --apply-schema --keep-target-data",
+    "migrate:supabase": "node scripts/migrate_to_supabase.js --apply-schema",
+    "migrate:supabase:data-only": "node scripts/migrate_to_supabase.js"
   },
   "keywords": [],
   "author": "",
@@ -20,6 +23,7 @@
     "dotenv": "^16.6.1",
     "express": "^5.2.1",
     "multer": "^2.1.1",
+    "pg": "^8.16.3",
     "razorpay": "^2.9.6",
     "socket.io": "^4.8.3"
   }

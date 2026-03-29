@@ -99,3 +99,47 @@ In Razorpay dashboard:
 - Render free tiers may sleep when idle.
 - Keep persistent disk enabled; without it, SQLite data can be lost between deploys.
 - For higher traffic, move to managed Postgres in a future phase.
+
+## 8) One-Time Supabase Migration (Automated Script)
+Use this when you want to move existing SQLite data into Supabase Postgres.
+
+What this does:
+- Creates required tables/indexes in Supabase (if you pass `--apply-schema`).
+- Copies all rows from local SQLite into Supabase.
+- Resets Postgres sequences so new inserts continue correctly.
+
+### 8.1) Supabase setup
+1. Create a Supabase project.
+2. In Supabase dashboard, open: `Settings -> Database -> Connection string -> URI`.
+3. Copy URI and set as `DATABASE_URL`.
+
+### 8.2) Run migration locally
+From project root:
+
+Fresh Supabase DB (schema only, no SQLite import):
+
+```bash
+DATABASE_URL="<supabase_uri>" PGSSL=true npm run supabase:init
+```
+
+```bash
+npm install
+DATABASE_URL="<supabase_uri>" PGSSL=true npm run migrate:supabase
+```
+
+PowerShell example:
+
+```powershell
+$env:DATABASE_URL='<supabase_uri>'
+$env:PGSSL='true'
+npm run migrate:supabase
+```
+
+Optional:
+- Custom sqlite source file: set `SQLITE_FILE`.
+- Keep target data (no truncate): run script directly with `--keep-target-data`.
+
+### 8.3) Important notes
+- Migration writes directly to your Supabase DB.
+- Default mode clears target app tables first to prevent duplicate rows.
+- Current runtime server still uses SQLite; this step migrates data only.

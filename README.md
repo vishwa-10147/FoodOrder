@@ -118,6 +118,51 @@ npm start
 
 - `npm start` → start server
 - `npm run dev` → start server (same command currently)
+- `npm run supabase:init` → create fresh Supabase schema only (no data import)
+- `npm run migrate:supabase` → apply Supabase schema + migrate SQLite data
+- `npm run migrate:supabase:data-only` → migrate data only (schema already exists)
+
+---
+
+## Supabase Migration (SQLite -> Postgres)
+
+This project now includes one-command migration tooling:
+
+- Schema file: `scripts/supabase_schema.sql`
+- Migration script: `scripts/migrate_to_supabase.js`
+
+### 1) Create Supabase project
+- In Supabase, copy the Postgres URI from `Settings -> Database -> Connection string`.
+
+### 2) Set env vars and run
+
+For a fresh database without importing SQLite data:
+
+```powershell
+$env:DATABASE_URL='<supabase_uri>'
+$env:PGSSL='true'
+npm run supabase:init
+```
+
+PowerShell:
+
+```powershell
+$env:DATABASE_URL='<supabase_uri>'
+$env:PGSSL='true'
+npm run migrate:supabase
+```
+
+Bash:
+
+```bash
+DATABASE_URL="<supabase_uri>" PGSSL=true npm run migrate:supabase
+```
+
+### 3) Optional controls
+- `SQLITE_FILE` to point to a non-default SQLite file.
+- `npm run migrate:supabase:data-only` if schema already exists.
+
+Note: current runtime server remains SQLite-based. This migration automates data transfer into Supabase.
 
 ---
 
