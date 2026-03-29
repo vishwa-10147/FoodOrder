@@ -122,9 +122,6 @@
     .menu-admin-name { font-size:12px; color:var(--color-text-primary); }
     .menu-admin-meta { font-size:11px; color:var(--color-text-secondary); margin-top:2px; }
     .menu-admin-actions { display:flex; align-items:center; gap:6px; }
-    .menu-admin-thumb { width:52px; height:52px; border-radius:10px; object-fit:cover; border:var(--border); background:var(--color-background-secondary); }
-    .menu-admin-main { display:flex; align-items:center; gap:10px; }
-    .menu-admin-upload { width:170px; }
     .state-btn { border:var(--border); border-radius:var(--border-radius-md); background:var(--color-background-secondary); color:var(--color-text-secondary); font-size:11px; padding:5px 8px; cursor:pointer; }
     .state-btn.active.available { background:var(--accent-light); color:var(--accent-dark); border-color:#9FE1CB; }
     .state-btn.active.unavailable { background:var(--warn-light); color:var(--warn); border-color:#FAC775; }
@@ -348,12 +345,11 @@
               <input id="menu-cat" class="menu-admin-input" placeholder="Category (mains/drinks...)" />
               <input id="menu-emoji" class="menu-admin-input" placeholder="Emoji (optional)" />
               <input id="menu-desc" class="menu-admin-input" placeholder="Description (optional)" />
-              <input id="menu-image-file" class="menu-admin-input" type="file" accept="image/*" />
               <input id="menu-delete-id" class="menu-admin-input" type="number" min="1" placeholder="Delete item ID" />
               <input id="menu-csv-file" class="menu-admin-input" type="file" accept=".csv,text/csv" />
             </div>
             <div class="menu-admin-form-actions">
-              <div class="menu-admin-meta">Customize menu and upload food images.</div>
+              <div class="menu-admin-meta">Customize menu by adding/removing items.</div>
               <div style="display:flex; gap:6px;">
                 <button class="small-btn" onclick="addMenuItem()">+ Add item</button>
                 <button class="small-btn" onclick="deleteMenuItemByInput()">- Delete item</button>
@@ -575,32 +571,6 @@
       if (!res.ok) {
         const err = await res.json().catch(() => ({ error: 'Request failed' }));
         throw new Error(err.error || 'Request failed');
-      }
-      return res.json();
-    }
-
-    async function apiUploadImage(path, file) {
-      const headers = { 'X-Actor': 'management-ui' };
-      if (managementAuth?.token) {
-        headers.Authorization = `Bearer ${managementAuth.token}`;
-      }
-
-      const form = new FormData();
-      form.append('image', file);
-
-      const res = await fetch(path, {
-        method: 'POST',
-        headers,
-        body: form
-      });
-
-      if (res.status === 401) {
-        showLoginGate('Session expired. Please login again.');
-        throw new Error('Unauthorized');
-      }
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({ error: 'Upload failed' }));
-        throw new Error(err.error || 'Upload failed');
       }
       return res.json();
     }
@@ -1023,17 +993,11 @@
         const isAvailable = Number(item.available) === 1;
         return `
           <div class="menu-admin-item">
-            <div class="menu-admin-main">
-              ${item.imageUrl ? `<img class="menu-admin-thumb" src="${escapeHtml(item.imageUrl)}" alt="${escapeHtml(item.name)}" />` : '<div class="menu-admin-thumb"></div>'}
-              <div>
-                <div class="menu-admin-name">#${item.id} · ${item.name}</div>
-                <div class="menu-admin-meta">${item.cat} · ${money(item.price)}</div>
-              </div>
+            <div>
+              <div class="menu-admin-name">#${item.id} · ${item.name}</div>
+              <div class="menu-admin-meta">${item.cat} · ${money(item.price)}</div>
             </div>
             <div class="menu-admin-actions">
-              <input id="menu-image-${item.id}" class="menu-admin-input menu-admin-upload" type="file" accept="image/*" />
-              <button class="state-btn" onclick="uploadMenuImage(${item.id})">Upload image</button>
-              <button class="state-btn" onclick="clearMenuImage(${item.id})">Clear image</button>
               <button class="state-btn available ${isAvailable ? 'active available' : ''}" onclick="setMenuAvailability(${item.id}, true)">Available</button>
               <button class="state-btn unavailable ${!isAvailable ? 'active unavailable' : ''}" onclick="setMenuAvailability(${item.id}, false)">Unavailable</button>
               <button class="state-btn" onclick="deleteMenuItem(${item.id})">-</button>
@@ -1225,10 +1189,8 @@
         const cat = String(document.getElementById('menu-cat').value || '').trim();
         const emoji = String(document.getElementById('menu-emoji').value || '').trim();
         const desc = String(document.getElementById('menu-desc').value || '').trim();
-        const imageInput = document.getElementById('menu-image-file');
-        const imageFile = imageInput?.files && imageInput.files[0] ? imageInput.files[0] : null;
 
-        const created = await api('/api/menu', 'POST', {
+        await api('/api/menu', 'POST', {
           name,
           price,
           cat,
@@ -1237,41 +1199,11 @@
           available: true
         });
 
-        if (imageFile && created?.id) {
-          await apiUploadImage(`/api/menu/${created.id}/image`, imageFile);
-        }
-
         document.getElementById('menu-name').value = '';
         document.getElementById('menu-price').value = '';
         document.getElementById('menu-cat').value = '';
         document.getElementById('menu-emoji').value = '';
         document.getElementById('menu-desc').value = '';
-        if (imageInput) imageInput.value = '';
-      } catch (e) {
-        alert(e.message);
-      }
-    }
-
-    async function uploadMenuImage(menuItemId) {
-      const input = document.getElementById(`menu-image-${menuItemId}`);
-      const file = input?.files && input.files[0] ? input.files[0] : null;
-      if (!file) {
-        alert('Choose an image file first.');
-        return;
-      }
-
-      try {
-        await apiUploadImage(`/api/menu/${menuItemId}/image`, file);
-        input.value = '';
-        await fetchManagementState();
-      } catch (e) {
-        alert(e.message);
-      }
-    }
-
-    async function clearMenuImage(menuItemId) {
-      try {
-        await api(`/api/menu/${menuItemId}/image`, 'DELETE');
       } catch (e) {
         alert(e.message);
       }
