@@ -8,6 +8,7 @@ const crypto = require('crypto');
 const Database = require('better-sqlite3');
 const { Server } = require('socket.io');
 const Razorpay = require('razorpay');
+const multer = require('multer');
 
 const app = express();
 const server = http.createServer(app);
@@ -15,6 +16,8 @@ const io = new Server(server);
 
 const DATA_DIR = path.join(__dirname, 'data');
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+const UPLOADS_DIR = path.join(DATA_DIR, 'uploads');
+if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 
 const DB_FILE = path.join(DATA_DIR, 'restaurant.db');
 const BACKUP_DIR = path.join(DATA_DIR, 'backups');
@@ -46,6 +49,22 @@ let lastBackupAt = null;
 
 const db = new Database(DB_FILE);
 db.pragma('journal_mode = WAL');
+
+const uploadMenuImage = multer({
+  storage: multer.diskStorage({
+    destination: (_req, _file, cb) => cb(null, UPLOADS_DIR),
+    filename: (_req, file, cb) => {
+      const ext = String(path.extname(file.originalname || '') || '').toLowerCase();
+      const safeExt = ext && ext.length <= 8 ? ext : '.jpg';
+      cb(null, `menu-${Date.now()}-${crypto.randomBytes(6).toString('hex')}${safeExt}`);
+    }
+  }),
+  limits: { fileSize: 5 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    if (String(file.mimetype || '').toLowerCase().startsWith('image/')) return cb(null, true);
+    return cb(new Error('Only image files are allowed'));
+  }
+}).single('image');
 
 function toSafeTimestampForFile(date = new Date()) {
   return date.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}Z$/, 'Z');
@@ -148,6 +167,7 @@ CREATE TABLE IF NOT EXISTS menu_items (
   price INTEGER NOT NULL,
   emoji TEXT NOT NULL,
   category TEXT NOT NULL,
+  image_url TEXT,
   available INTEGER NOT NULL DEFAULT 1
 );
 
@@ -506,11 +526,15 @@ function seedDatabase() {
   const menuColumns = db.prepare('PRAGMA table_info(menu_items)').all();
   const hasAvailableColumn = menuColumns.some((col) => col.name === 'available');
   const hasMenuRestaurantIdColumn = menuColumns.some((col) => col.name === 'restaurant_id');
+  const hasImageUrlColumn = menuColumns.some((col) => col.name === 'image_url');
   if (!hasAvailableColumn) {
     db.exec('ALTER TABLE menu_items ADD COLUMN available INTEGER NOT NULL DEFAULT 1');
   }
   if (!hasMenuRestaurantIdColumn) {
     db.exec('ALTER TABLE menu_items ADD COLUMN restaurant_id INTEGER NOT NULL DEFAULT 1');
+  }
+  if (!hasImageUrlColumn) {
+    db.exec('ALTER TABLE menu_items ADD COLUMN image_url TEXT');
   }
   db.exec('UPDATE menu_items SET restaurant_id = 1 WHERE restaurant_id IS NULL OR restaurant_id < 1');
 
@@ -783,7 +807,7 @@ function getStats(orders, tables) {
 
 function getState(restaurantId = 1) {
   const menu = db.prepare(
-    'SELECT id, restaurant_id as restaurantId, name, description as desc, price, emoji, category as cat, available FROM menu_items WHERE restaurant_id = ? ORDER BY id ASC'
+    'SELECT id, restaurant_id as restaurantId, name, description as desc, price, emoji, category as cat, image_url as imageUrl, available FROM menu_items WHERE restaurant_id = ? ORDER BY id ASC'
   ).all(restaurantId);
   const tables = db.prepare('SELECT restaurant_id as restaurantId, table_number as tableNumber, status FROM table_status WHERE restaurant_id = ? ORDER BY table_number ASC').all(restaurantId);
   const orders = getOrders(restaurantId);
@@ -1135,8 +1159,8 @@ app.post('/api/menu', requireManagementAuth, (req, res) => {
   if (!Number.isFinite(price) || price <= 0) return res.status(400).json({ error: 'Price must be greater than 0' });
 
   const result = db.prepare(
-    'INSERT INTO menu_items (restaurant_id, name, description, price, emoji, category, available) VALUES (?, ?, ?, ?, ?, ?, ?)'
-  ).run(restaurantId, name, description || 'Custom menu item', Math.round(price), emoji, cat, available);
+    'INSERT INTO menu_items (restaurant_id, name, description, price, emoji, category, image_url, available) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+  ).run(restaurantId, name, description || 'Custom menu item', Math.round(price), emoji, cat, String(req.body?.imageUrl || '').trim() || null, available);
 
   logAudit({
     action: 'menu_item_added',
@@ -1170,6 +1194,76 @@ app.delete('/api/menu/:id', requireManagementAuth, (req, res) => {
   return res.json({ ok: true });
 });
 
+app.post('/api/menu/:id/image', requireManagementAuth, (req, res) => {
+  uploadMenuImage(req, res, (uploadError) => {
+    if (uploadError) {
+      return res.status(400).json({ error: uploadError.message || 'Failed to upload image' });
+    }
+
+    const menuItemId = Number(req.params.id);
+    const actor = `${getActor(req)}:${req.management.restaurantCode}`;
+    const restaurantId = req.management.restaurantId;
+    const item = db.prepare('SELECT id, name, image_url as imageUrl FROM menu_items WHERE id = ? AND restaurant_id = ?').get(menuItemId, restaurantId);
+    if (!item) return res.status(404).json({ error: 'Menu item not found' });
+    if (!req.file) return res.status(400).json({ error: 'Image file is required' });
+
+    const imageUrl = `/data/uploads/${req.file.filename}`;
+    db.prepare('UPDATE menu_items SET image_url = ? WHERE id = ? AND restaurant_id = ?').run(imageUrl, menuItemId, restaurantId);
+
+    if (item.imageUrl && String(item.imageUrl).startsWith('/data/uploads/')) {
+      const previousFilePath = path.normalize(path.join(__dirname, String(item.imageUrl).replace(/^\//, '')));
+      if (previousFilePath.startsWith(UPLOADS_DIR) && fs.existsSync(previousFilePath)) {
+        try {
+          fs.unlinkSync(previousFilePath);
+        } catch (_err) {
+        }
+      }
+    }
+
+    logAudit({
+      action: 'menu_image_uploaded',
+      entityType: 'menu_item',
+      entityId: menuItemId,
+      actor,
+      details: { name: item.name, imageUrl }
+    });
+
+    broadcastState();
+    return res.json({ ok: true, imageUrl });
+  });
+});
+
+app.delete('/api/menu/:id/image', requireManagementAuth, (req, res) => {
+  const menuItemId = Number(req.params.id);
+  const actor = `${getActor(req)}:${req.management.restaurantCode}`;
+  const restaurantId = req.management.restaurantId;
+  const item = db.prepare('SELECT id, name, image_url as imageUrl FROM menu_items WHERE id = ? AND restaurant_id = ?').get(menuItemId, restaurantId);
+  if (!item) return res.status(404).json({ error: 'Menu item not found' });
+
+  if (item.imageUrl && String(item.imageUrl).startsWith('/data/uploads/')) {
+    const filePath = path.normalize(path.join(__dirname, String(item.imageUrl).replace(/^\//, '')));
+    if (filePath.startsWith(UPLOADS_DIR) && fs.existsSync(filePath)) {
+      try {
+        fs.unlinkSync(filePath);
+      } catch (_err) {
+      }
+    }
+  }
+
+  db.prepare('UPDATE menu_items SET image_url = NULL WHERE id = ? AND restaurant_id = ?').run(menuItemId, restaurantId);
+
+  logAudit({
+    action: 'menu_image_cleared',
+    entityType: 'menu_item',
+    entityId: menuItemId,
+    actor,
+    details: { name: item.name }
+  });
+
+  broadcastState();
+  return res.json({ ok: true });
+});
+
 app.post('/api/menu/import-csv', requireManagementAuth, (req, res) => {
   try {
     const actor = `${getActor(req)}:${req.management.restaurantCode}`;
@@ -1190,7 +1284,7 @@ app.post('/api/menu/import-csv', requireManagementAuth, (req, res) => {
     }
 
     const insertItem = db.prepare(
-      'INSERT INTO menu_items (restaurant_id, name, description, price, emoji, category, available) VALUES (?, ?, ?, ?, ?, ?, ?)'
+      'INSERT INTO menu_items (restaurant_id, name, description, price, emoji, category, image_url, available) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
     );
     const deleteExisting = db.prepare('DELETE FROM menu_items WHERE restaurant_id = ?');
 
@@ -1208,6 +1302,7 @@ app.post('/api/menu/import-csv', requireManagementAuth, (req, res) => {
           row.price,
           row.emoji,
           row.category,
+          null,
           row.available
         );
         inserted += 1;

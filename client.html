@@ -56,6 +56,7 @@
     .menu-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; }
     .menu-item { border:var(--border); border-radius:var(--border-radius-md); background:var(--color-background-primary); padding:12px; }
     .menu-item.unavailable { opacity:0.65; }
+    .menu-photo { width:100%; height:120px; border-radius:10px; object-fit:cover; display:block; margin-bottom:8px; border:var(--border); background:var(--color-background-secondary); }
     .emoji { font-size:24px; display:block; margin-bottom:6px; }
     .name { font-size:13px; color:var(--color-text-primary); font-weight:500; }
     .desc { font-size:11px; color:var(--color-text-secondary); margin:2px 0 6px; }
@@ -563,7 +564,7 @@
       const menu = currentCat === 'all' ? state.menu : state.menu.filter((m) => m.cat === currentCat);
       document.getElementById('menu').innerHTML = menu.map((m) => `
         <div class="menu-item ${Number(m.available) === 1 ? '' : 'unavailable'}">
-          <span class="emoji">${m.emoji}</span>
+          ${m.imageUrl ? `<img class="menu-photo" src="${escapeHtml(m.imageUrl)}" alt="${escapeHtml(m.name)}" loading="lazy" />` : `<span class="emoji">${m.emoji}</span>`}
           <div class="name">${m.name}</div>
           <div class="desc">${m.desc}</div>
           ${Number(m.available) === 1 ? '' : '<div class="unavailable-badge">Temporarily unavailable</div>'}
