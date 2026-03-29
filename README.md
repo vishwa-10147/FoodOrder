@@ -260,9 +260,9 @@ For small single-location setups, local SQLite is recommended.
 - Wait for `RATE_LIMIT_WINDOW_MS` reset or increase limit for your environment.
 
 ### Management login keeps failing
-- In development, restaurants without an auth row are auto-bootstrapped with `MANAGEMENT_DEFAULT_PASSWORD`.
+- Restaurants without an auth row are auto-bootstrapped with `MANAGEMENT_DEFAULT_PASSWORD`.
 - If `MANAGEMENT_DEFAULT_PASSWORD` is empty, fallback password is `admin123` (unless overridden by `MANAGEMENT_DEV_FALLBACK_PASSWORD`).
-- In production, set `MANAGEMENT_DEFAULT_PASSWORD` explicitly and keep `MANAGEMENT_DEV_FALLBACK_PASSWORD` empty.
+- After first login, set a strong password using `/api/management/register` and remove fallback defaults.
 
 ---
 

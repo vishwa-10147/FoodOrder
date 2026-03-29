@@ -525,7 +525,8 @@ function seedDatabase() {
   }
 
   const effectiveBootstrapPassword = MANAGEMENT_DEFAULT_PASSWORD
-    || (NODE_ENV === 'production' ? '' : (MANAGEMENT_DEV_FALLBACK_PASSWORD || 'admin123'));
+    || MANAGEMENT_DEV_FALLBACK_PASSWORD
+    || 'admin123';
 
   if (effectiveBootstrapPassword) {
     const restaurantsWithoutAuth = db.prepare(
