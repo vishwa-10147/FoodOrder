@@ -13,7 +13,7 @@ A real-time restaurant ordering app with separate **Client** and **Management** 
 - **Backend:** Node.js, Express 5, Socket.IO
 - **Database:** SQLite (`better-sqlite3`)
 - **Frontend:** Plain HTML/CSS/JS (`client.html`, `management.html`)
-- **Utilities:** `qrcode` (QR generation endpoint), in-memory API rate limiter, scheduled DB backups
+- **Utilities:** in-memory API rate limiter, scheduled DB backups
 
 ---
 
@@ -32,7 +32,6 @@ FoodOrdering/
 ├─ data/
 │  ├─ restaurant.db
 │  └─ backups/
-└─ availability_smoke.js
 ```
 
 ---
@@ -140,24 +139,14 @@ npm start
 - `GET /api/payments/razorpay/config` – online payment availability for frontend
 - `POST /api/payments/razorpay/webhook` – webhook capture sync from Razorpay
 
-### Swiggy Integration (Official Partner)
-- `GET /api/integrations/swiggy/config` – check if credentials and strict mode are configured
-- `POST /api/integrations/swiggy/webhook` – ingest order/status webhooks from Swiggy
-- `POST /api/integrations/swiggy/menu/sync` – enqueue full menu sync job
-- `POST /api/integrations/swiggy/orders/:id/status/sync` – enqueue single order status sync
-- `GET /api/integrations/swiggy/jobs?limit=50` – list recent sync jobs with retry/error state
-- `POST /api/integrations/swiggy/jobs/:id/retry` – manually retry failed/queued job
-
 ### Tables
 - `POST /api/tables/:tableNumber/toggle` – cycle table state
 - `POST /api/tables/:tableNumber/status` – explicit state set
 - `POST /api/tables` – add table
 - `DELETE /api/tables/:tableNumber` – delete free table (with safety checks)
 
-### Audit & Share
+### Audit
 - `GET /api/audit-logs?limit=30`
-- `GET /api/share-info`
-- `GET /api/share-qr?target=<url>`
 
 ---
 
@@ -193,13 +182,12 @@ Backups:
 - `data/backups/restaurant-YYYYMMDDTHHMMSSZ.db`
 
 Tables in DB:
+- `restaurants`
 - `menu_items`
 - `table_status`
 - `orders`
 - `order_items`
 - `audit_logs`
-- `swiggy_order_map`
-- `integration_sync_jobs`
 
 ---
 
@@ -236,7 +224,7 @@ This is the lowest-risk option for low traffic because no DB rewrite is needed.
 
 ### Razorpay (UPI/Card) setup
 
-1. Create Razorpay account and get test keys.
+1. Create a Razorpay account and get your live keys.
 2. Add these env vars in Render service:
   - `RAZORPAY_KEY_ID`
   - `RAZORPAY_KEY_SECRET`
@@ -249,16 +237,6 @@ This is the lowest-risk option for low traffic because no DB rewrite is needed.
 Cash payments continue to work through internal backend validation.
 
 For small single-location setups, local SQLite is recommended.
-
-### Swiggy integration notes
-
-- This project now includes a Swiggy adapter-ready backend that supports:
-  - Incoming Swiggy order webhooks -> local order creation
-  - Incoming status webhooks -> local status updates
-  - Outbound queue for menu + order status sync with exponential retry
-  - Manual retry endpoint for failed jobs
-- Use only official Swiggy partner docs/credentials.
-- Keep `SWIGGY_ENABLED=false` until credentials are shared.
 
 ---
 

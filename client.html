@@ -154,7 +154,6 @@
       </div>
 
       <section class="content active" id="view-order">
-        <div class="mode-note" id="swiggy-only-note" style="display:none;">Swiggy-only mode is active. Place new orders on Swiggy; this screen only shows tracking information.</div>
         <div class="customer-wrap">
           <div class="menu-panel">
             <div class="order-type-tabs">
@@ -418,31 +417,6 @@
       }
     }
 
-    function isSwiggyOnlyMode() {
-      return Boolean(state?.swiggyOnlyMode);
-    }
-
-    function applySwiggyOnlyModeUI() {
-      const enabled = isSwiggyOnlyMode();
-      const orderNav = document.querySelector('.nav-item[data-view="order"]');
-      const paymentNav = document.querySelector('.nav-item[data-view="payment"]');
-      const note = document.getElementById('swiggy-only-note');
-      const placeBtn = document.getElementById('place-btn');
-
-      if (orderNav) orderNav.style.display = enabled ? 'none' : '';
-      if (paymentNav) paymentNav.style.display = enabled ? 'none' : '';
-      if (note) note.style.display = enabled ? 'block' : 'none';
-
-      if (placeBtn) {
-        placeBtn.disabled = enabled;
-        placeBtn.textContent = enabled ? 'Ordering via Swiggy only' : 'Place order & checkout →';
-      }
-
-      if (enabled) {
-        switchView('tracking', document.querySelector('.nav-item[data-view="tracking"]'));
-      }
-    }
-
     function renderDineTableOptions() {
       const select = document.getElementById('table-number');
       if (!select) return;
@@ -488,11 +462,6 @@
     }
 
     function addToCart(menuItemId) {
-      if (isSwiggyOnlyMode()) {
-        alert('Cart is disabled in Swiggy-only mode. Place orders on Swiggy.');
-        return;
-      }
-
       const item = state.menu.find((m) => m.id === menuItemId && Number(m.available) === 1);
       if (!item) {
         alert('This item is currently unavailable.');
@@ -548,11 +517,6 @@
     }
 
     async function placeOrder() {
-      if (isSwiggyOnlyMode()) {
-        alert('Direct ordering is disabled in Swiggy-only mode.');
-        return;
-      }
-
       syncCartWithMenu();
       renderCart();
       if (!cart.length) return;
@@ -647,11 +611,6 @@
     }
 
     async function payOrder() {
-      if (isSwiggyOnlyMode()) {
-        alert('Direct payment is disabled in Swiggy-only mode.');
-        return;
-      }
-
       if (!pendingPaymentOrderId) return;
       try {
         const order = state.orders.find((o) => o.id === pendingPaymentOrderId);
@@ -752,7 +711,6 @@
     }
 
     function renderAll() {
-      applySwiggyOnlyModeUI();
       syncCartWithMenu();
       renderDineTableOptions();
       renderCategoryTabs();

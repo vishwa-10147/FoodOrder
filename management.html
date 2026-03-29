@@ -56,7 +56,7 @@
     .tag.takeaway { background: var(--warn-light); color: var(--warn); }
     .tag.preorder { background: var(--accent-light); color: var(--accent-dark); }
     .tag.source-direct { background: var(--color-background-secondary); color: var(--color-text-secondary); }
-    .tag.source-swiggy { background: #fff1de; color: #9a5600; }
+      .tag.source-external { background: #fff1de; color: #9a5600; }
 
     .table-layout { display:grid; grid-template-columns:minmax(0, 2fr) minmax(260px, 1fr); gap:10px; align-items:start; }
     .table-grid { display:grid; grid-template-columns:repeat(7,minmax(0,1fr)); gap:8px; }
@@ -438,13 +438,13 @@
 
     function sourceBadge(order) {
       const source = String(order?.source || 'direct').toLowerCase();
-      if (source === 'swiggy') return '<span class="tag source-swiggy">Partner</span>';
+        if (source !== 'direct') return '<span class="tag source-external">Partner</span>';
       return '<span class="tag source-direct">Direct</span>';
     }
 
     function sourceLabel(order) {
       const source = String(order?.source || 'direct').toLowerCase();
-      return source === 'swiggy' ? 'Partner' : 'Direct';
+        return source === 'direct' ? 'Direct' : 'Partner';
     }
 
     function eta(order) {

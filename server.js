@@ -4,11 +4,9 @@ const express = require('express');
 const http = require('http');
 const path = require('path');
 const fs = require('fs');
-const os = require('os');
 const crypto = require('crypto');
 const Database = require('better-sqlite3');
 const { Server } = require('socket.io');
-const QRCode = require('qrcode');
 const Razorpay = require('razorpay');
 
 const app = express();
@@ -637,21 +635,6 @@ function broadcastState() {
   io.emit('state:update', getState());
 }
 
-function getLocalAccessUrls(port) {
-  const ifaces = os.networkInterfaces();
-  const urls = [];
-
-  Object.values(ifaces).forEach((entries) => {
-    (entries || []).forEach((entry) => {
-      if (entry && entry.family === 'IPv4' && !entry.internal) {
-        urls.push(`http://${entry.address}:${port}`);
-      }
-    });
-  });
-
-  return Array.from(new Set(urls));
-}
-
 seedDatabase();
 
 const jsonParser = express.json();
@@ -865,27 +848,6 @@ app.post('/api/menu/import-csv', (req, res) => {
 app.get('/api/audit-logs', (req, res) => {
   const limit = Number(req.query.limit || 30);
   res.json({ logs: getAuditLogs(limit) });
-});
-
-app.get('/api/share-info', (req, res) => {
-  const port = Number(process.env.PORT || 3000);
-  const localUrls = getLocalAccessUrls(port);
-  const currentHost = req.get('host');
-  const currentUrl = currentHost ? `http://${currentHost}` : null;
-  res.json({ currentUrl, localUrls });
-});
-
-app.get('/api/share-qr', async (req, res) => {
-  const target = String(req.query.target || '').trim();
-  if (!target) return res.status(400).json({ error: 'Missing target URL' });
-
-  try {
-    const svg = await QRCode.toString(target, { type: 'svg', margin: 1, width: 240 });
-    res.setHeader('Content-Type', 'image/svg+xml');
-    return res.send(svg);
-  } catch (_error) {
-    return res.status(400).json({ error: 'Unable to generate QR' });
-  }
 });
 
 app.post('/api/orders', (req, res) => {
