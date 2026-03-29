@@ -110,6 +110,17 @@
     .receipt-total-line.grand { font-size:14px; font-weight:600; }
     .receipt-foot { margin-top:8px; font-size:11px; color:var(--color-text-secondary); }
     .mode-note { margin-bottom:12px; border:var(--border); border-radius:var(--border-radius-md); background:var(--warn-light); color:var(--warn); padding:10px; font-size:12px; }
+    .restaurant-selector-wrap { margin-bottom: 12px; }
+    .restaurant-selector-label { font-size: 12px; color: var(--color-text-secondary); margin-bottom: 6px; }
+    .restaurant-selector { width:100%; border:var(--border); border-radius:12px; padding:10px 12px; font-size:14px; color:var(--color-text-primary); background:var(--color-background-primary); }
+    .restaurant-hero { border:var(--border); border-radius:20px; background:#f3f3f4; overflow:hidden; margin-bottom:14px; box-shadow:0 1px 0 rgba(0,0,0,0.04) inset; }
+    .restaurant-hero-banner { background:#f7e7db; color:#ef6426; font-weight:600; font-size:14px; padding:12px 14px; display:none; align-items:center; gap:8px; }
+    .restaurant-hero-body { padding:14px; }
+    .restaurant-name { font-size:32px; font-weight:700; color:#0d1b3a; margin-bottom:8px; letter-spacing:0.2px; }
+    .restaurant-meta { font-size:16px; font-weight:600; color:#0d1b3a; margin-bottom:10px; }
+    .restaurant-cuisines { color:#ef6426; font-size:13px; font-weight:600; text-decoration:underline; margin-bottom:10px; }
+    .restaurant-line { font-size:14px; color:#4a5568; margin:5px 0; }
+    .restaurant-line strong { color:#111827; }
 
     @media (max-width: 980px) {
       body { padding: 10px; }
@@ -122,6 +133,7 @@
       .cart-panel { width: 100%; }
       .menu-grid { grid-template-columns: 1fr; }
       .payment-wrap { grid-template-columns: 1fr; }
+      .restaurant-name { font-size:26px; }
     }
 
     @media (max-width: 640px) {
@@ -156,6 +168,22 @@
       <section class="content active" id="view-order">
         <div class="customer-wrap">
           <div class="menu-panel">
+            <div class="restaurant-selector-wrap">
+              <div class="restaurant-selector-label">Select restaurant</div>
+              <select id="restaurant-selector" class="restaurant-selector" onchange="onRestaurantChange(this.value)"></select>
+            </div>
+
+            <div class="restaurant-hero" id="restaurant-hero">
+              <div class="restaurant-hero-banner" id="restaurant-hero-banner">⚠️ Outlet is not accepting orders at the moment.</div>
+              <div class="restaurant-hero-body">
+                <div class="restaurant-name" id="restaurant-name">Restaurant</div>
+                <div class="restaurant-meta" id="restaurant-meta">4.1 (1.4K+ ratings) • ₹150 for two</div>
+                <div class="restaurant-cuisines" id="restaurant-cuisines">South Indian, Indian</div>
+                <div class="restaurant-line"><strong>Outlet</strong> <span id="restaurant-address">Miyapur</span></div>
+                <div class="restaurant-line" id="restaurant-status-line"><strong>Open & accepting orders</strong></div>
+              </div>
+            </div>
+
             <div class="order-type-tabs">
               <div class="order-type-tab active" onclick="setOrderType(this, 'dine')">Dine-in</div>
               <div class="order-type-tab" onclick="setOrderType(this, 'takeaway')">Takeaway</div>
@@ -224,10 +252,12 @@
   </div>
 
   <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
-  <script src="/socket.io/socket.io.js"></script>
   <script>
-    const socket = io();
+    const CLIENT_SELECTED_RESTAURANT_KEY = 'foodorder_selected_restaurant_code';
     let state = { menu: [], tables: [], orders: [], stats: {} };
+    let restaurants = [];
+    let selectedRestaurantCode = 'default';
+    let statePollTimer = null;
     let cart = [];
     let currentCat = 'all';
     let orderType = 'dine';
@@ -351,6 +381,82 @@
         throw new Error(err.error || 'Request failed');
       }
       return res.json();
+    }
+
+    function selectedRestaurant() {
+      return restaurants.find((r) => String(r.code) === String(selectedRestaurantCode)) || null;
+    }
+
+    function renderRestaurantSelector() {
+      const select = document.getElementById('restaurant-selector');
+      if (!select) return;
+      select.innerHTML = (restaurants || []).map((restaurant) => `
+        <option value="${escapeHtml(restaurant.code)}">${escapeHtml(restaurant.name)}</option>
+      `).join('');
+
+      const hasSelected = (restaurants || []).some((restaurant) => String(restaurant.code) === String(selectedRestaurantCode));
+      if (!hasSelected && restaurants.length) {
+        selectedRestaurantCode = restaurants[0].code;
+      }
+      if (selectedRestaurantCode) select.value = selectedRestaurantCode;
+    }
+
+    function renderRestaurantHero() {
+      const restaurant = state.restaurant || selectedRestaurant();
+      if (!restaurant) return;
+
+      const banner = document.getElementById('restaurant-hero-banner');
+      const name = document.getElementById('restaurant-name');
+      const meta = document.getElementById('restaurant-meta');
+      const cuisines = document.getElementById('restaurant-cuisines');
+      const address = document.getElementById('restaurant-address');
+      const status = document.getElementById('restaurant-status-line');
+      const isAccepting = restaurant.acceptingOrders !== false;
+      const reopenNote = String(restaurant.reopenNote || '').trim();
+
+      name.textContent = String(restaurant.name || 'Restaurant');
+      meta.textContent = `${Number(restaurant.rating || 4.1).toFixed(1)} (${restaurant.ratingCount || '1.4K+ ratings'}) • ₹${Number(restaurant.priceForTwo || 150)} for two`;
+      cuisines.textContent = String(restaurant.cuisines || 'South Indian, Indian');
+      address.textContent = String(restaurant.address || 'Miyapur');
+
+      if (isAccepting) {
+        banner.style.display = 'none';
+        status.innerHTML = '<strong>Open & accepting orders</strong>';
+      } else {
+        banner.style.display = 'flex';
+        banner.textContent = `⚠️ Uh-oh! Outlet is not accepting orders at the moment.${reopenNote ? ` They should be back by ${reopenNote}` : ''}`;
+        status.innerHTML = '<strong>Closed & not delivering</strong>';
+      }
+    }
+
+    async function loadRestaurants() {
+      const data = await api('/api/public/restaurants');
+      restaurants = Array.isArray(data?.restaurants) ? data.restaurants : [];
+      if (!restaurants.length) {
+        restaurants = [{ code: 'default', name: 'Default Restaurant', address: 'Miyapur', cuisines: 'South Indian, Indian', rating: 4.1, ratingCount: '1.4K+ ratings', priceForTwo: 150, acceptingOrders: true }];
+      }
+      renderRestaurantSelector();
+    }
+
+    async function loadStateForSelectedRestaurant() {
+      const code = String(selectedRestaurantCode || 'default').trim() || 'default';
+      const data = await api(`/api/public/state?restaurant=${encodeURIComponent(code)}`);
+      state = data;
+      renderAll();
+    }
+
+    async function onRestaurantChange(code) {
+      selectedRestaurantCode = String(code || '').trim() || 'default';
+      try { localStorage.setItem(CLIENT_SELECTED_RESTAURANT_KEY, selectedRestaurantCode); } catch (_error) {}
+
+      cart = [];
+      renderCart();
+      clientOrderIds = new Set();
+      saveStoredNumberArray(CLIENT_ORDER_IDS_KEY, []);
+      setPendingPaymentOrder(0);
+      setSelectedTrackingOrder(0);
+
+      await loadStateForSelectedRestaurant();
     }
 
     function switchView(view, el) {
@@ -517,6 +623,12 @@
     }
 
     async function placeOrder() {
+      const restaurant = selectedRestaurant();
+      if (restaurant && restaurant.acceptingOrders === false) {
+        alert('This outlet is currently not accepting orders.');
+        return;
+      }
+
       syncCartWithMenu();
       renderCart();
       if (!cart.length) return;
@@ -536,6 +648,7 @@
 
         const notes = [baseNotes, scheduleText].filter(Boolean).join(' | ');
         const response = await api('/api/orders', 'POST', {
+          restaurantCode: selectedRestaurantCode,
           orderType,
           tableNumber,
           notes,
@@ -711,6 +824,7 @@
     }
 
     function renderAll() {
+      renderRestaurantHero();
       syncCartWithMenu();
       renderDineTableOptions();
       renderCategoryTabs();
@@ -724,11 +838,6 @@
       const now = new Date();
       document.getElementById('time').textContent = `Live · ${now.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}`;
     }
-
-    socket.on('state:update', (newState) => {
-      state = newState;
-      renderAll();
-    });
 
     (async function init() {
       updateTime();
@@ -751,9 +860,10 @@
       clientOrderIds = new Set(loadStoredNumberArray(CLIENT_ORDER_IDS_KEY));
       setSelectedTrackingOrder(Number(localStorage.getItem(CLIENT_SELECTED_ORDER_KEY) || 0));
       setPendingPaymentOrder(Number(localStorage.getItem(CLIENT_PENDING_ORDER_KEY) || 0));
+      selectedRestaurantCode = String(localStorage.getItem(CLIENT_SELECTED_RESTAURANT_KEY) || 'default').trim() || 'default';
 
-      const data = await api('/api/state');
-      state = data;
+      await loadRestaurants();
+      await loadStateForSelectedRestaurant();
       try {
         razorpayConfig = await api('/api/payments/razorpay/config');
       } catch (_error) {
@@ -766,6 +876,14 @@
       }
 
       renderAll();
+
+      if (statePollTimer) clearInterval(statePollTimer);
+      statePollTimer = setInterval(async () => {
+        try {
+          await loadStateForSelectedRestaurant();
+        } catch (_error) {
+        }
+      }, 5000);
     })();
   </script>
 </body>

@@ -129,6 +129,13 @@ CREATE TABLE IF NOT EXISTS restaurants (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   code TEXT NOT NULL UNIQUE,
   name TEXT NOT NULL,
+  address TEXT NOT NULL DEFAULT '',
+  cuisines TEXT NOT NULL DEFAULT 'South Indian, Indian',
+  rating REAL NOT NULL DEFAULT 4.1,
+  rating_count TEXT NOT NULL DEFAULT '1.4K+ ratings',
+  price_for_two INTEGER NOT NULL DEFAULT 150,
+  accepting_orders INTEGER NOT NULL DEFAULT 1,
+  reopen_note TEXT,
   created_at INTEGER NOT NULL,
   updated_at INTEGER NOT NULL
 );
@@ -348,6 +355,22 @@ function resolveRestaurantByCode(restaurantCode, fallbackName = '') {
   return db.prepare('SELECT id, code, name FROM restaurants WHERE code = ?').get(normalizedCode);
 }
 
+function resolveRestaurantByCodeOrName(input) {
+  const text = String(input || '').trim();
+  if (!text) return null;
+  const normalizedCode = normalizeRestaurantCode(text);
+  return db.prepare(
+    `SELECT id, code, name, address, cuisines,
+            rating, rating_count as ratingCount,
+            price_for_two as priceForTwo,
+            accepting_orders as acceptingOrders,
+            reopen_note as reopenNote
+     FROM restaurants
+     WHERE lower(code) = lower(?) OR lower(name) = lower(?)
+     LIMIT 1`
+  ).get(normalizedCode || text, text);
+}
+
 function parseCsvLine(line) {
   const values = [];
   let current = '';
@@ -436,8 +459,38 @@ function seedDatabase() {
   const now = Date.now();
   const defaultRestaurant = db.prepare('SELECT id FROM restaurants WHERE code = ?').get('default');
   if (!defaultRestaurant) {
-    db.prepare('INSERT INTO restaurants (code, name, created_at, updated_at) VALUES (?, ?, ?, ?)')
-      .run('default', 'Default Restaurant', now, now);
+    db.prepare('INSERT INTO restaurants (code, name, address, created_at, updated_at) VALUES (?, ?, ?, ?, ?)')
+      .run('default', 'Default Restaurant', 'Miyapur', now, now);
+  }
+
+  const restaurantColumns = db.prepare('PRAGMA table_info(restaurants)').all();
+  const hasAddress = restaurantColumns.some((col) => col.name === 'address');
+  const hasCuisines = restaurantColumns.some((col) => col.name === 'cuisines');
+  const hasRating = restaurantColumns.some((col) => col.name === 'rating');
+  const hasRatingCount = restaurantColumns.some((col) => col.name === 'rating_count');
+  const hasPriceForTwo = restaurantColumns.some((col) => col.name === 'price_for_two');
+  const hasAcceptingOrders = restaurantColumns.some((col) => col.name === 'accepting_orders');
+  const hasReopenNote = restaurantColumns.some((col) => col.name === 'reopen_note');
+  if (!hasAddress) db.exec("ALTER TABLE restaurants ADD COLUMN address TEXT NOT NULL DEFAULT ''");
+  if (!hasCuisines) db.exec("ALTER TABLE restaurants ADD COLUMN cuisines TEXT NOT NULL DEFAULT 'South Indian, Indian'");
+  if (!hasRating) db.exec('ALTER TABLE restaurants ADD COLUMN rating REAL NOT NULL DEFAULT 4.1');
+  if (!hasRatingCount) db.exec("ALTER TABLE restaurants ADD COLUMN rating_count TEXT NOT NULL DEFAULT '1.4K+ ratings'");
+  if (!hasPriceForTwo) db.exec('ALTER TABLE restaurants ADD COLUMN price_for_two INTEGER NOT NULL DEFAULT 150');
+  if (!hasAcceptingOrders) db.exec('ALTER TABLE restaurants ADD COLUMN accepting_orders INTEGER NOT NULL DEFAULT 1');
+  if (!hasReopenNote) db.exec('ALTER TABLE restaurants ADD COLUMN reopen_note TEXT');
+
+  db.exec("UPDATE restaurants SET cuisines = 'South Indian, Indian' WHERE cuisines IS NULL OR trim(cuisines) = ''");
+  db.exec("UPDATE restaurants SET rating_count = '1.4K+ ratings' WHERE rating_count IS NULL OR trim(rating_count) = ''");
+  db.exec('UPDATE restaurants SET price_for_two = 150 WHERE price_for_two IS NULL OR price_for_two < 1');
+  db.exec('UPDATE restaurants SET accepting_orders = 1 WHERE accepting_orders IS NULL');
+
+  const gandikota = db.prepare('SELECT id FROM restaurants WHERE code = ?').get('gandikota_dosa');
+  if (gandikota?.id) {
+    db.prepare(
+      `UPDATE restaurants
+       SET address = ?, cuisines = ?, rating = ?, rating_count = ?, price_for_two = ?, accepting_orders = ?, reopen_note = ?, updated_at = ?
+       WHERE id = ?`
+    ).run('Miyapur', 'South Indian, Indian', 4.1, '1.4K+ ratings', 150, 0, '5:30 PM', Date.now(), gandikota.id);
   }
   const defaultRestaurantRow = db.prepare('SELECT id, code, name FROM restaurants WHERE code = ?').get('default');
 
@@ -831,11 +884,54 @@ app.get('/api/state', (_req, res) => {
   res.json(getState(1));
 });
 
+app.get('/api/public/restaurants', (_req, res) => {
+  const rows = db.prepare(
+    `SELECT id, code, name, address, cuisines,
+            rating, rating_count as ratingCount,
+            price_for_two as priceForTwo,
+            accepting_orders as acceptingOrders,
+            reopen_note as reopenNote
+     FROM restaurants
+     ORDER BY name ASC`
+  ).all();
+
+  return res.json({
+    restaurants: rows.map((row) => ({
+      ...row,
+      acceptingOrders: Number(row.acceptingOrders) === 1
+    }))
+  });
+});
+
+app.get('/api/public/state', (req, res) => {
+  const restaurantInput = String(req.query.restaurant || req.query.restaurantCode || 'default').trim();
+  const restaurant = resolveRestaurantByCodeOrName(restaurantInput) || resolveRestaurantByCodeOrName('default');
+  if (!restaurant?.id) return res.status(404).json({ error: 'Restaurant not found' });
+
+  return res.json({
+    ...getState(restaurant.id),
+    restaurant: {
+      id: restaurant.id,
+      code: restaurant.code,
+      name: restaurant.name,
+      address: restaurant.address || 'Miyapur',
+      cuisines: restaurant.cuisines || 'South Indian, Indian',
+      rating: Number(restaurant.rating || 4.1),
+      ratingCount: restaurant.ratingCount || '1.4K+ ratings',
+      priceForTwo: Number(restaurant.priceForTwo || 150),
+      acceptingOrders: Number(restaurant.acceptingOrders) === 1,
+      reopenNote: restaurant.reopenNote || null
+    }
+  });
+});
+
 app.post('/api/management/register', (req, res) => {
   const authCount = Number(db.prepare('SELECT COUNT(*) as count FROM restaurant_auth').get().count || 0);
+  const privilegedSession = getManagementSession(req);
+  const isPrivileged = Boolean(privilegedSession?.restaurantId);
   const setupKey = String(req.body?.setupKey || '').trim();
   const firstBootstrap = authCount === 0;
-  if (!firstBootstrap) {
+  if (!firstBootstrap && !isPrivileged) {
     if (!MANAGEMENT_SETUP_KEY) {
       return res.status(403).json({ error: 'Management setup key is not configured' });
     }
@@ -846,6 +942,13 @@ app.post('/api/management/register', (req, res) => {
 
   const restaurantInput = String(req.body?.restaurant || req.body?.restaurantCode || '').trim();
   const restaurantName = String(req.body?.restaurantName || restaurantInput || '').trim();
+  const address = String(req.body?.address || '').trim();
+  const cuisines = String(req.body?.cuisines || '').trim();
+  const rating = Number(req.body?.rating || 4.1);
+  const ratingCount = String(req.body?.ratingCount || '').trim();
+  const priceForTwo = Number(req.body?.priceForTwo || 150);
+  const acceptingOrders = req.body?.acceptingOrders === false ? 0 : 1;
+  const reopenNote = String(req.body?.reopenNote || '').trim();
   const password = String(req.body?.password || '').trim();
   if (!restaurantInput) return res.status(400).json({ error: 'Restaurant name or code is required' });
   if (password.length < 6) return res.status(400).json({ error: 'Password must be at least 6 characters' });
@@ -854,6 +957,23 @@ app.post('/api/management/register', (req, res) => {
   if (!restaurantCode) return res.status(400).json({ error: 'Invalid restaurant code' });
 
   const restaurant = resolveRestaurantByCode(restaurantCode, restaurantName || restaurantInput);
+  db.prepare(
+    `UPDATE restaurants
+     SET address = ?, cuisines = ?, rating = ?, rating_count = ?, price_for_two = ?, accepting_orders = ?, reopen_note = ?, updated_at = ?
+     WHERE id = ?`
+  ).run(
+    address || 'Miyapur',
+    cuisines || 'South Indian, Indian',
+    Number.isFinite(rating) && rating > 0 ? rating : 4.1,
+    ratingCount || '1.4K+ ratings',
+    Number.isFinite(priceForTwo) && priceForTwo > 0 ? Math.round(priceForTwo) : 150,
+    acceptingOrders,
+    reopenNote || null,
+    Date.now(),
+    restaurant.id
+  );
+
+  const updatedRestaurant = db.prepare('SELECT id, code, name FROM restaurants WHERE id = ?').get(restaurant.id);
   const credentials = hashPasswordWithSalt(password);
   db.prepare(
     `INSERT INTO restaurant_auth (restaurant_id, password_hash, password_salt, updated_at)
@@ -862,7 +982,7 @@ app.post('/api/management/register', (req, res) => {
      DO UPDATE SET password_hash = excluded.password_hash, password_salt = excluded.password_salt, updated_at = excluded.updated_at`
   ).run(restaurant.id, credentials.hash, credentials.salt, Date.now());
 
-  return res.json({ ok: true, restaurant: { id: restaurant.id, code: restaurant.code, name: restaurant.name } });
+  return res.json({ ok: true, restaurant: { id: updatedRestaurant.id, code: updatedRestaurant.code, name: updatedRestaurant.name } });
 });
 
 app.post('/api/management/login', (req, res) => {
@@ -1079,7 +1199,10 @@ app.get('/api/audit-logs', requireManagementAuth, (req, res) => {
 app.post('/api/orders', (req, res) => {
   try {
     const session = getManagementSession(req);
-    const restaurantId = session?.restaurantId || 1;
+    const requestedRestaurant = session
+      ? null
+      : resolveRestaurantByCodeOrName(String(req.body?.restaurantCode || req.body?.restaurant || 'default').trim());
+    const restaurantId = session?.restaurantId || requestedRestaurant?.id || 1;
     const actor = session ? `${getActor(req)}:${session.restaurantCode}` : getActor(req);
     const { orderType, tableNumber, notes, items } = req.body || {};
     if (!['dine', 'takeaway', 'preorder'].includes(orderType)) {
