@@ -1036,14 +1036,59 @@ app.post('/api/management/login', (req, res) => {
 });
 
 app.get('/api/management/state', requireManagementAuth, (req, res) => {
+  const restaurant = db.prepare(
+    `SELECT id, code, name, address, cuisines,
+            rating, rating_count as ratingCount,
+            price_for_two as priceForTwo,
+            accepting_orders as acceptingOrders,
+            reopen_note as reopenNote
+     FROM restaurants
+     WHERE id = ?`
+  ).get(req.management.restaurantId);
+
   return res.json({
     ...getState(req.management.restaurantId),
-    restaurant: {
-      id: req.management.restaurantId,
-      code: req.management.restaurantCode,
-      name: req.management.restaurantName
-    }
+    restaurant: restaurant
+      ? {
+        ...restaurant,
+        acceptingOrders: Number(restaurant.acceptingOrders) === 1
+      }
+      : {
+        id: req.management.restaurantId,
+        code: req.management.restaurantCode,
+        name: req.management.restaurantName,
+        address: 'Miyapur',
+        cuisines: 'South Indian, Indian',
+        rating: 4.1,
+        ratingCount: '1.4K+ ratings',
+        priceForTwo: 150,
+        acceptingOrders: true,
+        reopenNote: null
+      }
   });
+});
+
+app.post('/api/management/outlet-status', requireManagementAuth, (req, res) => {
+  const actor = `${getActor(req)}:${req.management.restaurantCode}`;
+  const restaurantId = req.management.restaurantId;
+  const acceptingOrders = req.body?.acceptingOrders === false ? 0 : 1;
+  const reopenNoteInput = String(req.body?.reopenNote || '').trim();
+  const reopenNote = acceptingOrders === 1 ? null : (reopenNoteInput || null);
+
+  db.prepare(
+    'UPDATE restaurants SET accepting_orders = ?, reopen_note = ?, updated_at = ? WHERE id = ?'
+  ).run(acceptingOrders, reopenNote, Date.now(), restaurantId);
+
+  logAudit({
+    action: 'outlet_status_updated',
+    entityType: 'restaurant',
+    entityId: restaurantId,
+    actor,
+    details: { acceptingOrders: Boolean(acceptingOrders), reopenNote }
+  });
+
+  broadcastState();
+  return res.json({ ok: true, acceptingOrders: Boolean(acceptingOrders), reopenNote });
 });
 
 app.post('/api/menu/:id/availability', requireManagementAuth, (req, res) => {

@@ -396,7 +396,8 @@
 
       const hasSelected = (restaurants || []).some((restaurant) => String(restaurant.code) === String(selectedRestaurantCode));
       if (!hasSelected && restaurants.length) {
-        selectedRestaurantCode = restaurants[0].code;
+        const hasGandikota = restaurants.some((restaurant) => String(restaurant.code) === 'gandikotadosa');
+        selectedRestaurantCode = hasGandikota ? 'gandikotadosa' : restaurants[0].code;
       }
       if (selectedRestaurantCode) select.value = selectedRestaurantCode;
     }
@@ -432,8 +433,15 @@
     async function loadRestaurants() {
       const data = await api('/api/public/restaurants');
       restaurants = Array.isArray(data?.restaurants) ? data.restaurants : [];
+      const hasGandikota = restaurants.some((restaurant) => String(restaurant.code) === 'gandikotadosa');
+      if (hasGandikota) {
+        restaurants = restaurants.filter((restaurant) => String(restaurant.code) !== 'default');
+      }
       if (!restaurants.length) {
         restaurants = [{ code: 'default', name: 'Default Restaurant', address: 'Miyapur', cuisines: 'South Indian, Indian', rating: 4.1, ratingCount: '1.4K+ ratings', priceForTwo: 150, acceptingOrders: true }];
+      }
+      if (!selectedRestaurantCode || !restaurants.some((restaurant) => String(restaurant.code) === String(selectedRestaurantCode))) {
+        selectedRestaurantCode = hasGandikota ? 'gandikotadosa' : restaurants[0].code;
       }
       renderRestaurantSelector();
     }

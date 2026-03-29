@@ -210,6 +210,14 @@
     .auth-error { font-size:12px; color:#B42318; min-height:16px; margin-top:8px; }
     .topbar-right { display:flex; align-items:center; gap:8px; }
     .rest-chip { font-size:11px; border:var(--border); border-radius:999px; padding:4px 8px; color:var(--color-text-secondary); background:var(--color-background-secondary); }
+    .outlet-card { border:var(--border); border-radius:var(--border-radius-md); background:var(--color-background-primary); padding:10px 12px; margin-bottom:12px; }
+    .outlet-row { display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; }
+    .toggle-wrap { display:flex; align-items:center; gap:8px; }
+    .switch { position:relative; width:46px; height:24px; background:var(--color-background-secondary); border:var(--border); border-radius:999px; cursor:pointer; }
+    .switch::after { content:''; position:absolute; top:2px; left:2px; width:18px; height:18px; border-radius:999px; background:white; transition:all .2s ease; box-shadow:0 1px 2px rgba(0,0,0,.18); }
+    .switch.on { background:var(--accent-light); border-color:#9FE1CB; }
+    .switch.on::after { left:24px; background:var(--accent); }
+    .outlet-input { border:var(--border); border-radius:var(--border-radius-md); padding:6px 8px; font-size:12px; color:var(--color-text-primary); background:var(--color-background-primary); min-width:150px; }
   </style>
 </head>
 <body>
@@ -257,6 +265,23 @@
         </div>
 
         <div class="section">
+          <div class="outlet-card">
+            <div class="outlet-row">
+              <div>
+                <div class="menu-admin-name">Outlet availability</div>
+                <div class="menu-admin-meta" id="outlet-status-note">Loading status...</div>
+              </div>
+              <div class="toggle-wrap">
+                <div class="switch" id="outlet-open-switch" onclick="toggleOutletStatus()"></div>
+                <span id="outlet-open-label" class="menu-admin-meta">Closed</span>
+              </div>
+            </div>
+            <div class="outlet-row" style="margin-top:8px;">
+              <input id="outlet-reopen-note" class="outlet-input" placeholder="Back online at (e.g., 5:30 PM)" />
+              <button class="small-btn" onclick="saveOutletStatusNote()">Save reopen time</button>
+            </div>
+          </div>
+
           <h3>Recent orders</h3>
           <div class="orders-grid" id="recent"></div>
         </div>
@@ -378,6 +403,7 @@
     let autoPrintEnabled = false;
     let knownOrderIds = new Set();
     const tableOrderDrafts = {};
+    let outletOpen = true;
 
     function money(v) { return `₹${Number(v || 0).toLocaleString('en-IN')}`; }
 
@@ -608,6 +634,48 @@
       if (removeInput) {
         const maxTable = state.tables.length ? Math.max(...state.tables.map((t) => t.tableNumber)) : 1;
         removeInput.max = String(maxTable);
+      }
+
+      const restaurant = state.restaurant || {};
+      outletOpen = restaurant.acceptingOrders !== false;
+      const switchEl = document.getElementById('outlet-open-switch');
+      const labelEl = document.getElementById('outlet-open-label');
+      const noteEl = document.getElementById('outlet-status-note');
+      const reopenInput = document.getElementById('outlet-reopen-note');
+      if (switchEl && labelEl && noteEl && reopenInput) {
+        switchEl.classList.toggle('on', outletOpen);
+        labelEl.textContent = outletOpen ? 'Open' : 'Closed';
+        noteEl.textContent = outletOpen
+          ? 'Outlet is accepting orders now.'
+          : `Outlet is closed.${restaurant.reopenNote ? ` Back by ${restaurant.reopenNote}` : ''}`;
+        reopenInput.value = restaurant.reopenNote || '';
+      }
+    }
+
+    async function toggleOutletStatus() {
+      try {
+        const nextOpen = !outletOpen;
+        const reopenNote = String(document.getElementById('outlet-reopen-note').value || '').trim();
+        await api('/api/management/outlet-status', 'POST', {
+          acceptingOrders: nextOpen,
+          reopenNote
+        });
+        await fetchManagementState();
+      } catch (e) {
+        alert(e.message);
+      }
+    }
+
+    async function saveOutletStatusNote() {
+      try {
+        const reopenNote = String(document.getElementById('outlet-reopen-note').value || '').trim();
+        await api('/api/management/outlet-status', 'POST', {
+          acceptingOrders: outletOpen,
+          reopenNote
+        });
+        await fetchManagementState();
+      } catch (e) {
+        alert(e.message);
       }
     }
 
