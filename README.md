@@ -124,45 +124,22 @@ npm start
 
 ---
 
-## Supabase Migration (SQLite -> Postgres)
 
-This project now includes one-command migration tooling:
+---
 
-- Schema file: `scripts/supabase_schema.sql`
-- Migration script: `scripts/migrate_to_supabase.js`
+## Persistent SQLite on Render
 
-### 1) Create Supabase project
-- In Supabase, copy the Postgres URI from `Settings -> Database -> Connection string`.
+For production, use SQLite with a persistent disk on Render:
 
-### 2) Set env vars and run
+1. In Render, attach a persistent disk (e.g., 1GB) at `/data`.
+2. Set these environment variables:
+  - `DATA_DIR=/data`
+  - `DB_FILE=/data/restaurant.db`
+  - `DB_BACKUP_DIR=/data/backups`
+  - `REQUIRE_PERSISTENT_DB=true`
+3. Deploy as usual. Your data will persist across deploys and restarts.
 
-For a fresh database without importing SQLite data:
-
-```powershell
-$env:DATABASE_URL='<supabase_uri>'
-$env:PGSSL='true'
-npm run supabase:init
-```
-
-PowerShell:
-
-```powershell
-$env:DATABASE_URL='<supabase_uri>'
-$env:PGSSL='true'
-npm run migrate:supabase
-```
-
-Bash:
-
-```bash
-DATABASE_URL="<supabase_uri>" PGSSL=true npm run migrate:supabase
-```
-
-### 3) Optional controls
-- `SQLITE_FILE` to point to a non-default SQLite file.
-- `npm run migrate:supabase:data-only` if schema already exists.
-
-Note: current runtime server remains SQLite-based. This migration automates data transfer into Supabase.
+No cloud database required—everything is managed on Render.
 
 ---
 

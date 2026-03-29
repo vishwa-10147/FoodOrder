@@ -6,9 +6,7 @@
   "scripts": {
     "start": "node server.js",
     "dev": "node server.js",
-    "supabase:init": "node scripts/migrate_to_supabase.js --schema-only --apply-schema --keep-target-data",
-    "migrate:supabase": "node scripts/migrate_to_supabase.js --apply-schema",
-    "migrate:supabase:data-only": "node scripts/migrate_to_supabase.js"
+    
   },
   "keywords": [],
   "author": "",
