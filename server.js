@@ -1,7 +1,32 @@
+const helmet = require('helmet');
+const compression = require('compression');
+const cors = require('cors');
+const { body, validationResult } = require('express-validator');
+app.use(helmet());
+app.use(compression());
+app.use(cors({ origin: ['https://foodorder-2dy8.onrender.com'] })); // Restrict to your domain
+
+// Example: Input validation for /api/order
+app.post('/api/order',
+  body('items').isArray({ min: 1 }).withMessage('Order must have at least one item'),
+  body('customerName').isString().trim().notEmpty().withMessage('Customer name required'),
+  async (req, res) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ errors: errors.array() });
+    }
+    // ...existing order logic...
+    res.status(200).json({ message: 'Order received (sample endpoint)' });
+  }
+);
 const bcrypt = require('bcrypt');
 require('dotenv').config();
 
 const express = require('express');
+const helmet = require('helmet');
+const compression = require('compression');
+const cors = require('cors');
+const { body, validationResult } = require('express-validator');
 const http = require('http');
 const path = require('path');
 const fs = require('fs');
@@ -15,6 +40,11 @@ const multer = require('multer');
 
 const app = express();
 const server = http.createServer(app);
+
+// Security and performance middleware
+app.use(helmet());
+app.use(compression());
+app.use(cors({ origin: ['https://foodorder-2dy8.onrender.com'] })); // Restrict to your deployed domain
 const io = new Server(server);
 
 const DATABASE_URL = process.env.DATABASE_URL;
@@ -661,6 +691,20 @@ app.use((req, res, next) => {
   return jsonParser(req, res, next);
 });
 app.use(express.static(__dirname));
+
+// Example: Input validation for order endpoint
+app.post('/api/order',
+  body('items').isArray({ min: 1 }).withMessage('Order must have at least one item'),
+  body('customerName').isString().trim().notEmpty().withMessage('Customer name required'),
+  async (req, res) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ errors: errors.array() });
+    }
+    // ...existing order logic...
+    res.json({ success: true, message: 'Order validated!' });
+  }
+);
 
 app.get('/', (_req, res) => {
   res.redirect('/client.html');
