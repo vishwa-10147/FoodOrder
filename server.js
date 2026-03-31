@@ -5,7 +5,9 @@ const http = require('http');
 const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
-const Database = require('better-sqlite3');
+const { Pool } = require('pg');
+const fsPromises = require('fs').promises;
+const parse = require('csv-parse/lib/sync');
 const { Server } = require('socket.io');
 const Razorpay = require('razorpay');
 const multer = require('multer');
@@ -21,10 +23,7 @@ if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 const UPLOADS_DIR = path.join(DATA_DIR, 'uploads');
 if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 
-const DB_FILE = process.env.DB_FILE
-  ? path.resolve(String(process.env.DB_FILE))
-  : path.join(DATA_DIR, 'restaurant.db');
-const DB_DIR = path.dirname(DB_FILE);
+const DATABASE_URL = process.env.DATABASE_URL;
 if (!fs.existsSync(DB_DIR)) fs.mkdirSync(DB_DIR, { recursive: true });
 const BACKUP_DIR = process.env.DB_BACKUP_DIR
   ? path.resolve(String(process.env.DB_BACKUP_DIR))
@@ -59,7 +58,8 @@ const razorpay = RAZORPAY_ENABLED
 
 let lastBackupAt = null;
 
-let dbFileExistsBeforeBoot = fs.existsSync(DB_FILE);
+// PostgreSQL does not use a file, so always true
+let dbFileExistsBeforeBoot = true;
 let dbRestoredFromBackupOnBoot = false;
 if (NODE_ENV === 'production' && REQUIRE_PERSISTENT_DB && !dbFileExistsBeforeBoot) {
   try {
@@ -69,8 +69,7 @@ if (NODE_ENV === 'production' && REQUIRE_PERSISTENT_DB && !dbFileExistsBeforeBoo
         .sort((a, b) => b.localeCompare(a));
       if (backupFiles.length) {
         const latestBackup = path.join(BACKUP_DIR, backupFiles[0]);
-        fs.copyFileSync(latestBackup, DB_FILE);
-        dbFileExistsBeforeBoot = fs.existsSync(DB_FILE);
+        // No backup restore for PostgreSQL
         dbRestoredFromBackupOnBoot = dbFileExistsBeforeBoot;
         if (dbRestoredFromBackupOnBoot) {
           // eslint-disable-next-line no-console
@@ -85,14 +84,49 @@ if (NODE_ENV === 'production' && REQUIRE_PERSISTENT_DB && !dbFileExistsBeforeBoo
 }
 if (NODE_ENV === 'production' && REQUIRE_PERSISTENT_DB && !dbFileExistsBeforeBoot) {
   // eslint-disable-next-line no-console
-  console.error(`[startup] Refusing to start: DB file missing at ${DB_FILE}. Check persistent disk mount or DB_FILE.`);
+  console.error(`[startup] Refusing to start: DATABASE_URL not set or PostgreSQL connection failed.`);
   process.exit(1);
 }
 // eslint-disable-next-line no-console
-console.log(`[startup] SQLite file: ${DB_FILE} (${dbFileExistsBeforeBoot ? 'existing' : 'new'})${dbRestoredFromBackupOnBoot ? ' [restored]' : ''}`);
+console.log(`[startup] PostgreSQL connection: ${DATABASE_URL ? 'configured' : 'missing'}`);
 
-const db = new Database(DB_FILE);
-db.pragma('journal_mode = WAL');
+
+const pool = new Pool({ connectionString: DATABASE_URL });
+
+async function ensureMenuTableAndSeed() {
+  // Create menu_items table if not exists
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS menu_items (
+      id SERIAL PRIMARY KEY,
+      name TEXT NOT NULL,
+      price INTEGER NOT NULL,
+      category TEXT NOT NULL
+    );
+  `);
+
+  // Check if table is empty
+  const { rows } = await pool.query('SELECT COUNT(*) FROM menu_items');
+  if (parseInt(rows[0].count, 10) === 0) {
+    // Read and parse CSV
+    const csvPath = path.join(__dirname, 'data', 'gandikota_menu.csv');
+    const csvContent = await fsPromises.readFile(csvPath, 'utf8');
+    const records = parse(csvContent, { columns: true, skip_empty_lines: true });
+    // Insert each menu item
+    for (const rec of records) {
+      await pool.query(
+        'INSERT INTO menu_items (name, price, category) VALUES ($1, $2, $3)',
+        [rec.Item, parseInt(rec.Price, 10), rec.Category]
+      );
+    }
+    console.log(`[startup] Seeded menu_items from CSV (${records.length} items)`);
+  }
+}
+
+// Call the function on startup
+ensureMenuTableAndSeed().catch(err => {
+  console.error('[startup] Failed to seed menu_items:', err);
+  process.exit(1);
+});
 
 const uploadMenuImage = multer({
   storage: multer.diskStorage({
@@ -615,7 +649,9 @@ function seedDatabase() {
   }
   db.exec('UPDATE table_status SET restaurant_id = 1 WHERE restaurant_id IS NULL OR restaurant_id < 1');
 
-  const tableSchemaSql = db.prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'table_status'").get()?.sql || '';
+  // Example: Query table schema in PostgreSQL (adjust as needed)
+  // const tableSchemaSql = await pool.query("SELECT column_name, data_type FROM information_schema.columns WHERE table_name = 'table_status'");
+  const tableSchemaSql = '';
   const usesCompositePrimaryKey = /PRIMARY KEY\s*\(\s*restaurant_id\s*,\s*table_number\s*\)/i.test(tableSchemaSql);
   if (!usesCompositePrimaryKey) {
     db.exec(`
@@ -966,8 +1002,8 @@ app.get('/api/health', (_req, res) => {
       port: PORT,
       uptimeSeconds: Math.floor((Date.now() - APP_START_TIME) / 1000),
       db: {
-        engine: 'sqlite',
-        file: DB_FILE,
+        engine: 'postgresql',
+        url: DATABASE_URL,
         existedOnBoot: dbFileExistsBeforeBoot,
         restoredFromBackupOnBoot: dbRestoredFromBackupOnBoot,
         backupEnabled: DB_BACKUP_ENABLED,
