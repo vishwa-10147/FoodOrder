@@ -1500,9 +1500,3 @@ server.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT}`);
 });
 
-if (DB_BACKUP_ENABLED) {
-  runDatabaseBackup('startup');
-  setInterval(() => {
-    runDatabaseBackup('interval');
-  }, DB_BACKUP_INTERVAL_MINUTES * 60 * 1000).unref();
-}
