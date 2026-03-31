@@ -1,6 +1,6 @@
 # FoodOrder – Restaurant Order Management System
 
-A real-time restaurant ordering app with separate **Client** and **Management** pages, powered by **Node.js + Express + Socket.IO + SQLite**.
+A real-time restaurant ordering app with separate **Client** and **Management** pages, powered by **Node.js + Express + Socket.IO + PostgreSQL**.
 
 - Client page: place dine-in / takeaway / pre-order requests, track orders, and pay.
 - Management page: monitor tables and kitchen pipeline, manage menu availability/items, switch table states, and view audit logs.
@@ -11,7 +11,7 @@ A real-time restaurant ordering app with separate **Client** and **Management** 
 ## Tech Stack
 
 - **Backend:** Node.js, Express 5, Socket.IO
-- **Database:** SQLite (`better-sqlite3`)
+- **Database:** PostgreSQL (`pg`)
 - **Frontend:** Plain HTML/CSS/JS (`client.html`, `management.html`)
 - **Utilities:** in-memory API rate limiter, scheduled DB backups
 

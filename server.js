@@ -8,7 +8,7 @@ const fs = require('fs');
 const crypto = require('crypto');
 const { Pool } = require('pg');
 const fsPromises = require('fs').promises;
-const parse = require('csv-parse/lib/sync');
+const { parse } = require('csv-parse/sync');
 const { Server } = require('socket.io');
 const Razorpay = require('razorpay');
 const multer = require('multer');
@@ -17,18 +17,9 @@ const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
 
-const DATA_DIR = process.env.DATA_DIR
-  ? path.resolve(String(process.env.DATA_DIR))
-  : path.join(__dirname, 'data');
-if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
-const UPLOADS_DIR = path.join(DATA_DIR, 'uploads');
-if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
-
 const DATABASE_URL = process.env.DATABASE_URL;
-if (!fs.existsSync(DB_DIR)) fs.mkdirSync(DB_DIR, { recursive: true });
-const BACKUP_DIR = process.env.DB_BACKUP_DIR
-  ? path.resolve(String(process.env.DB_BACKUP_DIR))
-  : path.join(DATA_DIR, 'backups');
+const UPLOADS_DIR = path.join(__dirname, 'uploads');
+if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 
 const APP_START_TIME = Date.now();
 const PORT = Number(process.env.PORT || 3000);
@@ -37,9 +28,6 @@ const NODE_ENV = process.env.NODE_ENV || 'development';
 const RATE_LIMIT_WINDOW_MS = Math.max(1000, Number(process.env.RATE_LIMIT_WINDOW_MS || 60 * 1000));
 const RATE_LIMIT_MAX = Math.max(1, Number(process.env.RATE_LIMIT_MAX || 240));
 
-const DB_BACKUP_ENABLED = String(process.env.DB_BACKUP_ENABLED || 'true') !== 'false';
-const DB_BACKUP_INTERVAL_MINUTES = Math.max(1, Number(process.env.DB_BACKUP_INTERVAL_MINUTES || 60));
-const DB_BACKUP_RETENTION_COUNT = Math.max(1, Number(process.env.DB_BACKUP_RETENTION_COUNT || 48));
 const REQUIRE_PERSISTENT_DB = process.env.REQUIRE_PERSISTENT_DB == null
   ? NODE_ENV === 'production'
   : String(process.env.REQUIRE_PERSISTENT_DB) === 'true';
@@ -60,35 +48,6 @@ const razorpay = RAZORPAY_ENABLED
 let lastBackupAt = null;
 
 // PostgreSQL does not use a file, so always true
-let dbFileExistsBeforeBoot = true;
-let dbRestoredFromBackupOnBoot = false;
-if (NODE_ENV === 'production' && REQUIRE_PERSISTENT_DB && !dbFileExistsBeforeBoot) {
-  try {
-    if (fs.existsSync(BACKUP_DIR)) {
-      const backupFiles = fs.readdirSync(BACKUP_DIR)
-        .filter((name) => /^restaurant-\d{8}T\d{6}Z\.db$/.test(name))
-        .sort((a, b) => b.localeCompare(a));
-      if (backupFiles.length) {
-        const latestBackup = path.join(BACKUP_DIR, backupFiles[0]);
-        // No backup restore for PostgreSQL
-        dbRestoredFromBackupOnBoot = dbFileExistsBeforeBoot;
-        if (dbRestoredFromBackupOnBoot) {
-          // eslint-disable-next-line no-console
-          console.log(`[startup] Restored DB from backup: ${latestBackup}`);
-        }
-      }
-    }
-  } catch (error) {
-    // eslint-disable-next-line no-console
-    console.error('[startup] Backup restore attempt failed', error.message);
-  }
-}
-if (NODE_ENV === 'production' && REQUIRE_PERSISTENT_DB && !dbFileExistsBeforeBoot) {
-  // eslint-disable-next-line no-console
-  console.error(`[startup] Refusing to start: DATABASE_URL not set or PostgreSQL connection failed.`);
-  process.exit(1);
-}
-// eslint-disable-next-line no-console
 console.log(`[startup] PostgreSQL connection: ${DATABASE_URL ? 'configured' : 'missing'}`);
 
 
