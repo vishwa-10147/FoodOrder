@@ -1,3 +1,4 @@
+const bcrypt = require('bcrypt');
 require('dotenv').config();
 
 const express = require('express');
@@ -122,11 +123,38 @@ async function ensureMenuTableAndSeed() {
   }
 }
 
-// Call the function on startup
-ensureMenuTableAndSeed().catch(err => {
-  console.error('[startup] Failed to seed menu_items:', err);
-  process.exit(1);
-});
+
+// Function to create users table and seed initial user
+async function ensureUsersTableAndSeed() {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS users (
+      id SERIAL PRIMARY KEY,
+      username VARCHAR(255) UNIQUE NOT NULL,
+      password VARCHAR(255) NOT NULL
+    );
+  `);
+  // Check if the user already exists
+  const res = await pool.query('SELECT * FROM users WHERE username = $1', ['Gandikota Dosa']);
+  if (res.rows.length === 0) {
+    const hashedPassword = await bcrypt.hash('Dosa1234', 10);
+    await pool.query(
+      'INSERT INTO users (username, password) VALUES ($1, $2)',
+      ['Gandikota Dosa', hashedPassword]
+    );
+    console.log('[startup] Seeded user: Gandikota Dosa');
+  }
+}
+
+// Call the functions on startup
+(async () => {
+  try {
+    await ensureMenuTableAndSeed();
+    await ensureUsersTableAndSeed();
+  } catch (err) {
+    console.error('[startup] Failed to seed database:', err);
+    process.exit(1);
+  }
+})();
 
 const uploadMenuImage = multer({
   storage: multer.diskStorage({
