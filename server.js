@@ -460,7 +460,11 @@ function parseMenuCsv(csvText) {
 
 function seedDatabase() {
   const now = Date.now();
-  const defaultRestaurant = db.prepare('SELECT id FROM restaurants WHERE code = ?').get('default');
+  // TODO: Replace with PostgreSQL query to get the default restaurant by code
+  // Example using 'pg' client:
+  // const res = await pgClient.query('SELECT id FROM restaurants WHERE code = $1', ['default']);
+  // const defaultRestaurant = res.rows[0];
+  const defaultRestaurant = null; // Placeholder until migration is complete
   if (!defaultRestaurant) {
     db.prepare('INSERT INTO restaurants (code, name, address, created_at, updated_at) VALUES (?, ?, ?, ?, ?)')
       .run('default', 'Default Restaurant', 'Miyapur', now, now);
