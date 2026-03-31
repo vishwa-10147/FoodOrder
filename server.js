@@ -848,41 +848,34 @@ app.post('/api/management/register', (req, res) => { // Register a new restauran
   return res.json({ ok: true, restaurant: { id: updatedRestaurant.id, code: updatedRestaurant.code, name: updatedRestaurant.name } });
 });
 
-app.post('/api/management/login', (req, res) => { // Login for management
-  const restaurantInput = String(req.body?.restaurant || '').trim();
+app.post('/api/management/login', async (req, res) => { // Login for management
+  const username = String(req.body?.restaurant || '').trim();
   const password = String(req.body?.password || '').trim();
-  if (!restaurantInput || !password) {
+  if (!username || !password) {
     return res.status(400).json({ error: 'Restaurant and password are required' });
   }
 
-  const normalizedCode = normalizeRestaurantCode(restaurantInput);
-  const restaurant = db.prepare(
-    `SELECT id, code, name
-     FROM restaurants
-     WHERE lower(code) = lower(?) OR lower(name) = lower(?)
-     LIMIT 1`
-  ).get(normalizedCode || restaurantInput, restaurantInput);
-  if (!restaurant) return res.status(401).json({ error: 'Invalid restaurant or password' });
+  try {
+    const { rows } = await pool.query(
+      'SELECT id, username, password FROM users WHERE lower(username) = lower($1) LIMIT 1',
+      [username]
+    );
+    if (rows.length === 0) return res.status(401).json({ error: 'Invalid restaurant or password' });
 
-  const authRow = db.prepare(
-    'SELECT restaurant_id as restaurantId, password_hash as passwordHash, password_salt as passwordSalt FROM restaurant_auth WHERE restaurant_id = ?'
-  ).get(restaurant.id);
-  if (!authRow) return res.status(401).json({ error: 'Invalid restaurant or password' });
+    const user = rows[0];
+    const valid = await bcrypt.compare(password, user.password);
+    if (!valid) return res.status(401).json({ error: 'Invalid restaurant or password' });
 
-  const valid = verifyPassword(password, authRow.passwordSalt, authRow.passwordHash);
-  if (!valid) return res.status(401).json({ error: 'Invalid restaurant or password' });
-
-  const token = createManagementToken({
-    restaurantId: restaurant.id,
-    restaurantCode: restaurant.code,
-    restaurantName: restaurant.name
-  });
-
-  return res.json({
-    ok: true,
-    token,
-    restaurant: { id: restaurant.id, code: restaurant.code, name: restaurant.name }
-  });
+    // You may want to generate a token here, or just return success
+    return res.json({
+      ok: true,
+      // token, // If you use JWT or session tokens
+      restaurant: { id: user.id, code: user.username, name: user.username }
+    });
+  } catch (err) {
+    console.error('Login error:', err);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
 });
 
 app.get('/api/management/state', requireManagementAuth, (req, res) => {
