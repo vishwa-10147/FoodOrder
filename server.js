@@ -1,24 +1,4 @@
-const helmet = require('helmet');
-const compression = require('compression');
-const cors = require('cors');
-const { body, validationResult } = require('express-validator');
-app.use(helmet());
-app.use(compression());
-app.use(cors({ origin: ['https://foodorder-2dy8.onrender.com'] })); // Restrict to your domain
-
-// Example: Input validation for /api/order
-app.post('/api/order',
-  body('items').isArray({ min: 1 }).withMessage('Order must have at least one item'),
-  body('customerName').isString().trim().notEmpty().withMessage('Customer name required'),
-  async (req, res) => {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return res.status(400).json({ errors: errors.array() });
-    }
-    // ...existing order logic...
-    res.status(200).json({ message: 'Order received (sample endpoint)' });
-  }
-);
+// ...existing code...
 const bcrypt = require('bcrypt');
 require('dotenv').config();
 
