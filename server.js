@@ -51,9 +51,9 @@ let lastBackupAt = null;
 console.log(`[startup] PostgreSQL connection: ${DATABASE_URL ? 'configured' : 'missing'}`);
 
 
-const pool = new Pool({ connectionString: DATABASE_URL });
+const pool = new Pool({ connectionString: DATABASE_URL }); // Initialize PostgreSQL connection
 
-async function ensureMenuTableAndSeed() {
+async function ensureMenuTableAndSeed() { // Ensure menu_items table exists and seed data
   // Create menu_items table if not exists
   await pool.query(`
     CREATE TABLE IF NOT EXISTS menu_items (
@@ -84,7 +84,7 @@ async function ensureMenuTableAndSeed() {
 
 
 // Function to create users table and seed initial user
-async function ensureUsersTableAndSeed() {
+async function ensureUsersTableAndSeed() { // Ensure users table exists and seed initial user
   await pool.query(`
     CREATE TABLE IF NOT EXISTS users (
       id SERIAL PRIMARY KEY,
@@ -115,7 +115,7 @@ async function ensureUsersTableAndSeed() {
   }
 })();
 
-const uploadMenuImage = multer({
+const uploadMenuImage = multer({ // Middleware for handling menu image uploads
   storage: multer.diskStorage({
     destination: (_req, _file, cb) => cb(null, UPLOADS_DIR),
     filename: (_req, file, cb) => {
@@ -176,7 +176,7 @@ function createMemoryRateLimiter({ windowMs, max, keyPrefix, skip }) {
   };
 }
 
-async function runDatabaseBackup(reason = 'scheduled') {
+async function runDatabaseBackup(reason = 'scheduled') { // Function to run database backup
   if (!DB_BACKUP_ENABLED) return;
 
   try {
@@ -291,7 +291,7 @@ CREATE TABLE IF NOT EXISTS restaurant_auth (
 );
 `);
 
-const seedMenu = [
+const seedMenu = [ // Seed menu items for the restaurant
   { name: 'Butter chicken', description: 'Creamy tomato gravy', price: 180, emoji: '🍛', category: 'mains' },
   { name: 'Paneer tikka', description: 'Grilled cottage cheese', price: 160, emoji: '🫕', category: 'starters' },
   { name: 'Dal makhani', description: 'Slow-cooked black lentils', price: 140, emoji: '🥘', category: 'mains' },
@@ -902,7 +902,7 @@ function getStats(orders, tables) {
   };
 }
 
-function getState(restaurantId = 1) {
+function getState(restaurantId = 1) { // Get the current state of the restaurant
   const menu = db.prepare(
     'SELECT id, restaurant_id as restaurantId, name, description as desc, price, emoji, category as cat, image_url as imageUrl, available FROM menu_items WHERE restaurant_id = ? ORDER BY id ASC'
   ).all(restaurantId);
@@ -917,7 +917,7 @@ function getState(restaurantId = 1) {
   };
 }
 
-function markOrderPaid({ orderId, actor, paymentMethod, paymentGatewayOrderId = null, paymentGatewayPaymentId = null }) {
+function markOrderPaid({ orderId, actor, paymentMethod, paymentGatewayOrderId = null, paymentGatewayPaymentId = null }) { // Mark an order as paid
   const order = db.prepare(
     'SELECT id, restaurant_id as restaurantId, order_type as orderType, table_number as tableNumber, paid FROM orders WHERE id = ?'
   ).get(orderId);
@@ -971,7 +971,7 @@ app.get('/management', (_req, res) => {
   res.redirect('/management.html');
 });
 
-const apiRateLimiter = createMemoryRateLimiter({
+const apiRateLimiter = createMemoryRateLimiter({ // Rate limiter for API requests
   windowMs: RATE_LIMIT_WINDOW_MS,
   max: RATE_LIMIT_MAX,
   keyPrefix: 'api',
@@ -980,7 +980,7 @@ const apiRateLimiter = createMemoryRateLimiter({
 
 app.use('/api', apiRateLimiter);
 
-app.get('/api/health', (_req, res) => {
+app.get('/api/health', (_req, res) => { // Health check endpoint
   try {
     db.prepare('SELECT 1 as ok').get();
     return res.json({
@@ -1003,7 +1003,7 @@ app.get('/api/health', (_req, res) => {
   }
 });
 
-app.get('/api/state', (_req, res) => {
+app.get('/api/state', (_req, res) => { // Get the state of the restaurant
   res.json(getState(1));
 });
 
@@ -1048,7 +1048,7 @@ app.get('/api/public/state', (req, res) => {
   });
 });
 
-app.post('/api/management/register', (req, res) => {
+app.post('/api/management/register', (req, res) => { // Register a new restaurant
   const authCount = Number(db.prepare('SELECT COUNT(*) as count FROM restaurant_auth').get().count || 0);
   const privilegedSession = getManagementSession(req);
   const isPrivileged = Boolean(privilegedSession?.restaurantId);
@@ -1121,7 +1121,7 @@ app.post('/api/management/register', (req, res) => {
   return res.json({ ok: true, restaurant: { id: updatedRestaurant.id, code: updatedRestaurant.code, name: updatedRestaurant.name } });
 });
 
-app.post('/api/management/login', (req, res) => {
+app.post('/api/management/login', (req, res) => { // Login for management
   const restaurantInput = String(req.body?.restaurant || '').trim();
   const password = String(req.body?.password || '').trim();
   if (!restaurantInput || !password) {
