@@ -872,7 +872,14 @@ async function initDatabase() {
   }
 }
 
-app.use(helmet());
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      scriptSrc: ["'self'", "'unsafe-inline'"],
+      scriptSrcAttr: ["'unsafe-inline'"]
+    }
+  }
+}));
 app.use(compression());
 app.use(cors());
 
