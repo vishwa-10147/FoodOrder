@@ -241,14 +241,14 @@
       <div class="auth-title">Management Access</div>
       <div class="auth-sub">Login or register a restaurant account.</div>
       <div class="auth-tabs">
-        <button class="auth-tab active" id="auth-tab-login">Login</button>
-        <button class="auth-tab" id="auth-tab-register">Register</button>
+        <button class="auth-tab active" id="auth-tab-login" onclick="setAuthMode('login')">Login</button>
+        <button class="auth-tab" id="auth-tab-register" onclick="setAuthMode('register')">Register</button>
       </div>
 
       <div class="auth-panel active" id="auth-panel-login">
         <input id="login-restaurant" class="auth-input" placeholder="Restaurant name or code" />
         <input id="login-password" class="auth-input" type="password" placeholder="Password" />
-        <button class="auth-btn" id="login-btn">Login</button>
+        <button class="auth-btn" id="login-btn" onclick="loginManagement()">Login</button>
         <div class="auth-error" id="login-error"></div>
       </div>
 
@@ -258,7 +258,7 @@
         <input id="register-password" class="auth-input" type="password" placeholder="Password" />
         <input id="register-confirm-password" class="auth-input" type="password" placeholder="Confirm password" />
         <input id="register-setup-key" class="auth-input" type="password" placeholder="Setup key (required after first account)" />
-        <button class="auth-btn" id="register-btn">Register & Login</button>
+        <button class="auth-btn" id="register-btn" onclick="registerManagement()">Register & Login</button>
         <div class="auth-error" id="register-error"></div>
         <div class="auth-note" id="register-note"></div>
       </div>
@@ -272,10 +272,10 @@
         <p>Management Site</p>
       </div>
       <nav class="nav">
-        <div class="nav-item active" data-view="dashboard" id="nav-dashboard">Dashboard</div>
-        <div class="nav-item" data-view="kitchen" id="nav-kitchen">Kitchen <span class="badge" id="k-badge">0</span></div>
-        <div class="nav-item" data-view="tracking" id="nav-tracking">Tracking</div>
-        <div class="nav-item" data-view="menu" id="nav-menu">Menu</div>
+        <div class="nav-item active" data-view="dashboard" id="nav-dashboard" onclick="switchView('dashboard', this)">Dashboard</div>
+        <div class="nav-item" data-view="kitchen" id="nav-kitchen" onclick="switchView('kitchen', this)">Kitchen <span class="badge" id="k-badge">0</span></div>
+        <div class="nav-item" data-view="tracking" id="nav-tracking" onclick="switchView('tracking', this)">Tracking</div>
+        <div class="nav-item" data-view="menu" id="nav-menu" onclick="switchView('menu', this)">Menu</div>
       </nav>
     </aside>
 
@@ -285,7 +285,7 @@
         <div class="topbar-right">
           <div class="rest-chip" id="rest-chip">Restaurant</div>
           <div class="time" id="time">Live</div>
-          <button class="small-btn" id="logout-btn">Logout</button>
+          <button class="small-btn" id="logout-btn" onclick="logoutManagement()">Logout</button>
         </div>
       </div>
 
@@ -305,13 +305,13 @@
                 <div class="menu-admin-meta" id="outlet-status-note">Loading status...</div>
               </div>
               <div class="toggle-wrap">
-                <div class="switch" id="outlet-open-switch"></div>
+                <div class="switch" id="outlet-open-switch" onclick="toggleOutletStatus()"></div>
                 <span id="outlet-open-label" class="menu-admin-meta">Closed</span>
               </div>
             </div>
             <div class="outlet-row" style="margin-top:8px;">
               <input id="outlet-reopen-note" class="outlet-input" placeholder="Back online at (e.g., 5:30 PM)" />
-              <button class="small-btn" id="save-reopen-btn">Save reopen time</button>
+              <button class="small-btn" id="save-reopen-btn" onclick="saveOutletStatusNote()">Save reopen time</button>
             </div>
           </div>
 
@@ -323,9 +323,9 @@
           <div class="section-head">
             <h3>Table status (click free table to toggle · click ordering/occupied table to view menu)</h3>
             <div class="table-actions">
-              <button class="small-btn" id="add-table-btn">+ Add table</button>
+              <button class="small-btn" id="add-table-btn" onclick="addTable()">+ Add table</button>
               <input id="remove-table-number" class="table-input" type="number" min="1" placeholder="Table #" />
-              <button class="small-btn" id="remove-table-btn">- Remove table</button>
+              <button class="small-btn" id="remove-table-btn" onclick="removeTable()">- Remove table</button>
             </div>
           </div>
           <div class="table-layout">
@@ -342,8 +342,8 @@
         <div class="section">
           <h3>Print controls</h3>
           <div class="print-controls">
-            <button class="small-btn" id="auto-print-toggle">Auto print: Off</button>
-            <button class="small-btn" id="print-latest-btn">Select printer & print latest</button>
+            <button class="small-btn" id="auto-print-toggle" onclick="toggleAutoPrint()">Auto print: Off</button>
+            <button class="small-btn" id="print-latest-btn" onclick="printLatestOrder()">Select printer & print latest</button>
             <div class="print-note">Printer selection appears in the browser print dialog.</div>
           </div>
         </div>
@@ -385,9 +385,9 @@
             <div class="menu-admin-form-actions">
               <div class="menu-admin-meta">Customize menu and upload food images.</div>
               <div style="display:flex; gap:6px;">
-                <button class="small-btn" id="add-menu-item-btn">+ Add item</button>
-                <button class="small-btn" id="delete-menu-item-btn">- Delete item</button>
-                <button class="small-btn" id="import-menu-csv-btn">Import CSV</button>
+                <button class="small-btn" id="add-menu-item-btn" onclick="addMenuItem()">+ Add item</button>
+                <button class="small-btn" id="delete-menu-item-btn" onclick="deleteMenuItemByInput()">- Delete item</button>
+                <button class="small-btn" id="import-menu-csv-btn" onclick="importMenuCsv()">Import CSV</button>
               </div>
             </div>
             <div class="menu-admin-form-actions" style="justify-content:flex-start;">
@@ -405,7 +405,7 @@
             <h3>Order list</h3>
             <div class="order-export-controls">
               <input id="order-export-date" class="order-export-date" type="date" />
-              <button class="small-btn" id="download-orders-btn">Download Excel</button>
+              <button class="small-btn" id="download-orders-btn" onclick="downloadOrdersByDateExcel()">Download Excel</button>
             </div>
           </div>
           <div class="menu-orders-list" id="menu-order-list"></div>
@@ -419,8 +419,8 @@
       <div class="modal-title">Remove table</div>
       <div class="modal-desc" id="remove-modal-text">Are you sure?</div>
       <div class="modal-actions">
-        <button class="small-btn" id="remove-modal-cancel">Cancel</button>
-        <button class="small-btn" id="remove-modal-confirm">Remove</button>
+        <button class="small-btn" id="remove-modal-cancel" onclick="closeRemoveModal()">Cancel</button>
+        <button class="small-btn" id="remove-modal-confirm" onclick="confirmRemoveTable()">Remove</button>
       </div>
     </div>
   </div>
@@ -584,16 +584,51 @@
         localStorage.setItem(MANAGEMENT_TOKEN_KEY, JSON.stringify(managementAuth));
         document.getElementById('login-password').value = '';
         await startManagementSession();
+      } catch (e) {
+        error.textContent = e.message || 'Login failed';
+      }
+    }
 
-        // Registration block (if needed)
-        const registerResult = await fetch('/api/management/register', {
+    async function registerManagement() {
+      const restaurant = String(document.getElementById('register-restaurant').value || '').trim();
+      const restaurantName = String(document.getElementById('register-restaurant-name').value || '').trim();
+      const password = String(document.getElementById('register-password').value || '').trim();
+      const confirmPassword = String(document.getElementById('register-confirm-password').value || '').trim();
+      const setupKey = String(document.getElementById('register-setup-key').value || '').trim();
+      const error = document.getElementById('register-error');
+      const note = document.getElementById('register-note');
+      error.textContent = '';
+      note.textContent = '';
+
+      if (!restaurant || !password || !confirmPassword) {
+        error.textContent = 'Restaurant code, password, and confirm password are required.';
+        return;
+      }
+      if (password.length < 6) {
+        error.textContent = 'Password must be at least 6 characters.';
+        return;
+      }
+      if (password !== confirmPassword) {
+        error.textContent = 'Password and confirm password do not match.';
+        return;
+      }
+
+      try {
+        const payload = {
+          restaurant,
+          restaurantName: restaurantName || restaurant,
+          password
+        };
+        if (setupKey) payload.setupKey = setupKey;
+
+        const result = await fetch('/api/management/register', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload)
         });
-        const registerData = await registerResult.json().catch(() => ({}));
-        if (!registerResult.ok) {
-          throw new Error(registerData.error || 'Registration failed');
+        const data = await result.json().catch(() => ({}));
+        if (!result.ok) {
+          throw new Error(data.error || 'Registration failed');
         }
 
         note.textContent = 'Registration successful. Logging you in...';
