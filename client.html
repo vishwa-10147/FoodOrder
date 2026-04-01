@@ -492,7 +492,35 @@
       const code = String(selectedRestaurantCode || 'default').trim() || 'default';
       const data = await api(`/api/public/state?restaurant=${encodeURIComponent(code)}`);
       state = data;
-      renderAll();
+    }
+
+    function getActiveView() {
+      const active = document.querySelector('.content.active');
+      if (!active || !active.id) return 'order';
+      return String(active.id).replace('view-', '') || 'order';
+    }
+
+    function renderActiveViewOnly() {
+      const activeView = getActiveView();
+      renderRestaurantHero();
+
+      if (activeView === 'order') {
+        syncCartWithMenu();
+        renderDineTableOptions();
+        renderCategoryTabs();
+        renderMenu();
+        renderCart();
+        return;
+      }
+
+      if (activeView === 'tracking') {
+        renderTracking();
+        return;
+      }
+
+      if (activeView === 'payment') {
+        renderPayment();
+      }
     }
 
     async function onRestaurantChange(code) {
@@ -618,12 +646,21 @@
             <span class="price">${money(m.price)}</span>
             <div class="menu-qty-controls">
               <button class="menu-qty-btn" ${Number(m.available) === 1 ? '' : 'disabled'} onclick="updateCartQty(${m.id}, -1)">-</button>
-              <span class="menu-qty-value">${qtyByMenuItemId.get(Number(m.id)) || 0}</span>
+              <span class="menu-qty-value" id="menu-qty-${m.id}">${qtyByMenuItemId.get(Number(m.id)) || 0}</span>
               <button class="menu-qty-btn" ${Number(m.available) === 1 ? '' : 'disabled'} onclick="updateCartQty(${m.id}, 1)">+</button>
             </div>
           </div>
         </div>
       `).join('');
+    }
+
+    function refreshMenuItemQty(menuItemId) {
+      const id = Number(menuItemId || 0);
+      if (!id) return;
+      const qtyEl = document.getElementById(`menu-qty-${id}`);
+      if (!qtyEl) return;
+      const line = cart.find((entry) => Number(entry.menuItemId) === id);
+      qtyEl.textContent = String(Number(line?.qty || 0));
     }
 
     function addToCart(menuItemId) {
@@ -636,6 +673,7 @@
       if (existing) existing.qty += 1;
       else cart.push({ menuItemId, name: item.name, price: item.price, qty: 1 });
       renderCart();
+      refreshMenuItemQty(menuItemId);
     }
 
     function updateCartQty(menuItemId, delta) {
@@ -658,6 +696,7 @@
         line.qty = nextQty;
       }
       renderCart();
+      refreshMenuItemQty(id);
     }
 
     function syncCartWithMenu() {
@@ -1004,9 +1043,10 @@
       statePollTimer = setInterval(async () => {
         try {
           await loadStateForSelectedRestaurant();
+          renderActiveViewOnly();
         } catch (_error) {
         }
-      }, 5000);
+      }, 7000);
     })();
   </script>
 </body>
