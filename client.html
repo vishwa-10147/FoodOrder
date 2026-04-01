@@ -40,9 +40,9 @@
     .content { display: none; flex: 1; padding: 22px; overflow-y: auto; }
     .content.active { display: block; }
 
-    .customer-wrap { display:flex; gap:16px; }
+    .customer-wrap { display:flex; flex-direction:column; gap:16px; }
     .menu-panel { flex:1; }
-    .cart-panel { width:260px; flex-shrink:0; }
+    .cart-panel { width:100%; flex-shrink:0; position:sticky; top:0; z-index:2; }
     .order-type-tabs { display:flex; background:#e8eef7; border-radius:12px; padding:4px; margin-bottom:14px; }
     .order-type-tab { flex:1; text-align:center; padding:8px 6px; font-size:12px; cursor:pointer; color:var(--color-text-secondary); border-radius:8px; transition: all 0.2s ease; }
     .order-type-tab.active { background:var(--color-background-primary); color:#0f172a; font-weight:600; box-shadow: 0 1px 2px rgba(2, 6, 23, 0.08); }
@@ -150,7 +150,7 @@
       .nav-item { white-space: nowrap; }
       .content { padding: 12px; }
       .customer-wrap { flex-direction: column; }
-      .cart-panel { width: 100%; }
+      .cart-panel { width: 100%; position: static; }
       .menu-grid { grid-template-columns: 1fr; }
       .payment-wrap { grid-template-columns: 1fr; }
       .restaurant-name { font-size:26px; }
@@ -190,6 +190,19 @@
 
       <section class="content active" id="view-order">
         <div class="customer-wrap">
+          <div class="cart-panel">
+            <div class="box">
+              <h3>Your order</h3>
+              <div class="cart-items" id="cart-items"><div class="empty">Nothing added yet</div></div>
+              <textarea id="notes" class="notes-input" rows="2" placeholder="Add notes (allergies, spice level...)"></textarea>
+              <div class="row"><span>Subtotal</span><span id="sub">₹0</span></div>
+              <div class="row"><span>CGST (2.5%)</span><span id="cgst">₹0</span></div>
+              <div class="row"><span>SGST (2.5%)</span><span id="sgst">₹0</span></div>
+              <div class="row total"><span>Grand Total</span><span id="total">₹0</span></div>
+              <button class="btn" id="place-btn" onclick="placeOrder()">Place order & checkout →</button>
+            </div>
+          </div>
+
           <div class="menu-panel">
             <div class="restaurant-selector-wrap">
               <div class="restaurant-selector-label">Select restaurant</div>
@@ -230,19 +243,6 @@
 
             <div class="menu-grid" id="menu"></div>
           </div>
-
-          <div class="cart-panel">
-            <div class="box">
-              <h3>Your order</h3>
-              <div class="cart-items" id="cart-items"><div class="empty">Nothing added yet</div></div>
-              <textarea id="notes" class="notes-input" rows="2" placeholder="Add notes (allergies, spice level...)"></textarea>
-              <div class="row"><span>Subtotal</span><span id="sub">₹0</span></div>
-              <div class="row"><span>CGST (2.5%)</span><span id="cgst">₹0</span></div>
-              <div class="row"><span>SGST (2.5%)</span><span id="sgst">₹0</span></div>
-              <div class="row total"><span>Grand Total</span><span id="total">₹0</span></div>
-              <button class="btn" id="place-btn" onclick="placeOrder()">Place order & checkout →</button>
-            </div>
-          </div>
         </div>
       </section>
 
@@ -263,7 +263,7 @@
               <input id="upi-id" class="field-input" type="text" placeholder="example@okhdfcbank" />
               <div class="upi-id-help">Enter your UPI ID to start a direct UPI collect flow.</div>
             </div>
-            <button class="btn" id="pay-btn" onclick="payOrder()">Pay ₹0</button>
+            <button class="btn" id="pay-btn" onclick="payOrder()">Continue payment</button>
           </div>
           <div class="pay-card">
             <h3>Order summary</h3>
@@ -293,7 +293,27 @@
     const CLIENT_SELECTED_ORDER_KEY = 'foodorder_selected_tracking_order_id';
     const CLIENT_PENDING_ORDER_KEY = 'foodorder_pending_payment_order_id';
     const CLIENT_UPI_ID_KEY = 'foodorder_upi_id';
+    const CLIENT_LAST_ORDER_KEY = 'foodorder_last_order_id';
+    const LOCAL_API_ORIGIN = 'http://localhost:3000';
     let clientOrderIds = new Set();
+
+    function resolveApiUrl(path) {
+      const rawPath = String(path || '').trim();
+      if (!rawPath) return rawPath;
+      if (/^https?:\/\//i.test(rawPath)) return rawPath;
+
+      const normalized = rawPath.startsWith('/') ? rawPath : `/${rawPath}`;
+      const host = String(window.location.hostname || '').toLowerCase();
+      const protocol = String(window.location.protocol || '').toLowerCase();
+      const port = String(window.location.port || '');
+      const isLocalHost = host === 'localhost' || host === '127.0.0.1';
+      const isBackendOrigin = isLocalHost && port === '3000';
+
+      if (protocol === 'file:' || (isLocalHost && !isBackendOrigin)) {
+        return `${LOCAL_API_ORIGIN}${normalized}`;
+      }
+      return normalized;
+    }
 
     function money(v) { return `₹${Number(v || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`; }
 
@@ -321,6 +341,94 @@
       if (!numericOrderId) return;
       clientOrderIds.add(numericOrderId);
       saveStoredNumberArray(CLIENT_ORDER_IDS_KEY, Array.from(clientOrderIds));
+      try { localStorage.setItem(CLIENT_LAST_ORDER_KEY, String(numericOrderId)); } catch (_error) {}
+    }
+
+    function getLastClientOrderId() {
+      try {
+        return Number(localStorage.getItem(CLIENT_LAST_ORDER_KEY) || 0) || 0;
+      } catch (_error) {
+        return 0;
+      }
+    }
+
+    function getPlaceOrderDraftKey() {
+      const code = String(selectedRestaurantCode || 'default').trim() || 'default';
+      return `foodorder_place_order_draft_${code}`;
+    }
+
+    function persistPlaceOrderDraft() {
+      const draft = {
+        cart: cart.map((line) => ({ menuItemId: Number(line.menuItemId), qty: Number(line.qty || 0) })).filter((line) => line.menuItemId > 0 && line.qty > 0),
+        notes: String(document.getElementById('notes')?.value || ''),
+        orderType: String(orderType || 'dine'),
+        scheduleDate: String(document.getElementById('schedule-date')?.value || ''),
+        scheduleTime: String(document.getElementById('schedule-time')?.value || ''),
+        category: String(currentCat || 'all')
+      };
+      try {
+        localStorage.setItem(getPlaceOrderDraftKey(), JSON.stringify(draft));
+      } catch (_error) {
+      }
+    }
+
+    function clearPlaceOrderDraft() {
+      try {
+        localStorage.removeItem(getPlaceOrderDraftKey());
+      } catch (_error) {
+      }
+    }
+
+    function applyOrderTypeUi(type) {
+      const safeType = ['dine', 'takeaway', 'preorder'].includes(String(type || '').toLowerCase())
+        ? String(type).toLowerCase()
+        : 'dine';
+      orderType = safeType;
+      document.querySelectorAll('.order-type-tab').forEach((tab) => {
+        const tabType = String(tab.getAttribute('onclick') || '').match(/'([a-z]+)'/)?.[1] || '';
+        tab.classList.toggle('active', tabType === safeType);
+      });
+      const showSchedule = safeType === 'takeaway' || safeType === 'preorder';
+      document.getElementById('eta').style.display = showSchedule ? 'flex' : 'none';
+      document.getElementById('schedule-group').style.display = showSchedule ? 'block' : 'none';
+      document.getElementById('table-group').style.display = 'none';
+    }
+
+    function restorePlaceOrderDraft() {
+      cart = [];
+      let parsed = null;
+      try {
+        parsed = JSON.parse(localStorage.getItem(getPlaceOrderDraftKey()) || 'null');
+      } catch (_error) {
+        parsed = null;
+      }
+      if (!parsed || typeof parsed !== 'object') return;
+
+      applyOrderTypeUi(parsed.orderType);
+      currentCat = String(parsed.category || 'all');
+
+      const dateInput = document.getElementById('schedule-date');
+      const timeInput = document.getElementById('schedule-time');
+      const notesInput = document.getElementById('notes');
+      if (dateInput && parsed.scheduleDate) dateInput.value = String(parsed.scheduleDate);
+      if (timeInput && parsed.scheduleTime) timeInput.value = String(parsed.scheduleTime);
+      if (notesInput) notesInput.value = String(parsed.notes || '');
+
+      const menuMap = new Map((state.menu || []).map((item) => [Number(item.id), item]));
+      const draftCart = Array.isArray(parsed.cart) ? parsed.cart : [];
+      cart = draftCart
+        .map((line) => {
+          const menuItem = menuMap.get(Number(line.menuItemId));
+          const qty = Number(line.qty || 0);
+          if (!menuItem || Number(menuItem.available) !== 1 || qty <= 0) return null;
+          return {
+            menuItemId: Number(menuItem.id),
+            name: menuItem.name,
+            price: Number(menuItem.price || 0),
+            qty
+          };
+        })
+        .filter(Boolean);
     }
 
     function setSelectedTrackingOrder(orderId) {
@@ -413,7 +521,7 @@
     }
 
     async function api(path, method = 'GET', body) {
-      const res = await fetch(path, {
+      const res = await fetch(resolveApiUrl(path), {
         method,
         headers: { 'Content-Type': 'application/json' },
         body: body ? JSON.stringify(body) : undefined
@@ -524,17 +632,18 @@
     }
 
     async function onRestaurantChange(code) {
+      persistPlaceOrderDraft();
       selectedRestaurantCode = String(code || '').trim() || 'default';
       try { localStorage.setItem(CLIENT_SELECTED_RESTAURANT_KEY, selectedRestaurantCode); } catch (_error) {}
 
-      cart = [];
-      renderCart();
       clientOrderIds = new Set();
       saveStoredNumberArray(CLIENT_ORDER_IDS_KEY, []);
       setPendingPaymentOrder(0);
       setSelectedTrackingOrder(0);
 
       await loadStateForSelectedRestaurant();
+      restorePlaceOrderDraft();
+      renderAll();
     }
 
     function switchView(view, el) {
@@ -560,6 +669,7 @@
       if (el) el.classList.add('active');
       currentCat = cat;
       renderMenu();
+      persistPlaceOrderDraft();
     }
 
     function renderCategoryTabs() {
@@ -588,6 +698,7 @@
       document.getElementById('eta').style.display = showSchedule ? 'flex' : 'none';
       document.getElementById('schedule-group').style.display = showSchedule ? 'block' : 'none';
       document.getElementById('table-group').style.display = 'none';
+      persistPlaceOrderDraft();
     }
 
     function getScheduleText() {
@@ -716,6 +827,7 @@
             price: source.price
           };
         });
+      persistPlaceOrderDraft();
     }
 
     function renderCart() {
@@ -723,6 +835,7 @@
       if (!cart.length) {
         box.innerHTML = '<div class="empty">Nothing added yet</div>';
         updateTotals(0);
+        persistPlaceOrderDraft();
         return;
       }
       box.innerHTML = cart.map((i) => `
@@ -737,6 +850,7 @@
         </div>
       `).join('');
       updateTotals(cart.reduce((s, i) => s + i.price * i.qty, 0));
+      persistPlaceOrderDraft();
     }
 
     function updateTotals(inclusiveTotal) {
@@ -793,6 +907,7 @@
         setSelectedTrackingOrder(response.order.id);
         cart = [];
         document.getElementById('notes').value = '';
+        clearPlaceOrderDraft();
         switchView('payment', document.querySelector('.nav-item[data-view="payment"]'));
         renderAll();
       } catch (e) {
@@ -824,27 +939,33 @@
         ${receiptMarkup(o)}
         <div class="progress"><div class="fill" style="width:${o.progress || 0}%;"></div></div>
         <div style="font-size:11px;color:var(--color-text-secondary);">${o.progress || 0}% complete · ${o.status === 'delivered' ? 'Delivered' : `ETA ${left}m`} · ${o.paid ? 'Paid' : 'Pending payment'}</div>
-        ${o.paid ? '' : '<div style="margin-top:10px;"><button class="btn" onclick="openRetryPayment(' + Number(o.id) + ')">Retry payment</button></div>'}
+        ${o.paid ? '' : '<div style="margin-top:10px;"><button class="btn" onclick="openRetryPayment(' + Number(o.id) + ')">Continue payment</button></div>'}
       `;
     }
 
     function renderPayment() {
-      const scopedOrders = getClientScopedOrders();
-      const order = scopedOrders.find((o) => o.id === pendingPaymentOrderId) || scopedOrders.find((o) => o.paid === 0) || null;
+      const scopedOrders = getClientScopedOrders().slice().sort((a, b) => Number(b.createdAt || 0) - Number(a.createdAt || 0));
+      const selectedPendingOrder = scopedOrders.find((o) => Number(o.id) === Number(pendingPaymentOrderId));
+      const lastOrderId = Number(getLastClientOrderId());
+      const latestCurrentOrder = scopedOrders.find((o) => Number(o.id) === lastOrderId);
+      const latestUnpaidOrder = scopedOrders.find((o) => Number(o.paid) !== 1) || null;
+      const order = selectedPendingOrder || latestCurrentOrder || latestUnpaidOrder || scopedOrders[0] || null;
       const sum = document.getElementById('pay-summary');
       const btn = document.getElementById('pay-btn');
 
       if (!order) {
         sum.innerHTML = '<div class="sum-row">No pending order</div>';
-        btn.textContent = 'Pay ₹0';
+        btn.textContent = 'Continue payment';
         btn.disabled = true;
         return;
       }
 
-      setPendingPaymentOrder(order.id);
       const isPending = Number(order.paid) !== 1;
+      if (isPending) {
+        setPendingPaymentOrder(order.id);
+      }
       btn.disabled = !isPending;
-      btn.textContent = isPending ? `Retry payment ${money(order.total)}` : 'Already paid';
+      btn.textContent = isPending ? 'Continue payment' : 'Already paid';
 
       sum.innerHTML = receiptMarkup(order);
     }
@@ -1009,6 +1130,13 @@
       const mi = String(today.getMinutes()).padStart(2, '0');
       timeInput.value = `${hh}:${mi}`;
 
+      const notesInput = document.getElementById('notes');
+      if (notesInput) {
+        notesInput.addEventListener('input', persistPlaceOrderDraft);
+      }
+      dateInput.addEventListener('change', persistPlaceOrderDraft);
+      timeInput.addEventListener('change', persistPlaceOrderDraft);
+
       clientOrderIds = new Set(loadStoredNumberArray(CLIENT_ORDER_IDS_KEY));
       setSelectedTrackingOrder(Number(localStorage.getItem(CLIENT_SELECTED_ORDER_KEY) || 0));
       setPendingPaymentOrder(Number(localStorage.getItem(CLIENT_PENDING_ORDER_KEY) || 0));
@@ -1026,6 +1154,8 @@
       if (upiIdInput) {
         try { upiIdInput.value = String(localStorage.getItem(CLIENT_UPI_ID_KEY) || ''); } catch (_error) {}
       }
+
+      restorePlaceOrderDraft();
 
       renderAll();
 
