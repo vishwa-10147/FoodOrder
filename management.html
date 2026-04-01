@@ -738,6 +738,10 @@
         return source === 'direct' ? 'Direct' : 'Partner';
     }
 
+    function getPaidOrders() {
+      return (state.orders || []).filter((order) => Number(order.paid) === 1);
+    }
+
     function eta(order) {
       if (order.status === 'delivered') return 'Delivered';
       const elapsed = Math.floor((Date.now() - order.createdAt) / 60000);
@@ -746,15 +750,16 @@
     }
 
     function renderDashboard() {
+      const paidOrders = getPaidOrders();
       const s = state.stats || {};
       document.getElementById('m-active').textContent = s.activeOrders || 0;
       document.getElementById('m-overdue').textContent = `${s.overdue || 0} overdue`;
       document.getElementById('m-tables').textContent = `${s.occupiedTables || 0}/${s.tableCapacity || 0}`;
       document.getElementById('m-wait').textContent = `${s.avgWait || 0}m`;
       document.getElementById('m-revenue').textContent = money(s.revenueToday || 0);
-      document.getElementById('k-badge').textContent = (state.orders || []).filter((o) => o.status === 'new').length;
+      document.getElementById('k-badge').textContent = paidOrders.filter((o) => o.status === 'new').length;
 
-      const recent = state.orders.slice(0, 3);
+      const recent = paidOrders.slice(0, 3);
       document.getElementById('recent').innerHTML = recent.length ? recent.map((o) => `
         <div class="order-card">
           <div class="order-head"><span class="order-id">${o.label}</span><div style="display:flex;gap:6px;">${badge(o)}${sourceBadge(o)}</div></div>
@@ -1001,8 +1006,9 @@
     }
 
     function renderKitchen() {
+      const paidOrders = getPaidOrders();
       const groups = { new: [], preparing: [], ready: [], delivered: [] };
-      state.orders.forEach((o) => groups[o.status]?.push(o));
+      paidOrders.forEach((o) => groups[o.status]?.push(o));
       ['new', 'preparing', 'ready', 'delivered'].forEach((st) => {
         document.getElementById(`c-${st}`).textContent = groups[st].length;
         document.getElementById(`l-${st}`).innerHTML = groups[st].length ? groups[st].map((o) => `
@@ -1019,18 +1025,19 @@
     }
 
     function renderTracking() {
-      if (!state.orders.length) {
+      const paidOrders = getPaidOrders();
+      if (!paidOrders.length) {
         document.getElementById('tpills').innerHTML = '';
         document.getElementById('tcard').textContent = 'No orders for tracking.';
         return;
       }
-      if (!selectedOrderId || !state.orders.some((o) => o.id === selectedOrderId)) selectedOrderId = state.orders[0].id;
+      if (!selectedOrderId || !paidOrders.some((o) => o.id === selectedOrderId)) selectedOrderId = paidOrders[0].id;
 
-      document.getElementById('tpills').innerHTML = state.orders.slice(0, 8).map((o) => `
+      document.getElementById('tpills').innerHTML = paidOrders.slice(0, 8).map((o) => `
         <div class="pill ${o.id === selectedOrderId ? 'active' : ''}" onclick="selectOrder(${o.id})">${o.label}</div>
       `).join('');
 
-      const o = state.orders.find((x) => x.id === selectedOrderId);
+      const o = paidOrders.find((x) => x.id === selectedOrderId);
       document.getElementById('tcard').innerHTML = `
         ${receiptMarkup(o)}
         <div class="progress"><div class="fill" style="width:${o.progress || 0}%"></div></div>
@@ -1244,11 +1251,12 @@
     }
 
     function printLatestOrder() {
-      if (!state.orders.length) {
+      const paidOrders = getPaidOrders();
+      if (!paidOrders.length) {
         alert('No orders available to print.');
         return;
       }
-      printOrder(state.orders[0]);
+      printOrder(paidOrders[0]);
     }
 
     function renderMenuManagement() {
@@ -1289,7 +1297,7 @@
       if (!orderContainer) return;
 
       // Keep latest orders first so staff sees newest bills at the top.
-      const orders = (state.orders || []).slice().sort((a, b) => Number(b.createdAt) - Number(a.createdAt));
+      const orders = getPaidOrders().slice().sort((a, b) => Number(b.createdAt) - Number(a.createdAt));
       if (!orders.length) {
         orderContainer.innerHTML = '<div class="menu-order-item"><div class="menu-order-time">No orders found.</div></div>';
       } else {
@@ -1321,7 +1329,7 @@
 
     function getOrdersForDate(dateText) {
       if (!dateText) return [];
-      return (state.orders || []).filter((order) => {
+      return getPaidOrders().filter((order) => {
         const d = new Date(order.createdAt || Date.now());
         const yyyy = d.getFullYear();
         const mm = String(d.getMonth() + 1).padStart(2, '0');

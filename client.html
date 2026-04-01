@@ -76,6 +76,9 @@
     .cart-item { display:flex; gap:8px; align-items:center; padding:6px 0; border-bottom:var(--border); }
     .cart-item:last-child { border-bottom:none; }
     .qty { width:20px; height:20px; border-radius:4px; background:var(--color-background-secondary); display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:500; }
+    .cart-qty-controls { display:flex; align-items:center; gap:6px; }
+    .cart-qty-btn { width:20px; height:20px; border-radius:5px; border:var(--border); background:var(--color-background-primary); color:var(--color-text-primary); font-size:13px; line-height:1; cursor:pointer; display:flex; align-items:center; justify-content:center; }
+    .cart-qty-btn:hover { background:var(--color-background-secondary); }
     .nm { flex:1; font-size:12px; color:var(--color-text-primary); }
     .pr { font-size:12px; color:var(--color-text-secondary); }
     .empty { font-size:12px; color:var(--color-text-tertiary); text-align:center; padding:20px 0; }
@@ -322,7 +325,17 @@
       pendingPaymentOrderId = Number(orderId || 0) || null;
       if (pendingPaymentOrderId) {
         try { localStorage.setItem(CLIENT_PENDING_ORDER_KEY, String(pendingPaymentOrderId)); } catch (_error) {}
+      } else {
+        try { localStorage.removeItem(CLIENT_PENDING_ORDER_KEY); } catch (_error) {}
       }
+    }
+
+    function openRetryPayment(orderId) {
+      const numericOrderId = Number(orderId || 0);
+      if (!numericOrderId) return;
+      setPendingPaymentOrder(numericOrderId);
+      switchView('payment', document.querySelector('.nav-item[data-view="payment"]'));
+      renderPayment();
     }
 
     function getClientScopedOrders() {
@@ -607,6 +620,23 @@
       renderCart();
     }
 
+    function updateCartQty(menuItemId, delta) {
+      const id = Number(menuItemId || 0);
+      const change = Number(delta || 0);
+      if (!id || !change) return;
+
+      const line = cart.find((entry) => Number(entry.menuItemId) === id);
+      if (!line) return;
+
+      const nextQty = Number(line.qty || 0) + change;
+      if (nextQty <= 0) {
+        cart = cart.filter((entry) => Number(entry.menuItemId) !== id);
+      } else {
+        line.qty = nextQty;
+      }
+      renderCart();
+    }
+
     function syncCartWithMenu() {
       const availableMap = new Map(
         (state.menu || [])
@@ -635,7 +665,11 @@
       }
       box.innerHTML = cart.map((i) => `
         <div class="cart-item">
-          <div class="qty">${i.qty}</div>
+          <div class="cart-qty-controls">
+            <button class="cart-qty-btn" onclick="updateCartQty(${i.menuItemId}, -1)">-</button>
+            <div class="qty">${i.qty}</div>
+            <button class="cart-qty-btn" onclick="updateCartQty(${i.menuItemId}, 1)">+</button>
+          </div>
           <div class="nm">${i.name}</div>
           <div class="pr">${money(i.price * i.qty)}</div>
         </div>
@@ -731,6 +765,7 @@
         ${receiptMarkup(o)}
         <div class="progress"><div class="fill" style="width:${o.progress || 0}%;"></div></div>
         <div style="font-size:11px;color:var(--color-text-secondary);">${o.progress || 0}% complete · ${o.status === 'delivered' ? 'Delivered' : `ETA ${left}m`} · ${o.paid ? 'Paid' : 'Pending payment'}</div>
+        ${o.paid ? '' : '<div style="margin-top:10px;"><button class="btn" onclick="openRetryPayment(' + Number(o.id) + ')">Retry payment</button></div>'}
       `;
     }
 
@@ -748,8 +783,9 @@
       }
 
       setPendingPaymentOrder(order.id);
-      btn.disabled = order.paid === 1;
-      btn.textContent = order.paid ? 'Already paid' : `Pay ${money(order.total)}`;
+      const isPending = Number(order.paid) !== 1;
+      btn.disabled = !isPending;
+      btn.textContent = isPending ? `Retry payment ${money(order.total)}` : 'Already paid';
 
       sum.innerHTML = receiptMarkup(order);
     }
@@ -826,12 +862,23 @@
           },
           handler: async function (response) {
             try {
-              await api(`/api/orders/${pendingPaymentOrderId}/razorpay/verify`, 'POST', {
+              const verification = await api(`/api/orders/${pendingPaymentOrderId}/razorpay/verify`, 'POST', {
                 paymentMethod: selectedPaymentMethod,
                 razorpayOrderId: response.razorpay_order_id,
                 razorpayPaymentId: response.razorpay_payment_id,
                 razorpaySignature: response.razorpay_signature
               });
+              const paidOrder = verification?.order;
+              if (paidOrder?.id) {
+                state.orders = [
+                  paidOrder,
+                  ...(state.orders || []).filter((existing) => Number(existing.id) !== Number(paidOrder.id))
+                ];
+              }
+              if (Number(paidOrder?.paid) === 1) {
+                setPendingPaymentOrder(0);
+              }
+              renderAll();
             } catch (error) {
               alert(error.message || 'Payment verification failed');
             }

@@ -878,7 +878,7 @@ app.use(helmet({
       scriptSrc: ["'self'", "'unsafe-inline'", "https://checkout.razorpay.com", "https://cdn.razorpay.com"],
       scriptSrcElem: ["'self'", "'unsafe-inline'", "https://checkout.razorpay.com", "https://cdn.razorpay.com"],
       frameSrc: ["'self'", "https://checkout.razorpay.com", "https://api.razorpay.com"],
-      connectSrc: ["'self'", "https://api.razorpay.com"],
+      connectSrc: ["'self'", "https://api.razorpay.com", "https://lumberjack.razorpay.com"],
       scriptSrcAttr: ["'unsafe-inline'"]
     }
   }
