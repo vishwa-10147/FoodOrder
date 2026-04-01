@@ -5,35 +5,37 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Client Site - Tableside</title>
   <style>
+    @import url('https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700&display=swap');
+
     :root {
-      --charcoal: #2C2C2A;
-      --accent: #1D9E75;
-      --accent-light: #E1F5EE;
-      --accent-dark: #085041;
-      --warn: #BA7517;
-      --warn-light: #FAEEDA;
-      --info: #185FA5;
-      --info-light: #E6F1FB;
+      --charcoal: #1f2937;
+      --accent: #0f766e;
+      --accent-light: #d6fbf3;
+      --accent-dark: #0b4f4a;
+      --warn: #b45309;
+      --warn-light: #fff1dd;
+      --info: #075985;
+      --info-light: #e0f2fe;
       --border: 0.5px solid var(--color-border-tertiary);
       --radius: var(--border-radius-lg);
     }
-    * { box-sizing: border-box; margin: 0; padding: 0; font-family: var(--font-sans); }
-    body { padding: 18px; background: radial-gradient(circle at top right, #f7fafc 0%, var(--color-background-primary) 55%); }
-    #app { display: flex; min-height: 680px; border: 1px solid #e7e9ee; border-radius: var(--border-radius-xl); overflow: hidden; background: var(--color-background-tertiary); box-shadow: 0 8px 30px rgba(2, 6, 23, 0.08); }
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Sora', var(--font-sans), sans-serif; }
+    body { padding: 18px; background: radial-gradient(circle at 8% 2%, #ffe6cc 0%, #fff3e5 20%, #effbf8 45%, #eef5ff 100%); }
+    #app { display: flex; min-height: 680px; border: 1px solid #e4e9f1; border-radius: var(--border-radius-xl); overflow: hidden; background: var(--color-background-tertiary); box-shadow: 0 14px 40px rgba(15, 23, 42, 0.12); }
 
-    #sidebar { width: 230px; background: linear-gradient(180deg, #ffffff 0%, #f9fafb 100%); border-right: 1px solid #eceef2; }
-    .logo { padding: 22px 18px; border-bottom: 1px solid #eceef2; }
-    .logo h1 { font-size: 16px; color: var(--color-text-primary); letter-spacing: 0.2px; }
-    .logo p { font-size: 11px; color: var(--color-text-secondary); margin-top: 3px; }
+    #sidebar { width: 230px; background: linear-gradient(180deg, #0f172a 0%, #13233f 45%, #17334f 100%); border-right: 1px solid #263954; }
+    .logo { padding: 22px 18px; border-bottom: 1px solid rgba(255, 255, 255, 0.12); }
+    .logo h1 { font-size: 16px; color: #f8fafc; letter-spacing: 0.2px; }
+    .logo p { font-size: 11px; color: #d1e2ff; margin-top: 3px; }
     .nav { padding: 12px 0; }
-    .nav-item { padding: 11px 16px; cursor: pointer; font-size: 13px; color: var(--color-text-secondary); border-left: 3px solid transparent; transition: all 0.2s ease; }
-    .nav-item:hover { background: #f3f6fb; color: var(--color-text-primary); }
-    .nav-item.active { background: #eaf8f3; color: var(--accent-dark); font-weight: 600; border-left-color: var(--accent); }
+    .nav-item { padding: 11px 16px; cursor: pointer; font-size: 13px; color: #c8daf3; border-left: 3px solid transparent; transition: all 0.2s ease; }
+    .nav-item:hover { background: rgba(255, 255, 255, 0.12); color: #ffffff; }
+    .nav-item.active { background: linear-gradient(90deg, rgba(45, 212, 191, 0.28) 0%, rgba(45, 212, 191, 0.08) 100%); color: #d6fff7; font-weight: 600; border-left-color: #2dd4bf; }
 
     #main { flex: 1; display: flex; flex-direction: column; }
-    .topbar { height: 56px; padding: 0 22px; border-bottom: 1px solid #eceef2; background: rgba(255, 255, 255, 0.94); display: flex; align-items: center; justify-content: space-between; backdrop-filter: blur(4px); }
-    .title { font-size: 16px; font-weight: 600; color: var(--color-text-primary); }
-    .time { font-size: 12px; color: var(--color-text-secondary); }
+    .topbar { height: 56px; padding: 0 22px; border-bottom: 1px solid #e3e9f2; background: rgba(255, 255, 255, 0.88); display: flex; align-items: center; justify-content: space-between; backdrop-filter: blur(6px); }
+    .title { font-size: 16px; font-weight: 700; color: #0f172a; letter-spacing: 0.2px; }
+    .time { font-size: 12px; color: #334155; }
 
     .content { display: none; flex: 1; padding: 22px; overflow-y: auto; }
     .content.active { display: block; }
@@ -41,9 +43,9 @@
     .customer-wrap { display:flex; gap:16px; }
     .menu-panel { flex:1; }
     .cart-panel { width:260px; flex-shrink:0; }
-    .order-type-tabs { display:flex; background:#eef2f7; border-radius:12px; padding:4px; margin-bottom:14px; }
+    .order-type-tabs { display:flex; background:#e8eef7; border-radius:12px; padding:4px; margin-bottom:14px; }
     .order-type-tab { flex:1; text-align:center; padding:8px 6px; font-size:12px; cursor:pointer; color:var(--color-text-secondary); border-radius:8px; transition: all 0.2s ease; }
-    .order-type-tab.active { background:var(--color-background-primary); color:var(--color-text-primary); font-weight:600; box-shadow: 0 1px 2px rgba(2, 6, 23, 0.08); }
+    .order-type-tab.active { background:var(--color-background-primary); color:#0f172a; font-weight:600; box-shadow: 0 1px 2px rgba(2, 6, 23, 0.08); }
     .field-label { font-size:11px; color:var(--color-text-secondary); margin-bottom:4px; }
     .field-input, .notes-input { width:100%; border:1px solid #d9dee7; border-radius:10px; padding:8px 10px; background:var(--color-background-primary); color:var(--color-text-primary); font-size:12px; }
     .field-input:focus, .notes-input:focus { outline:none; border-color:#86d8bc; box-shadow:0 0 0 3px rgba(29, 158, 117, 0.12); }
@@ -57,8 +59,8 @@
     .cat.active { background:var(--charcoal); border-color:var(--charcoal); color:white; }
 
     .menu-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; }
-    .menu-item { border:1px solid #e7e9ee; border-radius:14px; background:var(--color-background-primary); padding:13px; box-shadow:0 1px 2px rgba(2, 6, 23, 0.05); transition: transform 0.2s ease, box-shadow 0.2s ease; }
-    .menu-item:hover { transform: translateY(-2px); box-shadow:0 6px 14px rgba(2, 6, 23, 0.1); }
+    .menu-item { border:1px solid #dfe7f2; border-radius:14px; background:linear-gradient(180deg, #ffffff 0%, #f9fbff 100%); padding:13px; box-shadow:0 2px 8px rgba(2, 6, 23, 0.06); transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease; }
+    .menu-item:hover { transform: translateY(-2px); box-shadow:0 10px 18px rgba(2, 6, 23, 0.12); border-color:#c7d7ea; }
     .menu-item.unavailable { opacity:0.65; }
     .menu-photo { width:100%; height:124px; border-radius:12px; object-fit:cover; display:block; margin-bottom:9px; border:1px solid #e7e9ee; background:var(--color-background-secondary); }
     .emoji { font-size:24px; display:block; margin-bottom:6px; }
@@ -66,11 +68,11 @@
     .desc { font-size:11px; color:var(--color-text-secondary); margin:2px 0 6px; }
     .foot { display:flex; justify-content:space-between; align-items:center; }
     .price { font-size:13px; color:var(--color-text-primary); font-weight:500; }
-    .add { width:26px; height:26px; border-radius:50%; background:linear-gradient(180deg, #24323a 0%, #151f25 100%); color:white; border:none; cursor:pointer; font-size:16px; box-shadow:0 2px 4px rgba(2, 6, 23, 0.2); }
+    .add { width:28px; height:28px; border-radius:50%; background:linear-gradient(180deg, #06b6d4 0%, #0f766e 100%); color:white; border:none; cursor:pointer; font-size:17px; box-shadow:0 3px 6px rgba(15, 118, 110, 0.35); }
     .add:disabled { background:var(--color-background-secondary); color:var(--color-text-tertiary); cursor:not-allowed; }
     .unavailable-badge { display:inline-block; margin-top:4px; font-size:10px; padding:2px 7px; border-radius:999px; background:var(--warn-light); color:var(--warn); }
 
-    .box { border:1px solid #e7e9ee; border-radius:14px; background:var(--color-background-primary); padding:15px; box-shadow:0 2px 10px rgba(2, 6, 23, 0.06); }
+    .box { border:1px solid #dfe7f2; border-radius:14px; background:linear-gradient(180deg, #ffffff 0%, #f8fbff 100%); padding:15px; box-shadow:0 6px 14px rgba(2, 6, 23, 0.08); }
     .box h3 { font-size:14px; color:var(--color-text-primary); margin-bottom:12px; font-weight:600; }
     .cart-items { min-height:80px; margin-bottom:12px; }
     .cart-item { display:flex; gap:8px; align-items:center; padding:6px 0; border-bottom:var(--border); }
@@ -84,18 +86,18 @@
     .empty { font-size:12px; color:var(--color-text-tertiary); text-align:center; padding:20px 0; }
     .row { display:flex; justify-content:space-between; font-size:12px; color:var(--color-text-secondary); margin-bottom:5px; }
     .row.total { font-size:15px; font-weight:700; color:var(--color-text-primary); margin-top:8px; }
-    .btn { width:100%; background:linear-gradient(180deg, #1f2a31 0%, #111920 100%); color:white; border:none; border-radius:11px; padding:10px; font-size:13px; font-weight:600; cursor:pointer; box-shadow:0 3px 8px rgba(2, 6, 23, 0.24); }
-    .btn:hover { filter: brightness(1.03); }
+    .btn { width:100%; background:linear-gradient(180deg, #0f766e 0%, #115e59 100%); color:white; border:none; border-radius:11px; padding:10px; font-size:13px; font-weight:700; cursor:pointer; box-shadow:0 4px 10px rgba(15, 118, 110, 0.35); }
+    .btn:hover { filter: brightness(1.05); }
 
     .track-pills { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px; }
     .pill { font-size:12px; border:1px solid #dde2eb; border-radius:999px; padding:6px 12px; cursor:pointer; color:var(--color-text-secondary); background:var(--color-background-primary); transition: all 0.2s ease; }
     .pill.active { background:var(--charcoal); color:white; border-color:var(--charcoal); }
-    .track-card { border:1px solid #e7e9ee; border-radius:14px; background:var(--color-background-primary); padding:15px; box-shadow:0 2px 10px rgba(2, 6, 23, 0.06); }
+    .track-card { border:1px solid #dfe7f2; border-radius:14px; background:linear-gradient(180deg, #ffffff 0%, #f8fbff 100%); padding:15px; box-shadow:0 6px 14px rgba(2, 6, 23, 0.08); }
     .progress { height:5px; border-radius:999px; background:var(--color-background-secondary); overflow:hidden; margin:8px 0; }
     .fill { height:100%; background:var(--accent); }
 
     .payment-wrap { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
-    .pay-card { border:1px solid #e7e9ee; border-radius:14px; background:var(--color-background-primary); padding:18px; box-shadow:0 2px 10px rgba(2, 6, 23, 0.06); }
+    .pay-card { border:1px solid #dfe7f2; border-radius:14px; background:linear-gradient(180deg, #ffffff 0%, #f8fbff 100%); padding:18px; box-shadow:0 6px 14px rgba(2, 6, 23, 0.08); }
     .pay-card h3 { font-size:14px; color:var(--color-text-primary); margin-bottom:14px; font-weight:600; }
     .methods { display:flex; gap:6px; margin-bottom:12px; }
     .method { flex:1; font-size:12px; border:1px solid #dbe1ec; border-radius:10px; padding:8px; text-align:center; color:var(--color-text-secondary); cursor:pointer; transition: all 0.2s ease; }
@@ -105,9 +107,9 @@
     .upi-id-help { font-size:11px; color:var(--color-text-secondary); margin-top:4px; }
     .sum-row { display:flex; justify-content:space-between; font-size:13px; color:var(--color-text-secondary); padding:5px 0; border-bottom:var(--border); }
     .sum-row.total { border-bottom:none; font-size:15px; font-weight:500; color:var(--color-text-primary); padding-top:8px; }
-    .receipt { border:1px solid #e7e9ee; border-radius:14px; padding:13px; background:var(--color-background-primary); box-shadow:0 2px 10px rgba(2, 6, 23, 0.06); }
+    .receipt { border:1px solid #dfe7f2; border-radius:14px; padding:13px; background:linear-gradient(180deg, #ffffff 0%, #fbfdff 100%); box-shadow:0 6px 14px rgba(2, 6, 23, 0.08); }
     .receipt-title { font-size:16px; font-weight:700; color:var(--color-text-primary); letter-spacing:0.1px; line-height:1.2; }
-    .receipt-subtitle { font-size:11px; color:#fc8019; text-transform:uppercase; letter-spacing:0.7px; margin-top:2px; font-weight:600; }
+    .receipt-subtitle { font-size:11px; color:#0f766e; text-transform:uppercase; letter-spacing:0.7px; margin-top:2px; font-weight:700; }
     .receipt-bill { font-size:12px; color:var(--color-text-secondary); margin-top:2px; line-height:1.3; }
     .receipt-meta { margin-top:6px; background:var(--color-background-secondary); border-radius:10px; padding:7px 8px; }
     .receipt-meta-row { display:flex; justify-content:space-between; gap:8px; font-size:12px; color:var(--color-text-secondary); margin-top:3px; }
@@ -120,19 +122,19 @@
     .receipt-grid-row span:nth-child(2), .receipt-grid-row span:nth-child(3), .receipt-grid-row span:nth-child(4),
     .receipt-grid-head span:nth-child(2), .receipt-grid-head span:nth-child(3), .receipt-grid-head span:nth-child(4) { text-align:right; }
     .receipt-total-line { display:flex; justify-content:space-between; font-size:13px; color:var(--color-text-primary); margin-top:5px; }
-    .receipt-total-line.grand { margin-top:7px; padding:8px 10px; border-radius:10px; background:#fff4ea; color:#9a4b00; font-size:15px; font-weight:700; }
+    .receipt-total-line.grand { margin-top:7px; padding:8px 10px; border-radius:10px; background:#dcfdf3; color:#0f5132; font-size:15px; font-weight:700; }
     .receipt-foot { margin-top:9px; font-size:12px; color:var(--color-text-secondary); border-top:1px solid #ebecef; padding-top:7px; }
     .mode-note { margin-bottom:12px; border:var(--border); border-radius:var(--border-radius-md); background:var(--warn-light); color:var(--warn); padding:10px; font-size:12px; }
     .restaurant-selector-wrap { margin-bottom: 12px; }
     .restaurant-selector-label { font-size: 12px; color: var(--color-text-secondary); margin-bottom: 6px; }
     .restaurant-selector { width:100%; border:var(--border); border-radius:12px; padding:10px 12px; font-size:14px; color:var(--color-text-primary); background:var(--color-background-primary); }
-    .restaurant-hero { border:var(--border); border-radius:20px; background:#f3f3f4; overflow:hidden; margin-bottom:14px; box-shadow:0 1px 0 rgba(0,0,0,0.04) inset; }
-    .restaurant-hero-banner { background:#f7e7db; color:#ef6426; font-weight:600; font-size:14px; padding:12px 14px; display:none; align-items:center; gap:8px; }
+    .restaurant-hero { border:1px solid #d7e6f5; border-radius:20px; background:linear-gradient(145deg, #ffffff 0%, #ecf7ff 45%, #e8fff8 100%); overflow:hidden; margin-bottom:14px; box-shadow:0 10px 24px rgba(2, 6, 23, 0.08); }
+    .restaurant-hero-banner { background:#fff1df; color:#b45309; font-weight:700; font-size:14px; padding:12px 14px; display:none; align-items:center; gap:8px; }
     .restaurant-hero-body { padding:14px; }
-    .restaurant-name { font-size:32px; font-weight:700; color:#0d1b3a; margin-bottom:8px; letter-spacing:0.2px; }
-    .restaurant-meta { font-size:16px; font-weight:600; color:#0d1b3a; margin-bottom:10px; }
-    .restaurant-cuisines { color:#ef6426; font-size:13px; font-weight:600; text-decoration:underline; margin-bottom:10px; }
-    .restaurant-line { font-size:14px; color:#4a5568; margin:5px 0; }
+    .restaurant-name { font-size:32px; font-weight:700; color:#0f172a; margin-bottom:8px; letter-spacing:0.2px; }
+    .restaurant-meta { font-size:16px; font-weight:600; color:#0f172a; margin-bottom:10px; }
+    .restaurant-cuisines { color:#0f766e; font-size:13px; font-weight:700; text-decoration:underline; margin-bottom:10px; }
+    .restaurant-line { font-size:14px; color:#334155; margin:5px 0; }
     .restaurant-line strong { color:#111827; }
 
     @media (max-width: 980px) {
@@ -150,6 +152,9 @@
     }
 
     @media (max-width: 640px) {
+      .logo { padding: 16px 14px; }
+      .logo h1 { font-size: 15px; }
+      .logo p { font-size: 11px; }
       .order-type-tabs { flex-wrap: wrap; }
       .order-type-tab { min-width: 33%; }
       .schedule-grid { grid-template-columns: 1fr; }
@@ -163,7 +168,7 @@
     <aside id="sidebar">
       <div class="logo">
         <h1>Tableside</h1>
-        <p>Client Site</p>
+        <p>Hello User</p>
       </div>
       <nav class="nav">
         <div class="nav-item active" data-view="order" onclick="switchView('order', this)">Place order</div>
@@ -246,8 +251,7 @@
           <div class="pay-card">
             <h3>Payment details</h3>
             <div class="methods">
-              <div class="method active" onclick="setMethod(this, 'card')">Card</div>
-              <div class="method" onclick="setMethod(this, 'upi')">UPI</div>
+              <div class="method active" onclick="setMethod(this, 'card')">Card/UPI</div>
             </div>
             <div class="upi-id-group" id="upi-id-group" style="display:none;">
               <div class="field-label">UPI ID</div>
@@ -557,11 +561,6 @@
       document.querySelectorAll('.method').forEach((m) => m.classList.remove('active'));
       el.classList.add('active');
       selectedPaymentMethod = String(method || 'card').trim().toLowerCase();
-
-      const upiGroup = document.getElementById('upi-id-group');
-      if (upiGroup) {
-        upiGroup.style.display = selectedPaymentMethod === 'upi' ? 'block' : 'none';
-      }
     }
 
     function renderDineTableOptions() {
@@ -677,14 +676,15 @@
       updateTotals(cart.reduce((s, i) => s + i.price * i.qty, 0));
     }
 
-    function updateTotals(subtotal) {
-      const gst = Number((subtotal * 0.05).toFixed(2));
+    function updateTotals(inclusiveTotal) {
+      const subtotal = Number((Number(inclusiveTotal || 0) / 1.05).toFixed(2));
+      const gst = Number((Number(inclusiveTotal || 0) - subtotal).toFixed(2));
       const cgst = Number((gst / 2).toFixed(2));
       const sgst = Number((gst - cgst).toFixed(2));
       document.getElementById('sub').textContent = money(subtotal);
       document.getElementById('cgst').textContent = money(cgst);
       document.getElementById('sgst').textContent = money(sgst);
-      document.getElementById('total').textContent = money(subtotal + cgst + sgst);
+      document.getElementById('total').textContent = money(Number(inclusiveTotal || 0));
     }
 
     async function placeOrder() {

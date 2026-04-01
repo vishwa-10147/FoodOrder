@@ -255,6 +255,14 @@ function toOrderLabel(id) {
   return `#${String(id).padStart(4, '0')}`;
 }
 
+function toIstDateKey(timestampMs) {
+  const date = new Date(Number(timestampMs || Date.now()) + (5.5 * 60 * 60 * 1000));
+  const yyyy = date.getUTCFullYear();
+  const mm = String(date.getUTCMonth() + 1).padStart(2, '0');
+  const dd = String(date.getUTCDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
+}
+
 function buildRestaurantPayload(row) {
   return {
     id: Number(row.id),
@@ -274,11 +282,12 @@ function buildRestaurantPayload(row) {
 
 function enrichOrder(order) {
   const items = Array.isArray(order.items) ? order.items : [];
-  const subtotal = Number(order.subtotal || items.reduce((sum, item) => sum + (Number(item.price || 0) * Number(item.qty || 0)), 0));
-  const gst = Math.round(subtotal * 0.05 * 100) / 100;
+  const inclusiveTotal = Number(items.reduce((sum, item) => sum + (Number(item.price || 0) * Number(item.qty || 0)), 0));
+  const subtotal = Math.round((inclusiveTotal / 1.05) * 100) / 100;
+  const gst = Math.round((inclusiveTotal - subtotal) * 100) / 100;
   const cgst = Math.round((gst / 2) * 100) / 100;
   const sgst = Math.round((gst - cgst) * 100) / 100;
-  const total = Math.round((subtotal + gst) * 100) / 100;
+  const total = Math.round(inclusiveTotal * 100) / 100;
   const progressMap = { new: 20, preparing: 55, ready: 85, delivered: 100 };
   return {
     ...order,
@@ -456,7 +465,24 @@ async function getOrders(restaurantId = null) {
     params
   );
 
-  return rows.map((row) => enrichOrder(row));
+  const orders = rows.map((row) => enrichOrder(row));
+
+  // Assign date-wise running labels (resets daily) so order IDs start from #0001 each day.
+  const sequenceByDate = new Map();
+  const labelByOrderId = new Map();
+  [...orders]
+    .sort((a, b) => Number(a.createdAt || 0) - Number(b.createdAt || 0) || Number(a.id || 0) - Number(b.id || 0))
+    .forEach((order) => {
+      const key = `${Number(order.restaurantId || 0)}:${toIstDateKey(order.createdAt)}`;
+      const next = Number(sequenceByDate.get(key) || 0) + 1;
+      sequenceByDate.set(key, next);
+      labelByOrderId.set(Number(order.id), toOrderLabel(next));
+    });
+
+  return orders.map((order) => ({
+    ...order,
+    label: labelByOrderId.get(Number(order.id)) || toOrderLabel(order.id)
+  }));
 }
 
 function getStats(orders, tables) {
