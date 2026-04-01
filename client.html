@@ -70,6 +70,11 @@
     .price { font-size:13px; color:var(--color-text-primary); font-weight:500; }
     .add { width:28px; height:28px; border-radius:50%; background:linear-gradient(180deg, #06b6d4 0%, #0f766e 100%); color:white; border:none; cursor:pointer; font-size:17px; box-shadow:0 3px 6px rgba(15, 118, 110, 0.35); }
     .add:disabled { background:var(--color-background-secondary); color:var(--color-text-tertiary); cursor:not-allowed; }
+    .menu-qty-controls { display:flex; align-items:center; gap:6px; }
+    .menu-qty-btn { width:24px; height:24px; border-radius:7px; border:1px solid #d7e2ef; background:#fff; color:#0f172a; font-size:14px; line-height:1; cursor:pointer; display:flex; align-items:center; justify-content:center; }
+    .menu-qty-btn:hover { background:#f2f7ff; }
+    .menu-qty-btn:disabled { opacity:0.5; cursor:not-allowed; }
+    .menu-qty-value { min-width:18px; text-align:center; font-size:12px; font-weight:600; color:#0f172a; }
     .unavailable-badge { display:inline-block; margin-top:4px; font-size:10px; padding:2px 7px; border-radius:999px; background:var(--warn-light); color:var(--warn); }
 
     .box { border:1px solid #dfe7f2; border-radius:14px; background:linear-gradient(180deg, #ffffff 0%, #f8fbff 100%); padding:15px; box-shadow:0 6px 14px rgba(2, 6, 23, 0.08); }
@@ -208,7 +213,7 @@
               <div class="order-type-tab" onclick="setOrderType(this, 'preorder')">Pre-order</div>
             </div>
 
-            <div id="table-group" style="margin-bottom:10px;">
+            <div id="table-group" style="margin-bottom:10px; display:none;">
               <div class="field-label">Select available table</div>
               <select id="table-number" class="field-input"></select>
             </div>
@@ -505,11 +510,21 @@
     }
 
     function switchView(view, el) {
+      const safeView = ['order', 'tracking', 'payment'].includes(String(view || '').toLowerCase())
+        ? String(view).toLowerCase()
+        : 'order';
+      const targetNav = el || document.querySelector(`.nav-item[data-view="${safeView}"]`);
+
       document.querySelectorAll('.content').forEach((c) => c.classList.remove('active'));
-      document.getElementById(`view-${view}`).classList.add('active');
+      document.getElementById(`view-${safeView}`).classList.add('active');
       document.querySelectorAll('.nav-item').forEach((n) => n.classList.remove('active'));
-      if (el) el.classList.add('active');
-      document.getElementById('title').textContent = view.charAt(0).toUpperCase() + view.slice(1);
+      if (targetNav) targetNav.classList.add('active');
+      document.getElementById('title').textContent = safeView.charAt(0).toUpperCase() + safeView.slice(1);
+
+      const currentStateView = String(history.state?.view || '').toLowerCase();
+      if (currentStateView !== safeView) {
+        history.pushState({ view: safeView }, '', `#${safeView}`);
+      }
     }
 
     function setCat(el, cat) {
@@ -544,8 +559,7 @@
       const showSchedule = type === 'takeaway' || type === 'preorder';
       document.getElementById('eta').style.display = showSchedule ? 'flex' : 'none';
       document.getElementById('schedule-group').style.display = showSchedule ? 'block' : 'none';
-      const showTable = type === 'dine' || type === 'preorder';
-      document.getElementById('table-group').style.display = showTable ? 'block' : 'none';
+      document.getElementById('table-group').style.display = 'none';
     }
 
     function getScheduleText() {
@@ -592,6 +606,7 @@
     }
 
     function renderMenu() {
+      const qtyByMenuItemId = new Map(cart.map((line) => [Number(line.menuItemId), Number(line.qty || 0)]));
       const menu = currentCat === 'all' ? state.menu : state.menu.filter((m) => m.cat === currentCat);
       document.getElementById('menu').innerHTML = menu.map((m) => `
         <div class="menu-item ${Number(m.available) === 1 ? '' : 'unavailable'}">
@@ -601,7 +616,11 @@
           ${Number(m.available) === 1 ? '' : '<div class="unavailable-badge">Temporarily unavailable</div>'}
           <div class="foot">
             <span class="price">${money(m.price)}</span>
-            <button class="add" ${Number(m.available) === 1 ? '' : 'disabled'} onclick="addToCart(${m.id})">+</button>
+            <div class="menu-qty-controls">
+              <button class="menu-qty-btn" ${Number(m.available) === 1 ? '' : 'disabled'} onclick="updateCartQty(${m.id}, -1)">-</button>
+              <span class="menu-qty-value">${qtyByMenuItemId.get(Number(m.id)) || 0}</span>
+              <button class="menu-qty-btn" ${Number(m.available) === 1 ? '' : 'disabled'} onclick="updateCartQty(${m.id}, 1)">+</button>
+            </div>
           </div>
         </div>
       `).join('');
@@ -625,7 +644,12 @@
       if (!id || !change) return;
 
       const line = cart.find((entry) => Number(entry.menuItemId) === id);
-      if (!line) return;
+      if (!line) {
+        if (change > 0) {
+          addToCart(id);
+        }
+        return;
+      }
 
       const nextQty = Number(line.qty || 0) + change;
       if (nextQty <= 0) {
@@ -698,11 +722,7 @@
       renderCart();
       if (!cart.length) return;
       try {
-        const tableNumber = Number(document.getElementById('table-number').value || 0);
-        if ((orderType === 'dine' || orderType === 'preorder') && !tableNumber) {
-          alert('Please select an available table for dine-in or pre-order.');
-          return;
-        }
+        const tableNumber = null;
 
         const baseNotes = String(document.getElementById('notes').value || '').trim();
         const scheduleText = getScheduleText();
@@ -918,6 +938,21 @@
     }
 
     (async function init() {
+      window.addEventListener('popstate', (event) => {
+        const stateView = String(event.state?.view || '').toLowerCase();
+        const hashView = String(window.location.hash || '').replace(/^#/, '').toLowerCase();
+        const targetView = ['order', 'tracking', 'payment'].includes(stateView)
+          ? stateView
+          : (['order', 'tracking', 'payment'].includes(hashView) ? hashView : 'order');
+
+        document.querySelectorAll('.content').forEach((c) => c.classList.remove('active'));
+        document.getElementById(`view-${targetView}`).classList.add('active');
+        document.querySelectorAll('.nav-item').forEach((n) => n.classList.remove('active'));
+        const nav = document.querySelector(`.nav-item[data-view="${targetView}"]`);
+        if (nav) nav.classList.add('active');
+        document.getElementById('title').textContent = targetView.charAt(0).toUpperCase() + targetView.slice(1);
+      });
+
       updateTime();
       setInterval(updateTime, 30000);
 
@@ -954,6 +989,16 @@
       }
 
       renderAll();
+
+      const initialHashView = String(window.location.hash || '').replace(/^#/, '').toLowerCase();
+      const initialView = ['order', 'tracking', 'payment'].includes(initialHashView) ? initialHashView : 'order';
+      history.replaceState({ view: initialView }, '', `#${initialView}`);
+      document.querySelectorAll('.content').forEach((c) => c.classList.remove('active'));
+      document.getElementById(`view-${initialView}`).classList.add('active');
+      document.querySelectorAll('.nav-item').forEach((n) => n.classList.remove('active'));
+      const initialNav = document.querySelector(`.nav-item[data-view="${initialView}"]`);
+      if (initialNav) initialNav.classList.add('active');
+      document.getElementById('title').textContent = initialView.charAt(0).toUpperCase() + initialView.slice(1);
 
       if (statePollTimer) clearInterval(statePollTimer);
       statePollTimer = setInterval(async () => {

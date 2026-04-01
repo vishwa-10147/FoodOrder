@@ -488,8 +488,9 @@ async function getOrders(restaurantId = null) {
 function getStats(orders, tables) {
   const activeOrders = orders.filter((order) => order.status !== 'delivered').length;
   const now = Date.now();
-  const overdue = orders.filter((order) => order.status !== 'delivered' && now - order.createdAt > order.etaMinutes * 60000).length;
-  const waitingOrders = orders.filter((order) => order.status !== 'delivered');
+  const paidInProgressOrders = orders.filter((order) => Number(order.paid) === 1 && order.status !== 'delivered');
+  const overdue = paidInProgressOrders.filter((order) => now - order.createdAt > order.etaMinutes * 60000).length;
+  const waitingOrders = paidInProgressOrders;
   const avgWait = waitingOrders.length
     ? Math.round(waitingOrders.reduce((sum, order) => sum + ((now - order.createdAt) / 60000), 0) / waitingOrders.length)
     : 0;
@@ -1120,6 +1121,37 @@ app.post('/api/menu/:id/availability', requireManagementAuth, async (req, res) =
   return res.json({ ok: true, available: available ? 1 : 0 });
 });
 
+app.patch('/api/menu/:id/name', requireManagementAuth, async (req, res) => {
+  const menuItemId = Number(req.params.id);
+  const name = String(req.body?.name || '').trim();
+  const actor = `${getActor(req)}:${req.management.restaurantCode}`;
+
+  if (!menuItemId) return res.status(400).json({ error: 'Valid menu item ID is required' });
+  if (!name) return res.status(400).json({ error: 'New menu item name is required' });
+
+  const result = await pool.query(
+    `UPDATE menu_items
+     SET name = $1
+     WHERE id = $2 AND restaurant_id = $3
+     RETURNING id, name`,
+    [name, menuItemId, req.management.restaurantId]
+  );
+  const item = result.rows[0];
+  if (!item) return res.status(404).json({ error: 'Menu item not found' });
+
+  await logAudit(pool, {
+    action: 'menu_item_renamed',
+    entityType: 'menu_item',
+    entityId: menuItemId,
+    actor,
+    restaurantId: req.management.restaurantId,
+    details: { name: item.name }
+  });
+
+  await broadcastState(req.management.restaurantId);
+  return res.json({ ok: true, id: item.id, name: item.name });
+});
+
 app.post('/api/menu', requireManagementAuth, async (req, res) => {
   const name = String(req.body?.name || '').trim();
   const description = String(req.body?.desc || req.body?.description || '').trim() || 'Custom menu item';
@@ -1301,12 +1333,7 @@ app.post('/api/orders', async (req, res) => {
       return res.status(400).json({ error: 'Invalid order type' });
     }
 
-    const normalizedTableNumber = (orderType === 'dine' || orderType === 'preorder')
-      ? (Number(tableNumber || 0) || null)
-      : null;
-    if ((orderType === 'dine' || orderType === 'preorder') && !normalizedTableNumber) {
-      return res.status(400).json({ error: 'Table number is required for dine-in and pre-order' });
-    }
+    const normalizedTableNumber = Number(tableNumber || 0) || null;
 
     const actor = session ? `${getActor(req)}:${session.restaurantCode}` : getActor(req);
     const orderId = await createOrder({
