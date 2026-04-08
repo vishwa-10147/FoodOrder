@@ -47,6 +47,20 @@
     .section { margin-bottom: 16px; }
     .section h3 { font-size: 13px; margin-bottom: 10px; color: var(--color-text-primary); }
 
+    .menu-view-layout { display:grid; grid-template-columns:minmax(0, 1.25fr) minmax(320px, 0.85fr); gap:12px; align-items:start; }
+    .menu-view-sidebar { display:flex; flex-direction:column; gap:12px; position:sticky; top:12px; }
+    .menu-panel { border:var(--border); border-radius:var(--border-radius-md); background:var(--color-background-primary); padding:10px; }
+    .menu-panel-title { font-size:13px; font-weight:500; color:var(--color-text-primary); margin-bottom:8px; }
+    .menu-orders-wrap { border:var(--border); border-radius:var(--border-radius-md); background:var(--color-background-primary); overflow:hidden; }
+    .menu-orders-wrap .menu-orders-list { max-height: 620px; overflow:auto; }
+    .history-table-wrap { max-height: 620px; overflow:auto; }
+    .history-table { width:100%; border-collapse:collapse; }
+    .history-table thead th { position:sticky; top:0; background:var(--color-background-secondary); z-index:1; }
+    .history-table th, .history-table td { padding:8px 10px; border-bottom:var(--border); font-size:11px; text-align:left; color:var(--color-text-primary); }
+    .history-table th { font-weight:600; color:var(--color-text-secondary); }
+    .history-table td.amount, .history-table th.amount { text-align:right; }
+    .history-empty { padding:10px 12px; font-size:11px; color:var(--color-text-secondary); }
+
     .orders-grid { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 10px; }
     .order-card { border: var(--border); border-radius: var(--border-radius-md); background: var(--color-background-primary); padding: 12px; }
     .order-head { display: flex; justify-content: space-between; margin-bottom: 8px; }
@@ -135,6 +149,10 @@
     .menu-orders-list { border:var(--border); border-radius:var(--border-radius-md); background:var(--color-background-primary); overflow:hidden; }
     .menu-order-item { padding:10px 12px; border-bottom:var(--border); }
     .menu-order-item:last-child { border-bottom:none; }
+    .menu-order-item.order-dine { background:#f0f9ff; border-left:4px solid #0b4f84; }
+    .menu-order-item.order-takeaway { background:#fff3da; border-left:4px solid #8a4d00; }
+    .menu-order-item.order-preorder { background:#ede9fe; border-left:4px solid #6b21a8; }
+    .menu-order-item.order-delivery { background:#defae7; border-left:4px solid #0e6b3f; }
     .menu-order-date-group { padding:10px 12px; border-bottom:var(--border); background:var(--color-background-secondary); font-size:12px; font-weight:600; color:var(--color-text-primary); }
     .menu-order-head { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:6px; }
     .menu-order-id { font-size:12px; font-weight:500; color:var(--color-text-primary); }
@@ -192,6 +210,8 @@
       .table-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
       .pipeline { grid-template-columns: 1fr; }
       .menu-admin-form-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .menu-view-layout { grid-template-columns: 1fr; }
+      .menu-view-sidebar { position: static; }
       .section-head { align-items: flex-start; flex-direction: column; }
     }
 
@@ -277,6 +297,7 @@
         <div class="nav-item" data-view="kitchen" id="nav-kitchen" onclick="switchView('kitchen', this)">Kitchen <span class="badge" id="k-badge">0</span></div>
         <div class="nav-item" data-view="tracking" id="nav-tracking" onclick="switchView('tracking', this)">Tracking</div>
         <div class="nav-item" data-view="menu" id="nav-menu" onclick="switchView('menu', this)">Menu</div>
+        <div class="nav-item" data-view="history" id="nav-history" onclick="switchView('history', this)">History</div>
       </nav>
     </aside>
 
@@ -286,6 +307,7 @@
         <div class="topbar-right">
           <div class="rest-chip" id="rest-chip">Restaurant</div>
           <div class="time" id="time">Live</div>
+          <button class="small-btn" id="open-outer-screen-btn" onclick="openOuterScreen()">Open outer screen</button>
           <button class="small-btn" id="logout-btn" onclick="logoutManagement()">Logout</button>
         </div>
       </div>
@@ -370,49 +392,67 @@
       </section>
 
       <section class="content" id="view-menu">
-        <div class="section">
-          <h3>Menu availability</h3>
-          <div class="menu-admin-form">
-            <div class="menu-admin-form-grid">
-              <input id="menu-name" class="menu-admin-input" placeholder="Food name" />
-              <input id="menu-price" class="menu-admin-input" type="number" min="1" placeholder="Cost (₹)" />
-              <input id="menu-cat" class="menu-admin-input" placeholder="Category (mains/drinks...)" />
-              <input id="menu-emoji" class="menu-admin-input" placeholder="Emoji (optional)" />
-              <input id="menu-desc" class="menu-admin-input" placeholder="Description (optional)" />
-              <input id="menu-image-file" class="menu-admin-input" type="file" accept="image/*" />
-              <input id="menu-delete-id" class="menu-admin-input" type="number" min="1" placeholder="Delete item ID" />
-              <input id="menu-edit-id" class="menu-admin-input" type="number" min="1" placeholder="Edit name by item ID" />
-              <input id="menu-edit-name" class="menu-admin-input" placeholder="New food name" />
-              <input id="menu-csv-file" class="menu-admin-input" type="file" accept=".csv,text/csv" />
+        <div class="menu-view-layout">
+          <div>
+            <div class="section">
+              <h3>Menu availability</h3>
+              <div class="menu-admin-form">
+                <div class="menu-admin-form-grid">
+                  <input id="menu-name" class="menu-admin-input" placeholder="Food name" />
+                  <input id="menu-price" class="menu-admin-input" type="number" min="1" placeholder="Cost (₹)" />
+                  <input id="menu-cat" class="menu-admin-input" placeholder="Category (mains/drinks...)" />
+                  <input id="menu-emoji" class="menu-admin-input" placeholder="Emoji (optional)" />
+                  <input id="menu-desc" class="menu-admin-input" placeholder="Description (optional)" />
+                  <input id="menu-image-file" class="menu-admin-input" type="file" accept="image/*" />
+                  <input id="menu-delete-id" class="menu-admin-input" type="number" min="1" placeholder="Delete item ID" />
+                  <input id="menu-edit-id" class="menu-admin-input" type="number" min="1" placeholder="Edit name by item ID" />
+                  <input id="menu-edit-name" class="menu-admin-input" placeholder="New food name" />
+                  <input id="menu-csv-file" class="menu-admin-input" type="file" accept=".csv,text/csv" />
+                </div>
+                <div class="menu-admin-form-actions">
+                  <div class="menu-admin-meta">Customize menu and upload food images.</div>
+                  <div style="display:flex; gap:6px;">
+                    <button class="small-btn" id="add-menu-item-btn" onclick="addMenuItem()">+ Add item</button>
+                    <button class="small-btn" id="delete-menu-item-btn" onclick="deleteMenuItemByInput()">- Delete item</button>
+                    <button class="small-btn" id="edit-menu-item-btn" onclick="renameMenuItemByInput()">Edit name</button>
+                    <button class="small-btn" id="import-menu-csv-btn" onclick="importMenuCsv()">Import CSV</button>
+                  </div>
+                </div>
+                <div class="menu-admin-form-actions" style="justify-content:flex-start;">
+                  <label class="menu-admin-meta" style="display:flex; align-items:center; gap:6px;">
+                    <input id="menu-csv-replace" type="checkbox" />
+                    Replace existing menu for this restaurant while importing
+                  </label>
+                </div>
+              </div>
+              <div class="menu-admin-list" id="menu-admin-list"></div>
             </div>
-            <div class="menu-admin-form-actions">
-              <div class="menu-admin-meta">Customize menu and upload food images.</div>
-              <div style="display:flex; gap:6px;">
-                <button class="small-btn" id="add-menu-item-btn" onclick="addMenuItem()">+ Add item</button>
-                <button class="small-btn" id="delete-menu-item-btn" onclick="deleteMenuItemByInput()">- Delete item</button>
-                <button class="small-btn" id="edit-menu-item-btn" onclick="renameMenuItemByInput()">Edit name</button>
-                <button class="small-btn" id="import-menu-csv-btn" onclick="importMenuCsv()">Import CSV</button>
+          </div>
+
+          <div class="menu-view-sidebar">
+            <div class="menu-panel">
+              <div class="menu-panel-title">Order list</div>
+              <div class="menu-orders-wrap">
+                <div class="menu-orders-list" id="menu-order-list"></div>
               </div>
             </div>
-            <div class="menu-admin-form-actions" style="justify-content:flex-start;">
-              <label class="menu-admin-meta" style="display:flex; align-items:center; gap:6px;">
-                <input id="menu-csv-replace" type="checkbox" />
-                Replace existing menu for this restaurant while importing
-              </label>
-            </div>
           </div>
-          <div class="menu-admin-list" id="menu-admin-list"></div>
         </div>
 
+      </section>
+
+      <section class="content" id="view-history">
         <div class="section">
           <div class="section-head-wrap">
-            <h3>Order list</h3>
+            <h3>History</h3>
             <div class="order-export-controls">
-              <input id="order-export-date" class="order-export-date" type="date" />
-              <button class="small-btn" id="download-orders-btn" onclick="downloadOrdersByDateExcel()">Download Excel</button>
+              <input id="history-export-date" class="order-export-date" type="date" />
+              <button class="small-btn" id="download-history-btn" onclick="downloadHistoryByDateExcel()">Download day</button>
             </div>
           </div>
-          <div class="menu-orders-list" id="menu-order-list"></div>
+          <div class="menu-orders-wrap">
+            <div class="history-table-wrap" id="history-order-list"></div>
+          </div>
         </div>
       </section>
     </main>
@@ -477,6 +517,19 @@
       const sgst = Number(order.sgst || (gst - cgst));
       const total = Number(order.total || (subtotal + cgst + sgst));
       const paymentMethodText = escapeHtml((order.paymentMethod || '-').toUpperCase());
+      const customerInfo = `
+        <div class="receipt-meta-row"><span>Customer</span><span>${escapeHtml(order.customerName || '-')}</span></div>
+        <div class="receipt-meta-row"><span>Mobile</span><span>${escapeHtml(order.customerMobile || '-')}</span></div>
+      `;
+      const isDelivery = order.orderType === 'delivery';
+      const deliveryInfo = isDelivery ? `
+        <div class="receipt-meta" style="background:#f0fdf4; padding:8px; border-radius:6px; margin-bottom:10px;">
+          <div style="font-weight:700; margin-bottom:6px; color:#0e6b3f;">🏍️ Delivery Details</div>
+          <div class="receipt-meta-row"><span>Name</span><span>${escapeHtml(order.deliveryName || '-')}</span></div>
+          <div class="receipt-meta-row"><span>Mobile</span><span>${escapeHtml(order.deliveryMobile || '-')}</span></div>
+          <div class="receipt-meta-row"><span>Location</span><span><a href="https://maps.google.com/?q=${order.deliveryLat || 0},${order.deliveryLng || 0}" target="_blank" style="color:#0e6b3f; text-decoration:underline;">📍 ${order.deliveryLat ? order.deliveryLat.toFixed(4) + ', ' + order.deliveryLng.toFixed(4) : '-'}</a></span></div>
+        </div>
+      ` : '';
 
       return `
         <div class="receipt ${compact ? 'compact' : ''}">
@@ -491,8 +544,10 @@
             <div class="receipt-meta-row"><span>Order ID</span><span>${escapeHtml(order.label || '-')}</span></div>
             <div class="receipt-meta-row"><span>Date</span><span>${dateText}</span></div>
             <div class="receipt-meta-row"><span>Time</span><span>${timeText}</span></div>
-            <div class="receipt-meta-row"><span>${order.orderType === 'dine' ? 'Table' : 'Order Type'}</span><span>${order.orderType === 'dine' ? (order.tableNumber ? `T${order.tableNumber}` : '-') : escapeHtml(order.orderType || '-')}</span></div>
+            <div class="receipt-meta-row"><span>${order.orderType === 'dine' ? 'Table' : 'Order Type'}</span><span>${order.orderType === 'dine' ? (order.tableNumber ? `T${order.tableNumber}` : '-') : escapeHtml((order.orderType === 'delivery' ? '🏍️ ' : '') + (order.orderType || '-'))}</span></div>
+            ${customerInfo}
           </div>
+          ${deliveryInfo}
           <div class="receipt-divider"></div>
           <div class="receipt-grid-head"><span>Item</span><span>Qty</span><span>Rate</span><span>Amount</span></div>
           ${(order.items || []).map((item) => `
@@ -585,7 +640,7 @@
         }
 
         managementAuth = { token: data.token, restaurant: data.restaurant };
-        localStorage.setItem(MANAGEMENT_TOKEN_KEY, JSON.stringify(managementAuth));
+        sessionStorage.setItem(MANAGEMENT_TOKEN_KEY, JSON.stringify(managementAuth));
         document.getElementById('login-password').value = '';
         await startManagementSession();
       } catch (e) {
@@ -646,8 +701,18 @@
     }
 
     function logoutManagement() {
-      localStorage.removeItem(MANAGEMENT_TOKEN_KEY);
+      sessionStorage.removeItem(MANAGEMENT_TOKEN_KEY);
       showLoginGate('Logged out.');
+    }
+
+    function openOuterScreen() {
+      const restaurantCode = String(state?.restaurant?.code || managementAuth?.restaurant?.code || '').trim();
+      const query = restaurantCode ? `?restaurant=${encodeURIComponent(restaurantCode)}` : '';
+      const url = `/outer-screen${query}`;
+      const popup = window.open(url, '_blank');
+      if (!popup) {
+        window.location.href = url;
+      }
     }
 
     async function fetchManagementState() {
@@ -744,6 +809,10 @@
 
     function getPaidOrders() {
       return (state.orders || []).filter((order) => Number(order.paid) === 1);
+    }
+
+    function getHistoryOrders() {
+      return (state.orders || []).slice().sort((a, b) => Number(b.createdAt || 0) - Number(a.createdAt || 0));
     }
 
     function eta(order) {
@@ -1022,6 +1091,7 @@
             <div style="display:flex;justify-content:space-between;align-items:center;gap:6px;">
               <span class="id">${o.label}</span><div style="display:flex;gap:6px;">${badge(o)}${sourceBadge(o)}</div>
             </div>
+            <div style="font-size:10px;color:var(--color-text-secondary);margin:4px 0 6px;">Customer: ${escapeHtml(o.customerName || o.deliveryName || '-')} · Mobile: ${escapeHtml(o.customerMobile || o.deliveryMobile || '-')}</div>
             <div class="desc">${o.items.map((i) => `${i.name} × ${i.qty}`).join(', ')}</div>
             <div style="font-size:10px;color:var(--color-text-tertiary);margin-bottom:6px;">${eta(o)}</div>
             ${st === 'delivered' ? '' : `<button class="btn" onclick="changeStatus(${o.id}, '${nextStatus(st)}')">Move to ${nextStatus(st)}</button>`}
@@ -1057,6 +1127,7 @@
       renderTracking();
       renderMenuManagement();
       renderMenuOrders();
+      renderHistoryTable();
       renderTableStatusSwitch();
       renderPrintControls();
       renderAuditLogs();
@@ -1315,9 +1386,10 @@
             ? `<div class="menu-order-date-group">${dateKey}</div>`
             : '';
           lastDateKey = dateKey;
+          const orderTypeClass = `order-${order.orderType || 'unknown'}`;
           return `
             ${dateHeader}
-            <div class="menu-order-item">
+            <div class="menu-order-item ${orderTypeClass}">
               <div class="menu-order-meta">Source: ${sourceLabel(order)}${order.externalOrderId ? ` · External ID: ${escapeHtml(order.externalOrderId)}` : ''}</div>
               ${receiptMarkup(order)}
             </div>
@@ -1327,15 +1399,48 @@
 
     }
 
-    function getSelectedExportDate() {
-      const input = document.getElementById('order-export-date');
+    function renderHistoryTable() {
+      const container = document.getElementById('history-order-list');
+      if (!container) return;
+      const orders = getHistoryOrders();
+      if (!orders.length) {
+        container.innerHTML = '<div class="history-empty">No orders found.</div>';
+        return;
+      }
+
+      container.innerHTML = `
+        <table class="history-table">
+          <thead>
+            <tr>
+              <th>Order No</th>
+              <th>Name</th>
+              <th>Mobile</th>
+              <th class="amount">Amount</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${orders.map((order) => `
+              <tr>
+                <td>${escapeHtml(order.label || '-')}</td>
+                <td>${escapeHtml(order.customerName || order.deliveryName || '-')}</td>
+                <td>${escapeHtml(order.customerMobile || order.deliveryMobile || '-')}</td>
+                <td class="amount">${money(order.total || 0)}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      `;
+    }
+
+    function getSelectedHistoryDate() {
+      const input = document.getElementById('history-export-date');
       if (!input || !input.value) return null;
       return input.value;
     }
 
     function getOrdersForDate(dateText) {
       if (!dateText) return [];
-      return getPaidOrders().filter((order) => {
+      return getHistoryOrders().filter((order) => {
         const d = new Date(order.createdAt || Date.now());
         const yyyy = d.getFullYear();
         const mm = String(d.getMonth() + 1).padStart(2, '0');
@@ -1353,8 +1458,8 @@
         .replaceAll("'", '&#39;');
     }
 
-    function downloadOrdersByDateExcel() {
-      const dateText = getSelectedExportDate();
+    function downloadHistoryByDateExcel() {
+      const dateText = getSelectedHistoryDate();
       if (!dateText) {
         alert('Select a date first.');
         return;
@@ -1366,44 +1471,18 @@
         return;
       }
 
-      const header = ['Order ID', 'Created At', 'Type', 'Table', 'Status', 'Paid', 'Payment Method', 'Items', 'Subtotal', 'CGST', 'SGST', 'GST Total', 'Total', 'Notes'];
+      const header = ['Order No', 'Name', 'Mobile', 'Amount'];
       const lines = [header.join(',')];
-      let totalAmount = 0;
-      let totalCgst = 0;
-      let totalSgst = 0;
-      let totalGst = 0;
-      let totalSubtotal = 0;
       let totalOrders = 0;
 
       const dataRows = rows.map((order) => {
         totalOrders += 1;
-        totalAmount += Number(order.total || 0);
-        const gst = Number(order.gst || order.tax || 0);
-        const cgst = Number(order.cgst || (gst / 2));
-        const sgst = Number(order.sgst || (gst - cgst));
-        totalCgst += cgst;
-        totalSgst += sgst;
-        totalGst += gst;
-        totalSubtotal += Number(order.subtotal || 0);
-
-        const itemsText = (order.items || []).map((item) => `${item.name} x${item.qty}`).join(' | ');
         return `
           <tr>
-            <td>${htmlEscape(order.label)}</td>
-            <td>${htmlEscape(new Date(order.createdAt || Date.now()).toLocaleString('en-IN'))}</td>
-            <td>${htmlEscape(order.orderType)}</td>
-            <td>${htmlEscape(order.tableNumber ? `T${order.tableNumber}` : '-')}</td>
-            <td>${htmlEscape(order.status)}</td>
-            <td>${htmlEscape(order.paid ? 'Yes' : 'No')}</td>
-            <td>${htmlEscape(order.paymentMethod || '-')}</td>
-            <td>${htmlEscape(itemsText)}</td>
-            <!-- mso-number-format removed: not valid in browsers -->
-            <td>${Number(order.subtotal || 0)}</td>
-            <td>${cgst.toFixed(2)}</td>
-            <td>${sgst.toFixed(2)}</td>
-            <td>${gst.toFixed(2)}</td>
+            <td>${htmlEscape(order.label || '-')}</td>
+            <td>${htmlEscape(order.customerName || order.deliveryName || '-')}</td>
+            <td>${htmlEscape(order.customerMobile || order.deliveryMobile || '-')}</td>
             <td>${Number(order.total || 0)}</td>
-            <td>${htmlEscape(order.notes || '')}</td>
           </tr>
         `;
       }).join('');
@@ -1427,10 +1506,10 @@
           </head>
           <body>
             <table border="1">
-              <tr><th colspan="14" style="font-size:16px;">FoodOrder Daily Summary - ${htmlEscape(dateText)}</th></tr>
-              <tr><th colspan="14">Total Orders: ${totalOrders} | Subtotal: ${totalSubtotal} | CGST: ${totalCgst.toFixed(2)} | SGST: ${totalSgst.toFixed(2)} | GST Total: ${totalGst.toFixed(2)} | Grand Total: ${totalAmount}</th></tr>
+              <tr><th colspan="4" style="font-size:16px;">FoodOrder Daily History - ${htmlEscape(dateText)}</th></tr>
+              <tr><th colspan="4">Total Orders: ${totalOrders}</th></tr>
               <tr>
-                <th>Order ID</th><th>Created At</th><th>Type</th><th>Table</th><th>Status</th><th>Paid</th><th>Payment Method</th><th>Items</th><th>Subtotal</th><th>CGST</th><th>SGST</th><th>GST Total</th><th>Total</th><th>Notes</th>
+                <th>Order No</th><th>Name</th><th>Mobile</th><th>Amount</th>
               </tr>
               ${dataRows}
             </table>
@@ -1442,7 +1521,7 @@
       const url = URL.createObjectURL(blob);
       const anchor = document.createElement('a');
       anchor.href = url;
-      anchor.download = `orders-summary-${dateText}.xls`;
+      anchor.download = `orders-history-${dateText}.xls`;
       anchor.click();
       URL.revokeObjectURL(url);
     }
@@ -1695,7 +1774,7 @@
       }
       renderPrintControls();
 
-      const exportDateInput = document.getElementById('order-export-date');
+      const exportDateInput = document.getElementById('history-export-date');
       if (exportDateInput) {
         const now = new Date();
         const yyyy = now.getFullYear();
@@ -1704,7 +1783,7 @@
         exportDateInput.value = `${yyyy}-${mm}-${dd}`;
       }
 
-      const persisted = localStorage.getItem(MANAGEMENT_TOKEN_KEY);
+      const persisted = sessionStorage.getItem(MANAGEMENT_TOKEN_KEY);
       if (persisted) {
         try {
           managementAuth = JSON.parse(persisted);
@@ -1721,7 +1800,7 @@
       try {
         await startManagementSession();
       } catch (_error) {
-        localStorage.removeItem(MANAGEMENT_TOKEN_KEY);
+        sessionStorage.removeItem(MANAGEMENT_TOKEN_KEY);
         showLoginGate('Please login to continue.');
       }
     })();

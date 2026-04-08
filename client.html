@@ -52,6 +52,11 @@
     .schedule-grid { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:10px; }
     .notes-input { resize:none; margin:10px 0 8px; }
     .eta { display:none; align-items:center; gap:6px; font-size:11px; color:var(--accent-dark); background:var(--accent-light); padding:6px 8px; border-radius:var(--border-radius-md); margin-bottom:10px; }
+    .delivery-info { display:none; align-items:center; gap:8px; font-size:13px; font-weight:600; color:#b45309; background:#fff1dd; padding:10px 12px; border-radius:10px; margin-bottom:12px; border:1px solid #ffd9b8; }
+    .delivery-status-chip { display:none; align-items:center; gap:8px; font-size:12px; font-weight:700; color:#0e6b3f; background:#defae7; padding:8px 12px; border-radius:999px; margin-bottom:12px; border:1px solid #9fe1cb; width:fit-content; }
+    .checkout-warning { display:none; margin-top:10px; padding:10px 12px; border-radius:10px; background:#fff1f2; color:#b91c1c; border:1px solid #fecdd3; font-size:13px; font-weight:600; box-shadow:0 1px 2px rgba(185,28,28,0.08); }
+    .delivery-form { display:none; margin-bottom:12px; padding:14px; background:linear-gradient(180deg, #f8fdff 0%, #f0f9ff 100%); border-radius:14px; border:1px solid #d4e6f7; box-shadow:0 8px 20px rgba(15, 23, 42, 0.06); }
+    .delivery-form-title { font-weight:800; margin-bottom:10px; color:#0f172a; font-size:14px; letter-spacing:0.2px; }
 
     .menu-categories { display:flex; gap:6px; margin-bottom:12px; flex-wrap:wrap; }
     .cat { padding:5px 12px; border-radius:999px; border:1px solid #dde2eb; font-size:12px; cursor:pointer; color:var(--color-text-secondary); background:var(--color-background-primary); transition: all 0.2s ease; }
@@ -200,6 +205,7 @@
               <div class="row"><span>SGST (2.5%)</span><span id="sgst">₹0</span></div>
               <div class="row total"><span>Grand Total</span><span id="total">₹0</span></div>
               <button class="btn" id="place-btn" onclick="placeOrder()">Place order & checkout →</button>
+              <div class="checkout-warning" id="checkout-warning"></div>
             </div>
           </div>
 
@@ -220,10 +226,22 @@
               </div>
             </div>
 
+            <div class="delivery-info" id="delivery-info">🏍️ Home delivery available after ₹500/-</div>
+            <div class="delivery-status-chip" id="delivery-status-chip">🏍️ Delivery unlocked</div>
+
+            <div class="delivery-form" style="display:block;">
+              <div class="delivery-form-title">Customer Details</div>
+              <div class="field-label">Your Name</div>
+              <input id="customer-name" class="field-input" type="text" placeholder="Enter your name" />
+              <div class="field-label" style="margin-top:8px;">Mobile Number</div>
+              <input id="customer-mobile" class="field-input" type="tel" placeholder="Enter mobile number" />
+            </div>
+
             <div class="order-type-tabs">
               <div class="order-type-tab active" onclick="setOrderType(this, 'dine')">Dine-in</div>
               <div class="order-type-tab" onclick="setOrderType(this, 'takeaway')">Takeaway</div>
               <div class="order-type-tab" onclick="setOrderType(this, 'preorder')">Pre-order</div>
+              <div class="order-type-tab" id="delivery-tab" onclick="setOrderType(this, 'delivery')">🏍️ Delivery</div>
             </div>
 
             <div id="table-group" style="margin-bottom:10px; display:none;">
@@ -238,6 +256,12 @@
               </div>
             </div>
             <div id="eta" class="eta">🕐 Schedule your pickup time and we will have it ready.</div>
+
+            <div id="delivery-form" class="delivery-form">
+              <div class="delivery-form-title">🏍️ Delivery Location</div>
+              <button class="btn" id="share-location-btn" onclick="shareDeliveryLocation()" style="width:100%; margin-top:10px; background:#0e6b3f; color:#fff;">📍 Share Location</button>
+              <div id="location-status" style="font-size:12px; margin-top:6px; color:#0f766e;">Location pending...</div>
+            </div>
 
             <div class="menu-categories" id="cat-tabs"></div>
 
@@ -288,6 +312,8 @@
     let pendingPaymentOrderId = null;
     let selectedPaymentMethod = 'card';
     let razorpayConfig = { enabled: false, keyId: null };
+    let currentCartTotal = 0;
+    let deliveryUnlockedShown = false;
 
     const CLIENT_ORDER_IDS_KEY = 'foodorder_client_order_ids';
     const CLIENT_SELECTED_ORDER_KEY = 'foodorder_selected_tracking_order_id';
@@ -698,6 +724,15 @@
       document.getElementById('eta').style.display = showSchedule ? 'flex' : 'none';
       document.getElementById('schedule-group').style.display = showSchedule ? 'block' : 'none';
       document.getElementById('table-group').style.display = 'none';
+      const deliveryForm = document.getElementById('delivery-form');
+      if (deliveryForm) {
+        deliveryForm.style.display = type === 'delivery' && currentCartTotal >= 500 ? 'block' : 'none';
+      }
+      if (type === 'delivery' && currentCartTotal < 500) {
+        showCheckoutWarning('Add cart more than 500 for delivery');
+      } else {
+        clearCheckoutWarning();
+      }
       persistPlaceOrderDraft();
     }
 
@@ -854,6 +889,7 @@
     }
 
     function updateTotals(inclusiveTotal) {
+      currentCartTotal = Number(inclusiveTotal || 0);
       const subtotal = Number((Number(inclusiveTotal || 0) / 1.05).toFixed(2));
       const gst = Number((Number(inclusiveTotal || 0) - subtotal).toFixed(2));
       const cgst = Number((gst / 2).toFixed(2));
@@ -862,6 +898,117 @@
       document.getElementById('cgst').textContent = money(cgst);
       document.getElementById('sgst').textContent = money(sgst);
       document.getElementById('total').textContent = money(Number(inclusiveTotal || 0));
+      updateDeliveryInfo(Number(inclusiveTotal || 0));
+      updateDeliveryLock(Number(inclusiveTotal || 0));
+    }
+
+    function updateDeliveryInfo(total) {
+      const deliveryInfo = document.getElementById('delivery-info');
+      if (!deliveryInfo) return;
+      if (total < 500) {
+        deliveryInfo.style.display = 'flex';
+      } else {
+        deliveryInfo.style.display = 'none';
+      }
+    }
+
+    function updateDeliveryLock(total) {
+      const statusChip = document.getElementById('delivery-status-chip');
+      if (total >= 500) {
+        if (statusChip && orderType === 'delivery') {
+          statusChip.style.display = 'inline-flex';
+        }
+        if (orderType === 'delivery' && !deliveryUnlockedShown) {
+          deliveryUnlockedShown = true;
+          showDeliveryUnlockedPopup();
+        }
+        const deliveryForm = document.getElementById('delivery-form');
+        if (orderType === 'delivery' && deliveryForm) deliveryForm.style.display = 'block';
+      } else {
+        if (statusChip) statusChip.style.display = 'none';
+        deliveryUnlockedShown = false;
+        if (orderType === 'delivery') {
+          const deliveryForm = document.getElementById('delivery-form');
+          if (deliveryForm) deliveryForm.style.display = 'none';
+          showCheckoutWarning('Add cart more than 500 for delivery');
+        }
+      }
+    }
+
+    function showDeliveryUnlockedPopup() {
+      const popup = document.createElement('div');
+      popup.style.position = 'fixed';
+      popup.style.top = '50%';
+      popup.style.left = '50%';
+      popup.style.transform = 'translate(-50%, -50%)';
+      popup.style.background = '#defae7';
+      popup.style.color = '#0e6b3f';
+      popup.style.padding = '20px 30px';
+      popup.style.borderRadius = '12px';
+      popup.style.boxShadow = '0 8px 24px rgba(0,0,0,0.2)';
+      popup.style.zIndex = '9999';
+      popup.style.fontWeight = '700';
+      popup.style.fontSize = '16px';
+      popup.style.textAlign = 'center';
+      popup.textContent = '🏍️ Delivery Unlocked!';
+      document.body.appendChild(popup);
+      setTimeout(() => popup.remove(), 3000);
+    }
+
+    function showCheckoutWarning(message) {
+      const warning = document.getElementById('checkout-warning');
+      if (!warning) return;
+      warning.textContent = String(message || '');
+      warning.style.display = 'block';
+    }
+
+    function clearCheckoutWarning() {
+      const warning = document.getElementById('checkout-warning');
+      if (!warning) return;
+      warning.textContent = '';
+      warning.style.display = 'none';
+    }
+
+    function disableCartModification() {
+      const cartRows = document.querySelectorAll('.cart-item-row');
+      cartRows.forEach(row => {
+        row.querySelectorAll('button').forEach(btn => btn.disabled = true);
+      });
+      const cartButtons = document.querySelectorAll('.cart-buttons button');
+      cartButtons.forEach(btn => {
+        if (!btn.textContent.includes('Place')) btn.disabled = true;
+      });
+    }
+
+    function enableCartModification() {
+      const cartRows = document.querySelectorAll('.cart-item-row');
+      cartRows.forEach(row => {
+        row.querySelectorAll('button').forEach(btn => btn.disabled = false);
+      });
+      const cartButtons = document.querySelectorAll('.cart-buttons button');
+      cartButtons.forEach(btn => btn.disabled = false);
+    }
+
+    let deliveryLocation = { lat: null, lng: null };
+
+    function shareDeliveryLocation() {
+      if (!navigator.geolocation) {
+        alert('Geolocation is not supported by your browser');
+        return;
+      }
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          deliveryLocation.lat = position.coords.latitude;
+          deliveryLocation.lng = position.coords.longitude;
+          document.getElementById('location-status').textContent = `📍 Location shared: ${deliveryLocation.lat.toFixed(4)}, ${deliveryLocation.lng.toFixed(4)}`;
+          document.getElementById('share-location-btn').textContent = '✅ Location Shared';
+          document.getElementById('share-location-btn').style.background = '#0e6b3f';
+        },
+        (error) => {
+          alert('Could not get your location. Please enable location services.');
+          console.error(error);
+        }
+      );
     }
 
     async function placeOrder() {
@@ -884,14 +1031,44 @@
           return;
         }
 
+        const customerName = String(document.getElementById('customer-name')?.value || '').trim();
+        const customerMobile = String(document.getElementById('customer-mobile')?.value || '').trim();
+        if (!customerName || !customerMobile) {
+          alert('Please enter your name and mobile number.');
+          return;
+        }
+
+        if (orderType === 'delivery' && currentCartTotal < 500) {
+          showCheckoutWarning('Add cart more than 500 for delivery');
+          return;
+        }
+
+        clearCheckoutWarning();
+
+        if (orderType === 'delivery') {
+          if (!deliveryLocation.lat || !deliveryLocation.lng) {
+            alert('Please share your location for delivery.');
+            return;
+          }
+        }
+
         const notes = [baseNotes, scheduleText].filter(Boolean).join(' | ');
-        const response = await api('/api/orders', 'POST', {
+        const orderPayload = {
           restaurantCode: selectedRestaurantCode,
           orderType,
           tableNumber,
           notes,
+          customerName,
+          customerMobile,
           items: cart.map((i) => ({ menuItemId: i.menuItemId, qty: i.qty }))
-        });
+        };
+
+        if (orderType === 'delivery') {
+          orderPayload.deliveryLat = deliveryLocation.lat;
+          orderPayload.deliveryLng = deliveryLocation.lng;
+        }
+
+        const response = await api('/api/orders', 'POST', orderPayload);
 
         // Keep client state in sync immediately so payment summary shows the newly placed order without waiting for socket refresh.
         if (response?.order?.id) {
@@ -1157,6 +1334,7 @@
 
       restorePlaceOrderDraft();
 
+      // Restore lock state
       renderAll();
 
       const initialHashView = String(window.location.hash || '').replace(/^#/, '').toLowerCase();

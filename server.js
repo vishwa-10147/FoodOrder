@@ -444,6 +444,12 @@ async function getOrders(restaurantId = null) {
        o.payment_gateway_payment_id AS "paymentGatewayPaymentId",
        o.source,
        o.external_order_id AS "externalOrderId",
+      o.customer_name AS "customerName",
+      o.customer_mobile AS "customerMobile",
+       o.delivery_name AS "deliveryName",
+       o.delivery_mobile AS "deliveryMobile",
+       o.delivery_lat AS "deliveryLat",
+       o.delivery_lng AS "deliveryLng",
        COALESCE(
          json_agg(
            json_build_object(
@@ -586,7 +592,13 @@ async function createOrder({
   source = 'direct',
   externalOrderId = null,
   restaurantId = 1,
-  actor = 'system'
+  actor = 'system',
+  customerName = null,
+  customerMobile = null,
+  deliveryName = null,
+  deliveryMobile = null,
+  deliveryLat = null,
+  deliveryLng = null
 }) {
   const client = await pool.connect();
   try {
@@ -612,11 +624,13 @@ async function createOrder({
     const created = await client.query(
       `INSERT INTO orders (
          restaurant_id, order_type, table_number, notes, status, paid,
-         eta_minutes, created_at, updated_at, source, external_order_id
+         eta_minutes, created_at, updated_at, source, external_order_id,
+         customer_name, customer_mobile,
+         delivery_name, delivery_mobile, delivery_lat, delivery_lng
        )
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $8, $9, $10)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $8, $9, $10, $11, $12, $13, $14, $15, $16)
        RETURNING id`,
-      [restaurantId, orderType, tableNumber, String(notes || ''), status, paid ? 1 : 0, etaMinutes, now, source, externalOrderId]
+      [restaurantId, orderType, tableNumber, String(notes || ''), status, paid ? 1 : 0, etaMinutes, now, source, externalOrderId, customerName, customerMobile, deliveryName, deliveryMobile, deliveryLat, deliveryLng]
     );
     const orderId = Number(created.rows[0].id);
 
@@ -812,7 +826,9 @@ async function initDatabase() {
         payment_gateway_order_id TEXT,
         payment_gateway_payment_id TEXT,
         source TEXT NOT NULL DEFAULT 'direct',
-        external_order_id TEXT
+        external_order_id TEXT,
+        customer_name TEXT,
+        customer_mobile TEXT
       )
     `);
 
@@ -851,6 +867,13 @@ async function initDatabase() {
     );
     const defaultRestaurantId = Number(restaurantResult.rows[0].id);
 
+    await client.query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS delivery_name TEXT`);
+    await client.query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS delivery_mobile TEXT`);
+    await client.query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS delivery_lat NUMERIC`);
+    await client.query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS delivery_lng NUMERIC`);
+    await client.query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS customer_name TEXT`);
+    await client.query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS customer_mobile TEXT`);
+    
     await client.query(`ALTER TABLE menu_items ADD COLUMN IF NOT EXISTS restaurant_id INTEGER`);
     await client.query(`ALTER TABLE menu_items ADD COLUMN IF NOT EXISTS description TEXT NOT NULL DEFAULT ''`);
     await client.query(`ALTER TABLE menu_items ADD COLUMN IF NOT EXISTS emoji TEXT NOT NULL DEFAULT '🍽️'`);
@@ -930,6 +953,8 @@ app.use('/api', createMemoryRateLimiter({
 app.get('/', (_req, res) => res.redirect('/client.html'));
 app.get('/client', (_req, res) => res.redirect('/client.html'));
 app.get('/management', (_req, res) => res.redirect('/management.html'));
+app.get('/outer-screen', (_req, res) => res.redirect('/outer-screen.html'));
+app.get('/display', (_req, res) => res.redirect('/outer-screen.html'));
 
 app.get('/api/health', async (_req, res) => {
   try {
@@ -1328,8 +1353,8 @@ app.post('/api/orders', async (req, res) => {
       return res.status(400).json({ error: 'This outlet is not accepting orders right now' });
     }
 
-    const { orderType, tableNumber, notes, items } = req.body || {};
-    if (!['dine', 'takeaway', 'preorder'].includes(orderType)) {
+    const { orderType, tableNumber, notes, items, customerName, customerMobile, deliveryName, deliveryMobile, deliveryLat, deliveryLng } = req.body || {};
+    if (!['dine', 'takeaway', 'preorder', 'delivery'].includes(orderType)) {
       return res.status(400).json({ error: 'Invalid order type' });
     }
 
@@ -1345,7 +1370,13 @@ app.post('/api/orders', async (req, res) => {
       paid: 0,
       etaMinutes: orderType === 'preorder' ? 25 : 15,
       restaurantId,
-      actor
+      actor,
+      customerName: customerName || null,
+      customerMobile: customerMobile || null,
+      deliveryName: deliveryName || null,
+      deliveryMobile: deliveryMobile || null,
+      deliveryLat: deliveryLat || null,
+      deliveryLng: deliveryLng || null
     });
 
     const createdOrder = (await getOrders(restaurantId)).find((order) => order.id === orderId);
