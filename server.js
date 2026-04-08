@@ -255,6 +255,19 @@ function toOrderLabel(id) {
   return `#${String(id).padStart(4, '0')}`;
 }
 
+function getGatewayErrorMessage(error, fallbackMessage) {
+  const message = String(
+    error?.error?.description
+    || error?.description
+    || error?.message
+    || fallbackMessage
+    || 'Payment gateway request failed'
+  ).trim();
+
+  const code = String(error?.error?.code || error?.code || '').trim();
+  return code ? `${message} (${code})` : message;
+}
+
 function toIstDateKey(timestampMs) {
   const date = new Date(Number(timestampMs || Date.now()) + (5.5 * 60 * 60 * 1000));
   const yyyy = date.getUTCFullYear();
@@ -1500,7 +1513,9 @@ app.post('/api/orders/:id/razorpay-order', async (req, res) => {
       appOrder: (await getOrders(order.restaurantId)).find((entry) => entry.id === order.id)
     });
   } catch (error) {
-    return res.status(400).json({ error: error.message || 'Unable to create Razorpay order' });
+    const message = getGatewayErrorMessage(error, 'Unable to create Razorpay order');
+    console.error('Razorpay order creation failed:', message);
+    return res.status(400).json({ error: message });
   }
 });
 
@@ -1554,7 +1569,9 @@ app.post('/api/orders/:id/razorpay/verify', async (req, res) => {
     await broadcastState(updatedOrder?.restaurantId || null);
     return res.json({ ok: true, order: updatedOrder });
   } catch (error) {
-    return res.status(400).json({ error: error.message || 'Razorpay verification failed' });
+    const message = getGatewayErrorMessage(error, 'Razorpay verification failed');
+    console.error('Razorpay verification failed:', message);
+    return res.status(400).json({ error: message });
   }
 });
 

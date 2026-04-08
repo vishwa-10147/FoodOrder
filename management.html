@@ -90,7 +90,18 @@
     .section-head h3 { margin-bottom:0; }
     .table-actions { display:flex; align-items:center; gap:6px; }
     .table-input { width:88px; border:var(--border); border-radius:var(--border-radius-md); padding:5px 7px; font-size:11px; color:var(--color-text-primary); background:var(--color-background-primary); }
-    .small-btn { border:var(--border); border-radius:var(--border-radius-md); background:var(--color-background-secondary); font-size:11px; padding:6px 8px; cursor:pointer; color:var(--color-text-secondary); }
+    .small-btn {
+      border:1px solid #0f766e;
+      border-radius:var(--border-radius-md);
+      background:linear-gradient(180deg, #14b8a6 0%, #0f766e 100%);
+      font-size:11px;
+      padding:6px 10px;
+      cursor:pointer;
+      color:#ffffff;
+      font-weight:600;
+      box-shadow:0 3px 8px rgba(15, 118, 110, 0.22);
+    }
+    .small-btn:hover { filter:brightness(1.05); }
     .small-btn:disabled { opacity:0.5; cursor:not-allowed; }
     .table-cell { cursor:pointer; padding:10px 6px; border-radius:var(--border-radius-md); border:var(--border); text-align:center; }
     .table-cell .n { font-size:11px; font-weight:500; }
@@ -111,12 +122,43 @@
     .item { border:var(--border); border-radius:var(--border-radius-md); background:var(--color-background-primary); padding:8px 10px; margin-bottom:7px; }
     .item .id { font-size:12px; font-weight:500; color:var(--color-text-primary); }
     .item .desc { font-size:11px; color:var(--color-text-secondary); margin:2px 0 6px; }
-    .btn { width:100%; border:var(--border); border-radius:var(--border-radius-md); background:var(--color-background-secondary); font-size:11px; padding:5px; cursor:pointer; color:var(--color-text-secondary); }
+    .btn {
+      width:100%;
+      border:1px solid #d87a12;
+      border-radius:var(--border-radius-md);
+      background:linear-gradient(180deg, #fb923c 0%, #ea580c 100%);
+      font-size:11px;
+      padding:6px;
+      cursor:pointer;
+      color:#ffffff;
+      font-weight:600;
+      box-shadow:0 4px 10px rgba(194, 65, 12, 0.25);
+    }
+    .btn:hover { filter:brightness(1.05); }
 
-    .track-pills { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px; }
-    .pill { font-size:12px; border:var(--border); border-radius:999px; padding:5px 12px; cursor:pointer; color:var(--color-text-secondary); background:var(--color-background-primary); }
-    .pill.active { background:var(--charcoal); color:white; border-color:var(--charcoal); }
-    .track-card { border:var(--border); border-radius:var(--border-radius-md); background:var(--color-background-primary); padding:14px; }
+    .track-controls { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:10px; }
+    .track-hint { font-size:11px; color:var(--color-text-secondary); }
+    .track-nav { display:flex; gap:6px; }
+    .track-slider-wrap { overflow:hidden; }
+    .track-slider {
+      display:grid;
+      grid-auto-flow:column;
+      grid-auto-columns:calc((100% - 24px) / 4);
+      gap:8px;
+      overflow-x:auto;
+      scroll-snap-type:x mandatory;
+      scrollbar-width:thin;
+      padding-bottom:4px;
+    }
+    .track-card {
+      border:var(--border);
+      border-radius:var(--border-radius-md);
+      background:var(--color-background-primary);
+      padding:12px;
+      scroll-snap-align:start;
+      min-width:0;
+    }
+    .track-empty { border:var(--border); border-radius:var(--border-radius-md); background:var(--color-background-primary); padding:14px; font-size:12px; color:var(--color-text-secondary); }
     .progress { height:5px; border-radius:999px; background:var(--color-background-secondary); overflow:hidden; margin:8px 0; }
     .fill { height:100%; background:var(--accent); }
 
@@ -139,7 +181,16 @@
     .menu-admin-thumb { width:52px; height:52px; border-radius:10px; object-fit:cover; border:var(--border); background:var(--color-background-secondary); }
     .menu-admin-main { display:flex; align-items:center; gap:10px; }
     .menu-admin-upload { width:170px; }
-    .state-btn { border:var(--border); border-radius:var(--border-radius-md); background:var(--color-background-secondary); color:var(--color-text-secondary); font-size:11px; padding:5px 8px; cursor:pointer; }
+    .state-btn {
+      border:1px solid #d2dbea;
+      border-radius:var(--border-radius-md);
+      background:linear-gradient(180deg, #ffffff 0%, #f4f7fb 100%);
+      color:#334155;
+      font-size:11px;
+      padding:5px 8px;
+      cursor:pointer;
+    }
+    .state-btn:hover { border-color:#94a3b8; }
     .state-btn.active.available { background:var(--accent-light); color:var(--accent-dark); border-color:#9FE1CB; }
     .state-btn.active.unavailable { background:var(--warn-light); color:var(--warn); border-color:#FAC775; }
     .state-btn.active.free { background:var(--color-background-secondary); color:var(--color-text-primary); }
@@ -209,6 +260,7 @@
       .table-layout { grid-template-columns: 1fr; }
       .table-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
       .pipeline { grid-template-columns: 1fr; }
+      .track-slider { grid-auto-columns: calc((100% - 8px) / 2); }
       .menu-admin-form-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .menu-view-layout { grid-template-columns: 1fr; }
       .menu-view-sidebar { position: static; }
@@ -219,6 +271,7 @@
       .metrics { grid-template-columns: 1fr; }
       .table-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .menu-admin-form-grid { grid-template-columns: 1fr; }
+      .track-slider { grid-auto-columns: 100%; }
       .table-actions { width: 100%; flex-wrap: wrap; }
       .table-input { width: 100%; }
       .small-btn { width: auto; }
@@ -313,11 +366,18 @@
       </div>
 
       <section class="content active" id="view-dashboard">
+        <div class="section-head-wrap" style="margin-bottom:10px;">
+          <h3 style="margin:0;">Dashboard Metrics</h3>
+          <div class="order-export-controls">
+            <input id="dashboard-date-filter" class="order-export-date" type="date" onchange="renderDashboard()" />
+            <button class="small-btn" onclick="clearDashboardDateFilter()">All dates</button>
+          </div>
+        </div>
         <div class="metrics">
           <div class="metric"><div class="l">Overdue orders</div><div class="v" id="m-active">0</div><div class="s" id="m-overdue">0 active</div></div>
           <div class="metric"><div class="l">Total orders (delivered)</div><div class="v" id="m-tables">0</div><div class="s">Completed orders</div></div>
           <div class="metric"><div class="l">Active orders</div><div class="v" id="m-wait">0</div><div class="s">Not yet delivered</div></div>
-          <div class="metric"><div class="l">Revenue today</div><div class="v" id="m-revenue">₹0</div><div class="s">Paid orders only</div></div>
+          <div class="metric"><div class="l">Revenue (selected date)</div><div class="v" id="m-revenue">₹0</div><div class="s">Paid orders only</div></div>
         </div>
 
         <div class="section">
@@ -378,6 +438,13 @@
       </section>
 
       <section class="content" id="view-kitchen">
+        <div class="section-head-wrap" style="margin-bottom:10px;">
+          <h3 style="margin:0;">Kitchen Delivery</h3>
+          <div class="order-export-controls">
+            <input id="kitchen-date-filter" class="order-export-date" type="date" onchange="renderKitchen()" />
+            <button class="small-btn" onclick="clearKitchenDateFilter()">All dates</button>
+          </div>
+        </div>
         <div class="pipeline">
           <div class="col"><div class="col-title">New <span id="c-new">0</span></div><div id="l-new"></div></div>
           <div class="col"><div class="col-title">Preparing <span id="c-preparing">0</span></div><div id="l-preparing"></div></div>
@@ -387,8 +454,16 @@
       </section>
 
       <section class="content" id="view-tracking">
-        <div class="track-pills" id="tpills"></div>
-        <div class="track-card" id="tcard"></div>
+        <div class="track-controls">
+          <div class="track-hint">Showing multiple live orders. Slide or use arrows.</div>
+          <div class="track-nav">
+            <button class="small-btn" onclick="scrollTracking(-1)">← Prev</button>
+            <button class="small-btn" onclick="scrollTracking(1)">Next →</button>
+          </div>
+        </div>
+        <div class="track-slider-wrap">
+          <div class="track-slider" id="tslider"></div>
+        </div>
       </section>
 
       <section class="content" id="view-menu">
@@ -431,7 +506,13 @@
 
           <div class="menu-view-sidebar">
             <div class="menu-panel">
-              <div class="menu-panel-title">Order list</div>
+              <div class="section-head-wrap" style="margin-bottom:8px;">
+                <div class="menu-panel-title" style="margin-bottom:0;">Order list</div>
+                <div class="order-export-controls">
+                  <input id="menu-orders-date-filter" class="order-export-date" type="date" onchange="renderMenuOrders()" />
+                  <button class="small-btn" onclick="clearMenuOrdersDateFilter()">All dates</button>
+                </div>
+              </div>
               <div class="menu-orders-wrap">
                 <div class="menu-orders-list" id="menu-order-list"></div>
               </div>
@@ -476,7 +557,6 @@
     let auditLogs = [];
     let managementAuth = null;
     let statePollTimer = null;
-    let selectedOrderId = null;
     let pendingRemoveTableNumber = null;
     let selectedOrderingTableNumber = null;
     let autoPrintEnabled = true;
@@ -811,6 +891,50 @@
       return (state.orders || []).filter((order) => Number(order.paid) === 1);
     }
 
+    function orderDateKey(order) {
+      const d = new Date(order.createdAt || Date.now());
+      const yyyy = d.getFullYear();
+      const mm = String(d.getMonth() + 1).padStart(2, '0');
+      const dd = String(d.getDate()).padStart(2, '0');
+      return `${yyyy}-${mm}-${dd}`;
+    }
+
+    function getSelectedKitchenDate() {
+      const input = document.getElementById('kitchen-date-filter');
+      if (!input || !input.value) return null;
+      return String(input.value);
+    }
+
+    function getSelectedDashboardDate() {
+      const input = document.getElementById('dashboard-date-filter');
+      if (!input || !input.value) return null;
+      return String(input.value);
+    }
+
+    function clearDashboardDateFilter() {
+      const input = document.getElementById('dashboard-date-filter');
+      if (input) input.value = '';
+      renderDashboard();
+    }
+
+    function getSelectedMenuOrdersDate() {
+      const input = document.getElementById('menu-orders-date-filter');
+      if (!input || !input.value) return null;
+      return String(input.value);
+    }
+
+    function clearMenuOrdersDateFilter() {
+      const input = document.getElementById('menu-orders-date-filter');
+      if (input) input.value = '';
+      renderMenuOrders();
+    }
+
+    function clearKitchenDateFilter() {
+      const input = document.getElementById('kitchen-date-filter');
+      if (input) input.value = '';
+      renderKitchen();
+    }
+
     function getHistoryOrders() {
       return (state.orders || []).slice().sort((a, b) => Number(b.createdAt || 0) - Number(a.createdAt || 0));
     }
@@ -823,15 +947,20 @@
     }
 
     function renderDashboard() {
-      const paidOrders = getPaidOrders();
+      const selectedDate = getSelectedDashboardDate();
+      const paidOrders = getPaidOrders().filter((order) => {
+        if (!selectedDate) return true;
+        return orderDateKey(order) === selectedDate;
+      });
       const activeOrders = paidOrders.filter((o) => o.status !== 'delivered').length;
       const deliveredOrders = paidOrders.filter((o) => o.status === 'delivered').length;
-      const s = state.stats || {};
-      document.getElementById('m-active').textContent = s.overdue || 0;
+      const overdueOrders = paidOrders.filter((o) => o.status !== 'delivered' && (Date.now() - Number(o.createdAt || 0)) > (Number(o.etaMinutes || 0) * 60000)).length;
+      const revenue = paidOrders.reduce((sum, o) => sum + Number(o.total || 0), 0);
+      document.getElementById('m-active').textContent = overdueOrders;
       document.getElementById('m-overdue').textContent = `${activeOrders} active`;
       document.getElementById('m-tables').textContent = deliveredOrders;
       document.getElementById('m-wait').textContent = activeOrders;
-      document.getElementById('m-revenue').textContent = money(s.revenueToday || 0);
+      document.getElementById('m-revenue').textContent = money(revenue);
       document.getElementById('k-badge').textContent = paidOrders.filter((o) => o.status === 'new').length;
 
       const recent = paidOrders.slice(0, 3);
@@ -1081,7 +1210,12 @@
     }
 
     function renderKitchen() {
-      const paidOrders = getPaidOrders();
+      const selectedDate = getSelectedKitchenDate();
+      const paidOrders = getPaidOrders().filter((order) => {
+        if (order.orderType !== 'delivery') return false;
+        if (!selectedDate) return true;
+        return orderDateKey(order) === selectedDate;
+      });
       const groups = { new: [], preparing: [], ready: [], delivered: [] };
       paidOrders.forEach((o) => groups[o.status]?.push(o));
       ['new', 'preparing', 'ready', 'delivered'].forEach((st) => {
@@ -1103,22 +1237,28 @@
     function renderTracking() {
       const paidOrders = getPaidOrders();
       if (!paidOrders.length) {
-        document.getElementById('tpills').innerHTML = '';
-        document.getElementById('tcard').textContent = 'No orders for tracking.';
+        const slider = document.getElementById('tslider');
+        if (slider) slider.innerHTML = '<div class="track-empty">No orders for tracking.</div>';
         return;
       }
-      if (!selectedOrderId || !paidOrders.some((o) => o.id === selectedOrderId)) selectedOrderId = paidOrders[0].id;
 
-      document.getElementById('tpills').innerHTML = paidOrders.slice(0, 8).map((o) => `
-        <div class="pill ${o.id === selectedOrderId ? 'active' : ''}" onclick="selectOrder(${o.id})">${o.label}</div>
+      const sorted = paidOrders.slice().sort((a, b) => Number(b.createdAt || 0) - Number(a.createdAt || 0));
+      const slider = document.getElementById('tslider');
+      if (!slider) return;
+      slider.innerHTML = sorted.map((o) => `
+        <div class="track-card">
+          ${receiptMarkup(o, true)}
+          <div class="progress"><div class="fill" style="width:${o.progress || 0}%"></div></div>
+          <div style="font-size:11px;color:var(--color-text-secondary);">${o.progress || 0}% complete · ${o.status} · ${o.paid ? 'Paid' : 'Pending payment'}</div>
+        </div>
       `).join('');
+    }
 
-      const o = paidOrders.find((x) => x.id === selectedOrderId);
-      document.getElementById('tcard').innerHTML = `
-        ${receiptMarkup(o)}
-        <div class="progress"><div class="fill" style="width:${o.progress || 0}%"></div></div>
-        <div style="font-size:11px;color:var(--color-text-secondary);">${o.progress || 0}% complete · ${o.status} · ${o.paid ? 'Paid' : 'Pending payment'}</div>
-      `;
+    function scrollTracking(direction) {
+      const slider = document.getElementById('tslider');
+      if (!slider) return;
+      const step = Math.max(280, Math.floor(slider.clientWidth * 0.75));
+      slider.scrollBy({ left: direction * step, behavior: 'smooth' });
     }
 
     function renderAll() {
@@ -1374,7 +1514,14 @@
       if (!orderContainer) return;
 
       // Keep latest orders first so staff sees newest bills at the top.
-      const orders = getPaidOrders().slice().sort((a, b) => Number(b.createdAt) - Number(a.createdAt));
+      const selectedDate = getSelectedMenuOrdersDate();
+      const orders = getPaidOrders()
+        .filter((order) => {
+          if (!selectedDate) return true;
+          return orderDateKey(order) === selectedDate;
+        })
+        .slice()
+        .sort((a, b) => Number(b.createdAt) - Number(a.createdAt));
       if (!orders.length) {
         orderContainer.innerHTML = '<div class="menu-order-item"><div class="menu-order-time">No orders found.</div></div>';
       } else {
@@ -1441,11 +1588,7 @@
     function getOrdersForDate(dateText) {
       if (!dateText) return [];
       return getHistoryOrders().filter((order) => {
-        const d = new Date(order.createdAt || Date.now());
-        const yyyy = d.getFullYear();
-        const mm = String(d.getMonth() + 1).padStart(2, '0');
-        const dd = String(d.getDate()).padStart(2, '0');
-        return `${yyyy}-${mm}-${dd}` === dateText;
+        return orderDateKey(order) === dateText;
       });
     }
 
@@ -1751,11 +1894,6 @@
       }
     }
 
-    function selectOrder(orderId) {
-      selectedOrderId = orderId;
-      renderTracking();
-    }
-
     function updateTime() {
       const now = new Date();
       document.getElementById('time').textContent = `Live · ${now.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}`;
@@ -1775,12 +1913,24 @@
       renderPrintControls();
 
       const exportDateInput = document.getElementById('history-export-date');
+      const kitchenDateInput = document.getElementById('kitchen-date-filter');
+      const dashboardDateInput = document.getElementById('dashboard-date-filter');
+      const menuOrdersDateInput = document.getElementById('menu-orders-date-filter');
       if (exportDateInput) {
         const now = new Date();
         const yyyy = now.getFullYear();
         const mm = String(now.getMonth() + 1).padStart(2, '0');
         const dd = String(now.getDate()).padStart(2, '0');
         exportDateInput.value = `${yyyy}-${mm}-${dd}`;
+        if (kitchenDateInput) {
+          kitchenDateInput.value = `${yyyy}-${mm}-${dd}`;
+        }
+        if (dashboardDateInput) {
+          dashboardDateInput.value = `${yyyy}-${mm}-${dd}`;
+        }
+        if (menuOrdersDateInput) {
+          menuOrdersDateInput.value = `${yyyy}-${mm}-${dd}`;
+        }
       }
 
       const persisted = sessionStorage.getItem(MANAGEMENT_TOKEN_KEY);
