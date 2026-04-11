@@ -5,32 +5,40 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Restaurant Order Management System</title>
   <style>
+    @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Urbanist:wght@400;500;600;700;800&display=swap');
+
     :root {
       --cream: #FAFAF8;
       --stone: #F1EFE8;
-      --charcoal: #2C2C2A;
-      --mid: #888780;
-      --accent: #1D9E75;
-      --accent-light: #E1F5EE;
-      --accent-dark: #085041;
-      --warn: #BA7517;
-      --warn-light: #FAEEDA;
+      --charcoal: #1f1a17;
+      --mid: #7f756d;
+      --accent: #b66545;
+      --accent-light: #f5e8de;
+      --accent-dark: #8b4a30;
+      --warn: #9f5d18;
+      --warn-light: #fcf1df;
       --danger: #A32D2D;
       --danger-light: #FCEBEB;
-      --info: #185FA5;
-      --info-light: #E6F1FB;
+      --info: #20476e;
+      --info-light: #e9f0f8;
       --border: 0.5px solid var(--color-border-tertiary);
       --radius: var(--border-radius-lg);
     }
-    * { box-sizing: border-box; margin: 0; padding: 0; font-family: var(--font-sans); }
-    body { padding: 18px; background: var(--color-background-primary); }
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Urbanist', var(--font-sans), sans-serif; }
+    body {
+      padding: 18px;
+      background:
+        radial-gradient(circle at 10% 8%, rgba(227, 195, 157, 0.34) 0%, rgba(227, 195, 157, 0) 30%),
+        radial-gradient(circle at 90% 92%, rgba(189, 205, 230, 0.3) 0%, rgba(189, 205, 230, 0) 35%),
+        linear-gradient(140deg, #f2eeea 0%, #f7f5f2 100%);
+    }
 
-    #app { display: flex; min-height: 680px; background: var(--color-background-tertiary); border-radius: var(--border-radius-xl); overflow: hidden; border: var(--border); }
+    #app { display: flex; min-height: 680px; background: #fcfbf9; border-radius: 12px; overflow: hidden; border: 1px solid #e6dfd7; box-shadow: 0 12px 28px rgba(46, 37, 30, 0.09); }
 
-    #sidebar { width: 210px; flex-shrink: 0; background: var(--color-background-primary); border-right: var(--border); display: flex; flex-direction: column; }
-    .sidebar-logo { padding: 20px 16px 16px; border-bottom: var(--border); }
-    .sidebar-logo .logo-name { font-size: 15px; font-weight: 500; color: var(--color-text-primary); }
-    .sidebar-logo .logo-sub { font-size: 11px; color: var(--color-text-secondary); margin-top: 2px; }
+    #sidebar { width: 210px; flex-shrink: 0; background: #fbf8f4; border-right: 1px solid #e7ddd3; display: flex; flex-direction: column; }
+    .sidebar-logo { padding: 20px 16px 16px; border-bottom: 1px solid #e9dfd7; }
+    .sidebar-logo .logo-name { font-size: 30px; font-weight: 600; color: #171412; font-family: 'Cormorant Garamond', serif; line-height: 0.9; }
+    .sidebar-logo .logo-sub { font-size: 11px; color: #7f756d; margin-top: 3px; }
     .mode-switch { display: flex; gap: 4px; padding: 10px 12px; border-bottom: var(--border); }
     .mode-btn { flex: 1; padding: 6px 8px; border-radius: var(--border-radius-md); border: var(--border); background: var(--color-background-primary); color: var(--color-text-secondary); font-size: 12px; cursor: pointer; }
     .mode-btn.active { background: var(--charcoal); color: white; border-color: var(--charcoal); }
@@ -133,7 +141,7 @@
     .cart-total-row { display: flex; justify-content: space-between; font-size: 14px; font-weight: 500; color: var(--color-text-primary); margin-top: 6px; }
     .notes-input, .field-input { width: 100%; border: var(--border); border-radius: var(--border-radius-md); padding: 6px 8px; font-size: 12px; color: var(--color-text-primary); background: var(--color-background-primary); }
     .notes-input { margin: 10px 0 8px; resize: none; }
-    .checkout-btn { width: 100%; padding: 9px; background: var(--charcoal); color: white; border: none; border-radius: var(--border-radius-md); font-size: 13px; font-weight: 500; cursor: pointer; }
+    .checkout-btn { width: 100%; padding: 9px; background: var(--accent); color: white; border: none; border-radius: 0; font-size: 13px; font-weight: 700; cursor: pointer; text-transform: uppercase; letter-spacing: 0.2px; }
     .eta-info { display: none; align-items: center; gap: 6px; font-size: 11px; color: var(--accent-dark); background: var(--accent-light); padding: 6px 8px; border-radius: var(--border-radius-md); margin-bottom: 10px; }
 
     .tracking-wrap { display: flex; gap: 16px; }
@@ -161,7 +169,7 @@
     .pay-method.active { border-color: var(--charcoal); color: var(--color-text-primary); background: var(--color-background-secondary); font-weight: 500; }
     .pay-summary-row { display: flex; justify-content: space-between; font-size: 13px; color: var(--color-text-secondary); padding: 5px 0; border-bottom: var(--border); }
     .pay-summary-row.total { color: var(--color-text-primary); font-weight: 500; font-size: 15px; border-bottom: none; padding-top: 8px; }
-    .pay-btn { width: 100%; padding: 10px; background: var(--charcoal); color: white; border: none; border-radius: var(--border-radius-md); font-size: 13px; font-weight: 500; cursor: pointer; margin-top: 12px; }
+    .pay-btn { width: 100%; padding: 10px; background: var(--accent); color: white; border: none; border-radius: 0; font-size: 13px; font-weight: 700; cursor: pointer; margin-top: 12px; text-transform: uppercase; letter-spacing: 0.2px; }
   </style>
 </head>
 <body>
