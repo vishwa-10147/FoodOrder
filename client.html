@@ -73,23 +73,64 @@
     .cat:hover { border-color:#b8c3d6; color:var(--color-text-primary); }
     .cat.active { background:linear-gradient(135deg, #18314f 0%, #1f4a67 100%); border-color:#18314f; color:white; }
 
-    .menu-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; }
-    .menu-item { border:1px solid #dbe6f3; border-radius:16px; background:linear-gradient(180deg, #ffffff 0%, #f9fbff 100%); padding:13px; box-shadow:0 6px 14px rgba(2, 6, 23, 0.07); transition: transform 0.22s ease, box-shadow 0.22s ease, border-color 0.22s ease; animation: riseIn 0.28s ease both; }
-    .menu-item:hover { transform: translateY(-3px); box-shadow:0 14px 24px rgba(2, 6, 23, 0.12); border-color:#b9d1ea; }
-    .menu-item.unavailable { opacity:0.65; }
-    .menu-photo { width:100%; height:124px; border-radius:12px; object-fit:cover; display:block; margin-bottom:9px; border:1px solid #e7e9ee; background:var(--color-background-secondary); }
-    .emoji { font-size:24px; display:block; margin-bottom:6px; }
-    .name { font-size:13px; color:var(--color-text-primary); font-weight:700; }
-    .desc { font-size:11px; color:#607089; margin:3px 0 6px; }
+    .menu-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px; }
+    .menu-item { border:1px solid #dfe7f3; border-radius:22px; background:linear-gradient(180deg, #ffffff 0%, #fcfdff 100%); padding:11px; box-shadow:0 8px 18px rgba(2, 6, 23, 0.08); transition: transform 0.22s ease, box-shadow 0.22s ease, border-color 0.22s ease; animation: riseIn 0.28s ease both; }
+    .menu-item:hover { transform: translateY(-3px); box-shadow:0 16px 28px rgba(2, 6, 23, 0.12); border-color:#c4d5ea; }
+    .menu-item.unavailable { opacity:0.67; }
+    .menu-photo-shell { position:relative; width:100%; height:146px; border-radius:16px; overflow:hidden; margin-bottom:10px; border:1px solid #e8e8ef; background:#f8fafc; }
+    .menu-photo { width:100%; height:100%; object-fit:cover; display:block; filter:saturate(1.08) contrast(1.03); transform:scale(1.01); }
+    .menu-photo-shell::after { content:''; position:absolute; inset:auto 0 0 0; height:44%; background:linear-gradient(180deg, rgba(0, 0, 0, 0) 0%, rgba(15, 23, 42, 0.24) 100%); pointer-events:none; }
+    .menu-photo-placeholder {
+      position:absolute;
+      inset:0;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      flex-direction:column;
+      gap:8px;
+      background:
+        radial-gradient(circle at 15% 15%, rgba(255, 205, 158, 0.45) 0%, rgba(255, 205, 158, 0) 44%),
+        radial-gradient(circle at 88% 88%, rgba(170, 230, 255, 0.45) 0%, rgba(170, 230, 255, 0) 46%),
+        linear-gradient(145deg, #fff9f2 0%, #f7fbff 100%);
+      transition:opacity 0.2s ease;
+    }
+    .menu-photo-placeholder::before {
+      content:attr(data-emoji);
+      width:58px;
+      height:58px;
+      border-radius:999px;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      font-size:28px;
+      background:linear-gradient(180deg, #ffffff 0%, #fff3ea 100%);
+      border:1px solid #ffd8bb;
+      box-shadow:0 8px 14px rgba(251, 146, 60, 0.2);
+    }
+    .menu-photo-label {
+      font-size:11px;
+      font-weight:700;
+      letter-spacing:0.2px;
+      color:#6b7280;
+      background:rgba(255, 255, 255, 0.88);
+      border:1px solid #e5e7eb;
+      border-radius:999px;
+      padding:4px 10px;
+    }
+    .menu-photo-shell.has-image .menu-photo-placeholder { opacity:0; pointer-events:none; }
+    .menu-photo-shell.is-empty .menu-photo { display:none; }
+    .menu-photo-shell.is-empty::after { display:none; }
+    .name { font-size:14px; color:var(--color-text-primary); font-weight:800; line-height:1.25; }
+    .desc { font-size:11px; color:#64748b; margin:4px 0 8px; line-height:1.35; min-height:28px; }
     .foot { display:flex; justify-content:space-between; align-items:center; }
     .price { font-size:13px; color:#13253e; font-weight:700; }
     .add { width:30px; height:30px; border-radius:50%; background:linear-gradient(180deg, #fb923c 0%, #ea580c 100%); color:white; border:none; cursor:pointer; font-size:18px; box-shadow:0 5px 10px rgba(194, 65, 12, 0.35); }
     .add:disabled { background:var(--color-background-secondary); color:var(--color-text-tertiary); cursor:not-allowed; }
     .menu-qty-controls { display:flex; align-items:center; gap:6px; }
-    .menu-qty-btn { width:24px; height:24px; border-radius:7px; border:1px solid #d7e2ef; background:#fff; color:#0f172a; font-size:14px; line-height:1; cursor:pointer; display:flex; align-items:center; justify-content:center; }
+    .menu-qty-btn { width:26px; height:26px; border-radius:999px; border:1px solid #ffd1ee; background:linear-gradient(180deg, #ffffff 0%, #fff5fd 100%); color:#d946ef; font-size:15px; line-height:1; cursor:pointer; display:flex; align-items:center; justify-content:center; box-shadow:0 3px 8px rgba(217, 70, 239, 0.16); }
     .menu-qty-btn:hover { background:#f2f7ff; }
     .menu-qty-btn:disabled { opacity:0.5; cursor:not-allowed; }
-    .menu-qty-value { min-width:18px; text-align:center; font-size:12px; font-weight:600; color:#0f172a; }
+    .menu-qty-value { min-width:18px; text-align:center; font-size:12px; font-weight:700; color:#0f172a; }
     .unavailable-badge { display:inline-block; margin-top:4px; font-size:10px; padding:2px 7px; border-radius:999px; background:var(--warn-light); color:var(--warn); }
 
     .box { border:1px solid #d9e5f3; border-radius:16px; background:linear-gradient(165deg, #ffffff 0%, #f4f9ff 58%, #eef8f5 100%); padding:15px; box-shadow:0 12px 20px rgba(2, 6, 23, 0.08); }
@@ -782,14 +823,39 @@
       }
     }
 
+    function renderMenuPhoto(item) {
+      const imageUrl = String(item?.imageUrl || '').trim();
+      const safeName = escapeHtml(String(item?.name || 'Menu item'));
+      const safeEmoji = escapeHtml(String(item?.emoji || '🍽️'));
+
+      if (!imageUrl) {
+        return `
+          <div class="menu-photo-shell is-empty">
+            <div class="menu-photo-placeholder" data-emoji="${safeEmoji}">
+              <span class="menu-photo-label">Photo coming soon</span>
+            </div>
+          </div>
+        `;
+      }
+
+      return `
+        <div class="menu-photo-shell has-image">
+          <img class="menu-photo" src="${escapeHtml(imageUrl)}" alt="${safeName}" loading="lazy" onerror="this.closest('.menu-photo-shell').classList.remove('has-image'); this.closest('.menu-photo-shell').classList.add('is-empty');" />
+          <div class="menu-photo-placeholder" data-emoji="${safeEmoji}">
+            <span class="menu-photo-label">Photo coming soon</span>
+          </div>
+        </div>
+      `;
+    }
+
     function renderMenu() {
       const qtyByMenuItemId = new Map(cart.map((line) => [Number(line.menuItemId), Number(line.qty || 0)]));
       const menu = currentCat === 'all' ? state.menu : state.menu.filter((m) => m.cat === currentCat);
       document.getElementById('menu').innerHTML = menu.map((m) => `
         <div class="menu-item ${Number(m.available) === 1 ? '' : 'unavailable'}">
-          ${m.imageUrl ? `<img class="menu-photo" src="${escapeHtml(m.imageUrl)}" alt="${escapeHtml(m.name)}" loading="lazy" />` : `<span class="emoji">${m.emoji}</span>`}
-          <div class="name">${m.name}</div>
-          <div class="desc">${m.desc}</div>
+          ${renderMenuPhoto(m)}
+          <div class="name">${escapeHtml(m.name)}</div>
+          <div class="desc">${escapeHtml(m.desc || '')}</div>
           ${Number(m.available) === 1 ? '' : '<div class="unavailable-badge">Temporarily unavailable</div>'}
           <div class="foot">
             <span class="price">${money(m.price)}</span>
