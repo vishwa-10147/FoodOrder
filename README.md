@@ -1,21 +1,36 @@
-# FoodOrder – Restaurant Order Management System
+# FoodOrder
 
-A real-time restaurant ordering app with separate **Client** and **Management** pages, powered by **Node.js + Express + Socket.IO + PostgreSQL**.
+![Node.js](https://img.shields.io/badge/Node.js-20.x-339933?logo=node.js&logoColor=white)
+![Express](https://img.shields.io/badge/Express-5.x-000000?logo=express&logoColor=white)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-Database-4169E1?logo=postgresql&logoColor=white)
+![Socket.IO](https://img.shields.io/badge/Socket.IO-Realtime-010101?logo=socket.io&logoColor=white)
+![License](https://img.shields.io/badge/License-ISC-blue)
 
-- Client page: place dine-in / takeaway / pre-order requests, track orders, and pay.
-- Management page: monitor tables and kitchen pipeline, manage menu availability/items, switch table states, and view audit logs.
-- Real-time sync: all connected screens update instantly via Socket.IO.
+FoodOrder is a real-time restaurant order management system with dedicated client and management interfaces, powered by Node.js, Express, PostgreSQL, and Socket.IO.
 
----
+## Overview
+
+FoodOrder helps restaurants run ordering and operations from a single backend.
+
+- Client interface: menu browsing, order placement, order tracking, and payments.
+- Management interface: menu control, table control, live order handling, and activity visibility.
+- Realtime sync: updates are pushed instantly across all connected screens.
+
+## Key Features
+
+- Live menu and order state updates with Socket.IO
+- Table lifecycle management (free, ordering, occupied)
+- Kitchen workflow support (new, preparing, ready, delivered)
+- Management controls for menu items and table status
+- Payment support with Razorpay integration
+- Health endpoint and operational safeguards (rate limiting)
 
 ## Tech Stack
 
-- **Backend:** Node.js, Express 5, Socket.IO
-- **Database:** PostgreSQL (`pg`)
-- **Frontend:** Plain HTML/CSS/JS (`client.html`, `management.html`)
-- **Utilities:** in-memory API rate limiter, scheduled DB backups
-
----
+- Backend: Node.js, Express 5
+- Database: PostgreSQL (`pg`)
+- Realtime: Socket.IO
+- Frontend: Static HTML/CSS/JS pages
 
 ## Project Structure
 
@@ -24,280 +39,78 @@ FoodOrdering/
 ├─ server.js
 ├─ client.html
 ├─ management.html
+├─ outer-screen.html
 ├─ restaurant_order_management_system.html
-├─ .env.example
-├─ DEPLOYMENT.md
-├─ render.yaml
-├─ package.json
 ├─ data/
-│  ├─ restaurant.db
-│  └─ backups/
+├─ uploads/
+├─ package.json
+├─ README.md
+├─ DEPLOYMENT.md
+└─ render.yaml
 ```
 
----
+## Quick Start
 
-## Features
+1. Install dependencies:
 
-### Core Ordering
-- Dine-in, takeaway, and pre-order flows
-- Live menu categories and item availability
-- Cart with subtotal, CGST, SGST, and grand total
-- Receipt-style bill UI in client and management views
-
-### Table & Kitchen Operations
-- Table states: `free`, `ordering`, `occupied`
-- Kitchen pipeline statuses: `new`, `preparing`, `ready`, `delivered`
-- Table status guard: table can be set to `free` only when related dine/pre-order items are delivered
-- Payment handling keeps dine/pre-order table marked `occupied`
-
-### Management Controls
-- Add/remove table
-- Table status switch panel
-- Ordering side panel for occupied/ordering tables with +/- and submit
-- Menu CRUD (add/delete) and availability toggles
-- Order list under Menu section
-- Activity audit logs
-
-### Reliability & Ops
-- `/api/health` endpoint
-- In-memory API rate limiting for `/api/*`
-- Automatic SQLite backups with retention policy
-
----
-
-## Quick Start (Local)
-
-## 1) Install
 ```bash
 npm install
 ```
 
-## 2) Run
+2. Start the server:
+
 ```bash
 npm start
 ```
 
-## 3) Open
-- Management: `http://localhost:3000/management.html`
+3. Open in browser:
+
 - Client: `http://localhost:3000/client.html`
+- Management: `http://localhost:3000/management.html`
+- Display: `http://localhost:3000/outer-screen.html`
 
----
+## Available Scripts
 
-## Environment Variables
+- `npm start`: start the server
+- `npm run dev`: start the server in development mode
+- `npm run supabase:init`: create Supabase schema only
+- `npm run migrate:supabase`: migrate schema and data to Supabase
+- `npm run migrate:supabase:data-only`: migrate data only
 
-Copy values from `.env.example` and override as needed:
+## Environment Configuration
 
-- `NODE_ENV` (default: `development`)
-- `PORT` (default: `3000`)
-- `RATE_LIMIT_WINDOW_MS` (default: `60000`)
-- `RATE_LIMIT_MAX` (default: `240`)
-- `DB_BACKUP_ENABLED` (default: `true`)
-- `DB_BACKUP_INTERVAL_MINUTES` (default: `60`)
-- `DB_BACKUP_RETENTION_COUNT` (default: `48`)
-- `REQUIRE_PERSISTENT_DB` (default: `false`; recommended `true` in production)
-- `DATA_DIR` (optional explicit data directory)
-- `DB_FILE` (optional explicit sqlite file path)
-- `DB_BACKUP_DIR` (optional explicit backup directory)
+Copy `.env.example` and configure the values needed for your environment:
 
-PowerShell example:
+- `NODE_ENV`
+- `PORT`
+- `DATABASE_URL`
+- `RATE_LIMIT_WINDOW_MS`
+- `RATE_LIMIT_MAX`
+- `RAZORPAY_KEY_ID`
+- `RAZORPAY_KEY_SECRET`
+- `RAZORPAY_WEBHOOK_SECRET`
+- `MANAGEMENT_AUTH_SECRET`
+- `MANAGEMENT_SETUP_KEY`
+- `MANAGEMENT_DEFAULT_PASSWORD`
 
-```powershell
-$env:NODE_ENV='production'
-$env:PORT='3000'
-$env:RATE_LIMIT_WINDOW_MS='60000'
-$env:RATE_LIMIT_MAX='240'
-$env:DB_BACKUP_ENABLED='true'
-$env:DB_BACKUP_INTERVAL_MINUTES='60'
-$env:DB_BACKUP_RETENTION_COUNT='48'
-npm start
-```
+## API Surface
 
----
+Core API groups include:
 
-## NPM Scripts
-
-- `npm start` → start server
-- `npm run dev` → start server (same command currently)
-- `npm run supabase:init` → create fresh Supabase schema only (no data import)
-- `npm run migrate:supabase` → apply Supabase schema + migrate SQLite data
-- `npm run migrate:supabase:data-only` → migrate data only (schema already exists)
-
----
-
-
----
-
-## Persistent SQLite on Render
-
-For production, use SQLite with a persistent disk on Render:
-
-1. In Render, attach a persistent disk (e.g., 1GB) at `/data`.
-2. Set these environment variables:
-  - `DATA_DIR=/data`
-  - `DB_FILE=/data/restaurant.db`
-  - `DB_BACKUP_DIR=/data/backups`
-  - `REQUIRE_PERSISTENT_DB=true`
-3. Deploy as usual. Your data will persist across deploys and restarts.
-
-No cloud database required—everything is managed on Render.
-
----
-
-## API Reference
-
-### Health & State
-- `GET /api/health` – service + DB health
-- `GET /api/state` – full UI state (`menu`, `tables`, `orders`, `stats`)
-
-### Menu
-- `POST /api/menu/:id/availability` – set availability
-- `POST /api/menu` – add menu item
-- `DELETE /api/menu/:id` – delete menu item
-
-### Orders
-- `POST /api/orders` – create order
-- `POST /api/orders/:id/status` – update order status (`new|preparing|ready|delivered`)
-- `POST /api/orders/:id/pay` – mark order paid
-- `POST /api/orders/:id/razorpay-order` – create Razorpay order for online checkout
-- `POST /api/orders/:id/razorpay/verify` – verify Razorpay signature and mark paid
-
-### Payments
-- `GET /api/payments/razorpay/config` – online payment availability for frontend
-- `POST /api/payments/razorpay/webhook` – webhook capture sync from Razorpay
-
-### Tables
-- `POST /api/tables/:tableNumber/toggle` – cycle table state
-- `POST /api/tables/:tableNumber/status` – explicit state set
-- `POST /api/tables` – add table
-- `DELETE /api/tables/:tableNumber` – delete free table (with safety checks)
-
-### Audit
-- `GET /api/audit-logs?limit=30`
-
----
-
-## Realtime Behavior
-
-Socket.IO event:
-- `state:update` – emitted whenever menu/tables/orders change.
-
-Both pages subscribe and rerender from the server state to stay in sync.
-
----
-
-## Business Rules (Current)
-
-- Dine-in and pre-order require table selection.
-- Creating dine-in marks table `occupied`.
-- Creating pre-order marks table `ordering`.
-- Status update effects:
-  - `new` → table `ordering`
-  - `preparing|ready` → table `occupied`
-  - `delivered` → table `free`
-- Paying a dine/pre-order marks table `occupied`.
-- Setting table to `free` is blocked if there are undelivered dine/pre-order orders for that table.
-
----
-
-## Database Notes
-
-SQLite file:
-- `data/restaurant.db`
-
-Backups:
-- `data/backups/restaurant-YYYYMMDDTHHMMSSZ.db`
-
-Tables in DB:
-- `restaurants`
-- `menu_items`
-- `table_status`
-- `orders`
-- `order_items`
-- `audit_logs`
-
----
+- Health and service status
+- Public restaurant/menu state
+- Order creation, status updates, and payments
+- Menu management
+- Table management
+- Audit logs
+- Razorpay config and webhooks
 
 ## Deployment
 
-- Local-first runbook: see `DEPLOYMENT.md`
-- `render.yaml` is present for cloud deployment scaffolding.
+For production deployment and Render setup, see [DEPLOYMENT.md](DEPLOYMENT.md).
 
-### Recommended low-cost internet backend (current codebase)
+## GitHub Placement
 
-Use the existing backend as-is on **Render Web Service + persistent disk**:
+Place this file at the repository root as `README.md`.
 
-- Runtime: Node.js web service
-- Database: SQLite file persisted on Render disk (`/opt/render/project/src/data`)
-- Realtime: Socket.IO works over the same Render service URL
-
-This is the lowest-risk option for low traffic because no DB rewrite is needed.
-
-#### Render steps
-
-1. Push this repo to GitHub.
-2. In Render, create a new **Blueprint** from repo (it will read `render.yaml`).
-3. Ensure disk is attached as configured (`sqlite-data`, `1GB`).
-4. Deploy.
-5. Open:
-  - `https://<your-service>.onrender.com/management.html`
-  - `https://<your-service>.onrender.com/client.html`
-
-#### Notes
-
-- Free plans may sleep when idle (cold starts).
-- For smoother always-on behavior, use a low paid Render instance.
-- Backups continue to run on server interval and are saved under the mounted `data/backups/` path.
-
-### Razorpay (UPI/Card) setup
-
-1. Create a Razorpay account and get your live keys.
-2. Add these env vars in Render service:
-  - `RAZORPAY_KEY_ID`
-  - `RAZORPAY_KEY_SECRET`
-  - `RAZORPAY_WEBHOOK_SECRET` (recommended)
-3. In Razorpay dashboard, set webhook URL:
-  - `https://<your-service>.onrender.com/api/payments/razorpay/webhook`
-4. Enable event:
-  - `payment.captured`
-
-Cash payments continue to work through internal backend validation.
-
-For small single-location setups, local SQLite is recommended.
-
----
-
-## Troubleshooting
-
-### UI says "Request failed"
-- Ensure latest server is running on port 3000.
-- Restart server:
-  ```powershell
-  npm start
-  ```
-- Hard refresh browser (`Ctrl+F5`).
-
-### Port 3000 already in use
-- Stop existing process and restart.
-
-### Table not switching to free
-- Check if related dine/pre-order orders are fully delivered; guard blocks freeing early by design.
-
-### Rate limit responses (`429`)
-- Wait for `RATE_LIMIT_WINDOW_MS` reset or increase limit for your environment.
-
-### Management login keeps failing
-- Restaurants without an auth row are auto-bootstrapped with `MANAGEMENT_DEFAULT_PASSWORD`.
-- If `MANAGEMENT_DEFAULT_PASSWORD` is empty, fallback password is `admin123` (unless overridden by `MANAGEMENT_DEV_FALLBACK_PASSWORD`).
-- After first login, set a strong password using `/api/management/register` and remove fallback defaults.
-
----
-
-## GitHub
-
-Repository: `https://github.com/vishwa-10147/FoodOrder`
-
----
-
-## License
-
-ISC
+If it is in the root directory, GitHub automatically renders it on your repository main page.
