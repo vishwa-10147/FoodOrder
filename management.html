@@ -802,6 +802,28 @@
           </div>
 
           <div class="dash-side">
+            <!-- Table Controls -->
+            <div class="card">
+              <div class="card-head"><div class="card-title">Tables</div></div>
+              <div class="card-body">
+                <div class="print-row" style="margin-bottom:12px;">
+                  <button class="btn-primary" onclick="addTable()">+ Add Table</button>
+                  <input class="inp" id="remove-table-number" type="number" min="1" placeholder="Table no." style="width:110px;" />
+                  <button class="btn-ghost" onclick="removeTable()">Remove</button>
+                </div>
+                <div class="table-grid" id="tables"></div>
+              </div>
+            </div>
+
+            <div class="card">
+              <div class="card-head"><div class="card-title">Table Status</div></div>
+              <div class="card-body">
+                <div class="table-status-list" id="dashboard-table-status-list"></div>
+              </div>
+            </div>
+
+            <div id="ordering-menu-panel"></div>
+
             <!-- Activity Log -->
             <div class="card">
               <div class="card-head"><div class="card-title">Activity Log</div></div>
@@ -1254,16 +1276,17 @@
     const delivered = paidOrders.filter(o=>o.status==='delivered').length;
     const overdue = paidOrders.filter(o=>o.status!=='delivered'&&(Date.now()-Number(o.createdAt||0))>(Number(o.etaMinutes||0)*60000)).length;
     const revenue = paidOrders.reduce((s,o)=>s+Number(o.total||0),0);
-    document.getElementById('m-active').textContent = overdue;
-    document.getElementById('m-overdue').textContent = `${active} active`;
-    document.getElementById('m-tables').textContent = delivered;
-    document.getElementById('m-wait').textContent = active;
-    document.getElementById('m-revenue').textContent = money(revenue);
-    document.getElementById('k-badge').textContent = paidOrders.filter(o=>o.status==='new').length;
+    const setText = (id, value) => { const node = document.getElementById(id); if (node) node.textContent = value; };
+    setText('m-active', overdue);
+    setText('m-overdue', `${active} active`);
+    setText('m-tables', delivered);
+    setText('m-wait', active);
+    setText('m-revenue', money(revenue));
+    setText('k-badge', paidOrders.filter(o=>o.status==='new').length);
 
     const recent = paidOrders.slice(0,5);
     const recentEl = document.getElementById('recent');
-    recentEl.innerHTML = recent.length ? recent.map(o=>`
+    if (recentEl) recentEl.innerHTML = recent.length ? recent.map(o=>`
       <div class="order-card">
         <div class="order-card-head">
           <div class="order-id">${esc(o.label)}</div>
@@ -1278,7 +1301,8 @@
     `).join('') : '<div style="font-size:13px;color:var(--text3);">No orders yet.</div>';
 
     // Table grid
-    document.getElementById('tables').innerHTML = (state.tables||[]).map(t=>`
+    const tableGrid = document.getElementById('tables');
+    if (tableGrid) tableGrid.innerHTML = (state.tables||[]).map(t=>`
       <div class="table-cell ${t.status}" onclick="onTableClick(${t.tableNumber})">
         <div class="tc-num">T${t.tableNumber}</div>
         <div class="tc-st">${t.status}</div>
@@ -1396,7 +1420,11 @@
   }
   async function setTableStatusFree(n) { await setTableStatus(n,'free'); }
   async function setTableStatus(n, s) {
-    try { if(s==='free') tableOrderDrafts[n]={}; await api(`/api/tables/${n}/status`,'POST',{status:s}); } catch(e) { alert(e.message); }
+    try {
+      if(s==='free') tableOrderDrafts[n]={};
+      await api(`/api/tables/${n}/status`,'POST',{status:s});
+      await fetchState();
+    } catch(e) { alert(e.message); }
   }
   function updateDraftQty(id, delta) {
     if (!selectedOrderingTableNumber) return;
@@ -1415,11 +1443,24 @@
     try {
       await api('/api/orders','POST',{orderType:'dine',tableNumber:selectedOrderingTableNumber,notes:'Management panel order',items});
       tableOrderDrafts[selectedOrderingTableNumber]={};
+      showToast('Order submitted');
+      await fetchState();
     } catch(e) { alert(e.message); }
   }
 
-  async function addTable() { try { await api('/api/tables','POST',{}); } catch(e) { alert(e.message); } }
-  async function toggleTable(n) { try { await api(`/api/tables/${n}/toggle`,'POST',{}); } catch(e) { alert(e.message); } }
+  async function addTable() {
+    try {
+      await api('/api/tables','POST',{});
+      showToast('Table added');
+      await fetchState();
+    } catch(e) { alert(e.message); }
+  }
+  async function toggleTable(n) {
+    try {
+      await api(`/api/tables/${n}/toggle`,'POST',{});
+      await fetchState();
+    } catch(e) { alert(e.message); }
+  }
 
   function openRemoveModal(n) {
     pendingRemoveTableNumber = n;
@@ -1429,11 +1470,18 @@
   function closeRemoveModal() { pendingRemoveTableNumber=null; document.getElementById('remove-modal').classList.remove('open'); }
   async function confirmRemoveTable() {
     if (!pendingRemoveTableNumber) return;
-    try { await api(`/api/tables/${pendingRemoveTableNumber}`,'DELETE'); document.getElementById('remove-table-number').value=''; closeRemoveModal(); } catch(e) { alert(e.message); }
+    try {
+      await api(`/api/tables/${pendingRemoveTableNumber}`,'DELETE');
+      const input = document.getElementById('remove-table-number');
+      if (input) input.value='';
+      closeRemoveModal();
+      showToast('Table removed');
+      await fetchState();
+    } catch(e) { alert(e.message); }
   }
   async function removeTable() {
     const input = document.getElementById('remove-table-number');
-    let n = Number(input.value||0);
+    let n = Number(input?.value||0);
     if (!n) {
       const free = (state.tables||[]).filter(t=>t.status==='free').map(t=>t.tableNumber);
       if (!free.length) { alert('No free table available. Enter a table number manually.'); return; }
@@ -1471,7 +1519,12 @@
     });
   }
 
-  async function changeStatus(id, status) { try { await api(`/api/orders/${id}/status`,'POST',{status}); } catch(e) { alert(e.message); } }
+  async function changeStatus(id, status) {
+    try {
+      await api(`/api/orders/${id}/status`,'POST',{status});
+      await fetchState();
+    } catch(e) { alert(e.message); }
+  }
 
   // ── TRACKING ─────────────────────────────────────────────
   function renderTracking() {
