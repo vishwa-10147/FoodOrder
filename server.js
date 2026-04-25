@@ -1320,6 +1320,39 @@ app.post('/api/menu/bulk', requireManagementAuth, async (req, res) => {
   }
 });
 
+app.post('/api/menu/:id/image-url', requireManagementAuth, async (req, res) => {
+  const menuItemId = Number(req.params.id);
+  const imageUrl = String(req.body?.imageUrl || '').trim();
+  const actor = `${getActor(req)}:${req.management.restaurantCode}`;
+
+  if (!menuItemId) return res.status(400).json({ error: 'Valid menu item ID is required' });
+  if (imageUrl && !/^https?:\/\//i.test(imageUrl)) {
+    return res.status(400).json({ error: 'Image URL must start with http:// or https://' });
+  }
+
+  const result = await pool.query(
+    `UPDATE menu_items
+     SET image_url = $1
+     WHERE id = $2 AND restaurant_id = $3
+     RETURNING id, name, image_url AS "imageUrl"`,
+    [imageUrl || null, menuItemId, req.management.restaurantId]
+  );
+  const item = result.rows[0];
+  if (!item) return res.status(404).json({ error: 'Menu item not found' });
+
+  await logAudit(pool, {
+    action: 'menu_image_url_updated',
+    entityType: 'menu_item',
+    entityId: menuItemId,
+    actor,
+    restaurantId: req.management.restaurantId,
+    details: { name: item.name, imageUrl: item.imageUrl }
+  });
+
+  await broadcastState(req.management.restaurantId);
+  return res.json({ ok: true, imageUrl: item.imageUrl });
+});
+
 app.post('/api/menu/:id/image', requireManagementAuth, (req, res) => {
   uploadMenuImage(req, res, async (uploadError) => {
     if (uploadError) return res.status(400).json({ error: uploadError.message || 'Failed to upload image' });

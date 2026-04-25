@@ -1512,6 +1512,7 @@
           <div class="menu-actions">
             <input id="menu-image-${item.id}" type="file" accept="image/*" onchange="previewMenuImage(${item.id})" class="inp" style="width:140px;font-size:10px;padding:5px;" />
             <button class="state-btn" onclick="uploadMenuImage(${item.id})">Upload</button>
+            <button class="state-btn" onclick="setMenuImageUrl(${item.id})">Image URL</button>
             <button class="state-btn avail ${avail?'active':''}" onclick="setMenuAvailability(${item.id},true)">Available</button>
             <button class="state-btn unavail ${!avail?'active':''}" onclick="setMenuAvailability(${item.id},false)">Unavailable</button>
             <button class="btn-danger" onclick="deleteMenuItem(${item.id})">✕</button>
@@ -1575,6 +1576,24 @@
     const file = input?.files?.[0];
     if (!file) { alert('Choose an image file first.'); return; }
     try { await apiUploadImage(`/api/menu/${id}/image`,file); input.value=''; await fetchState(); } catch(e) { alert(e.message); }
+  }
+
+  async function setMenuImageUrl(id) {
+    const current = (state.menu||[]).find(item=>Number(item.id)===Number(id))?.imageUrl || '';
+    const imageUrl = prompt('Paste online image URL', current);
+    if (imageUrl === null) return;
+
+    const trimmed = imageUrl.trim();
+    if (trimmed && !/^https?:\/\//i.test(trimmed)) {
+      alert('Image URL must start with http:// or https://');
+      return;
+    }
+
+    try {
+      await api(`/api/menu/${id}/image-url`,'POST',{imageUrl:trimmed});
+      showToast(trimmed ? 'Image URL saved' : 'Image removed');
+      await fetchState();
+    } catch(e) { alert(e.message); }
   }
 
   async function deleteMenuItemByInput() {
