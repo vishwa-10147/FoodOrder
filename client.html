@@ -1181,7 +1181,8 @@
   let deliveryLocation = { lat: null, lng: null };
   let clientOrderIds = new Set();
   let pollTimer = null;
-  let lastStateSignature = '';
+  let lastMenuSignature = '';
+  let lastOrdersSignature = '';
 
   // ── UTILS ────────────────────────────────────────────────
   function resolveApiUrl(path) {
@@ -2063,10 +2064,11 @@
     renderMenu();
     renderCart();
     syncMobileCartFab();
-    lastStateSignature = stateSignature();
+    lastMenuSignature = menuStateSignature();
+    lastOrdersSignature = ordersStateSignature();
   }
 
-  function stateSignature() {
+  function menuStateSignature() {
     return JSON.stringify({
       restaurant: appState.restaurant ? {
         id: appState.restaurant.id,
@@ -2083,6 +2085,15 @@
         imageUrl: m.imageUrl,
         available: m.available
       })),
+      tables: (appState.tables || []).map(t => ({
+        tableNumber: t.tableNumber,
+        status: t.status
+      }))
+    });
+  }
+
+  function ordersStateSignature() {
+    return JSON.stringify({
       orders: (appState.orders || []).map(o => ({
         id: o.id,
         status: o.status,
@@ -2160,12 +2171,29 @@
     pollTimer = setInterval(async () => {
       try {
         await loadState();
-        const nextSignature = stateSignature();
-        if (nextSignature === lastStateSignature) return;
-        lastStateSignature = nextSignature;
         const activeView = document.querySelector('.content.active')?.id?.replace('view-','') || 'order';
+        const nextMenuSignature = menuStateSignature();
+        const nextOrdersSignature = ordersStateSignature();
+        const menuChanged = nextMenuSignature !== lastMenuSignature;
+        const ordersChanged = nextOrdersSignature !== lastOrdersSignature;
+
+        if (activeView === 'order') {
+          if (!menuChanged) return;
+          lastMenuSignature = nextMenuSignature;
+          lastOrdersSignature = nextOrdersSignature;
+          renderRestoHero();
+          syncCartWithMenu();
+          renderTableOptions();
+          renderCategories();
+          renderMenu();
+          syncMobileCartFab();
+          return;
+        }
+
+        if (!menuChanged && !ordersChanged) return;
+        lastMenuSignature = nextMenuSignature;
+        lastOrdersSignature = nextOrdersSignature;
         renderRestoHero();
-        if (activeView === 'order') { syncCartWithMenu(); renderCategories(); renderMenu(); renderCart(); syncMobileCartFab(); }
         if (activeView === 'tracking') renderTracking();
         if (activeView === 'payment') renderPayment();
       } catch {}
