@@ -410,7 +410,14 @@
 
     /* ── MENU ADMIN ───────────────────────────────────────── */
     .menu-layout { display: grid; grid-template-columns: 1fr 360px; gap: 16px; align-items: start; }
-    .menu-form-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-bottom: 10px; }
+    .menu-form-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-bottom: 12px; }
+    .menu-form-grid .wide { grid-column: span 2; }
+    .menu-form-grid .full { grid-column: 1 / -1; }
+    .menu-tools {
+      display: grid; grid-template-columns: minmax(280px, 1fr) auto;
+      gap: 12px; align-items: center; margin-top: 14px; padding-top: 14px;
+      border-top: 1px solid var(--border);
+    }
     .menu-form-actions { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
     .menu-form-btns { display: flex; gap: 6px; flex-wrap: wrap; }
 
@@ -436,6 +443,9 @@
     .menu-name { font-size: 13px; font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .menu-meta { font-size: 11px; color: var(--text3); font-family: var(--font-mono); margin-top: 2px; }
     .menu-actions { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+    .menu-actions .inp { width: 132px; font-size: 10px; padding: 5px; }
+    .menu-form-actions button[onclick="deleteMenuItemByInput()"],
+    .menu-form-actions button[onclick="renameMenuItemByInput()"] { display: none; }
     .state-btn {
       padding: 5px 9px; border-radius: 6px;
       border: 1px solid var(--border); background: var(--bg4);
@@ -618,6 +628,8 @@
       .pipeline { grid-template-columns: 1fr; height: auto; }
       .menu-layout { grid-template-columns: 1fr; }
       .menu-form-grid { grid-template-columns: 1fr 1fr; }
+      .menu-form-grid .wide, .menu-form-grid .full { grid-column: 1 / -1; }
+      .menu-tools { grid-template-columns: 1fr; }
       .table-grid { grid-template-columns: repeat(4, 1fr); }
       .kit-date-bar, .tracking-controls { padding: 10px 14px; }
       .track-slider { padding: 14px; grid-auto-columns: min(320px, 90vw); }
@@ -627,6 +639,8 @@
       .metrics-grid { grid-template-columns: 1fr; }
       .table-grid { grid-template-columns: repeat(3, 1fr); }
       .menu-form-grid { grid-template-columns: 1fr; }
+      .menu-form-grid .wide, .menu-form-grid .full { grid-column: 1 / -1; }
+      .menu-tools { grid-template-columns: 1fr; }
       .sb-footer-btns { flex-direction: row; }
       .pipeline { gap: 10px; }
     }
@@ -853,23 +867,26 @@
               <div class="card-head"><div class="card-title">Add / Edit Menu Items</div></div>
               <div class="card-body">
                 <div class="menu-form-grid">
-                  <input class="inp" id="menu-name" placeholder="Food name" />
+                  <input class="inp wide" id="menu-name" placeholder="Food name" />
                   <input class="inp" id="menu-price" type="number" min="1" placeholder="Price (₹)" />
                   <input class="inp" id="menu-cat" placeholder="Category (mains/drinks…)" />
                   <input class="inp" id="menu-emoji" placeholder="Emoji (optional)" />
-                  <input class="inp" id="menu-desc" placeholder="Description (optional)" />
+                  <input class="inp wide" id="menu-desc" placeholder="Description (optional)" />
                   <input class="inp" id="menu-image-file" type="file" accept="image/*" />
-                  <input class="inp" id="menu-delete-id" type="number" min="1" placeholder="Delete item ID" />
-                  <input class="inp" id="menu-edit-id" type="number" min="1" placeholder="Edit name by ID" />
-                  <input class="inp" id="menu-edit-name" placeholder="New food name" />
-                  <input class="inp" id="menu-csv-file" type="file" accept=".csv,text/csv" onchange="previewMenuCsv()" style="grid-column:span 2;" />
+                  <div class="full" style="font-size:11px;color:var(--text3);">Use the menu list below to update, delete, set availability, and add item photos.</div>
+                </div>
+                <div class="menu-form-actions">
+                  <div style="font-size:11px;color:var(--text3);">New items are saved to the database immediately.</div>
+                  <div class="menu-form-btns">
+                  </div>
+                </div>
+                <div class="menu-tools">
+                  <input class="inp" id="menu-csv-file" type="file" accept=".csv,text/csv" onchange="previewMenuCsv()" />
                   <div id="csv-drop" style="
-                    grid-column:span 2;
                     border:2px dashed var(--border);
                     padding:16px;
                     text-align:center;
                     border-radius:10px;
-                    margin-top:10px;
                     cursor:pointer;
                   ">
                     Drop CSV here or click
@@ -879,7 +896,6 @@
                   </label>
                 </div>
                 <div class="menu-form-actions">
-                  <div style="font-size:11px;color:var(--text3);">Manage items and upload food photos</div>
                   <div class="menu-form-btns">
                     <button class="btn-primary" onclick="addMenuItem()">+ Add Item</button>
                     <button class="btn-ghost" onclick="deleteMenuItemByInput()">− Delete</button>
@@ -1082,7 +1098,11 @@
     const headers = { 'Content-Type':'application/json', 'X-Actor':'management-ui' };
     if (managementAuth?.token) headers.Authorization = `Bearer ${managementAuth.token}`;
     const res = await fetch(path, { method, headers, body: body ? JSON.stringify(body) : undefined });
-    if (res.status === 401) { showLoginGate('Session expired. Please login.'); throw new Error('Unauthorized'); }
+    if (res.status === 401) {
+      localStorage.removeItem(MGMT_TOKEN_KEY);
+      showLoginGate('Session expired. Please login.');
+      throw new Error('Unauthorized');
+    }
     if (!res.ok) { const e = await res.json().catch(()=>({})); throw new Error(e.error||'Request failed'); }
     return res.json();
   }
@@ -1092,7 +1112,11 @@
     if (managementAuth?.token) headers.Authorization = `Bearer ${managementAuth.token}`;
     const form = new FormData(); form.append('image', file);
     const res = await fetch(path, { method:'POST', headers, body:form });
-    if (res.status===401) { showLoginGate('Session expired.'); throw new Error('Unauthorized'); }
+    if (res.status===401) {
+      localStorage.removeItem(MGMT_TOKEN_KEY);
+      showLoginGate('Session expired.');
+      throw new Error('Unauthorized');
+    }
     if (!res.ok) { const e = await res.json().catch(()=>({})); throw new Error(e.error||'Upload failed'); }
     return res.json();
   }
@@ -1511,6 +1535,7 @@
           </div>
           <div class="menu-actions">
             <input id="menu-image-${item.id}" type="file" accept="image/*" onchange="previewMenuImage(${item.id})" class="inp" style="width:140px;font-size:10px;padding:5px;" />
+            <button class="state-btn" onclick="editMenuItem(${item.id})">Edit</button>
             <button class="state-btn" onclick="uploadMenuImage(${item.id})">Upload</button>
             <button class="state-btn" onclick="setMenuImageUrl(${item.id})">Image URL</button>
             <button class="state-btn avail ${avail?'active':''}" onclick="setMenuAvailability(${item.id},true)">Available</button>
@@ -1552,8 +1577,22 @@
     }).join('');
   }
 
-  async function setMenuAvailability(id, available) { try { await api(`/api/menu/${id}/availability`,'POST',{available}); } catch(e) { alert(e.message); } }
-  async function deleteMenuItem(id) { try { await api(`/api/menu/${id}`,'DELETE'); } catch(e) { alert(e.message); } }
+  async function setMenuAvailability(id, available) {
+    try {
+      await api(`/api/menu/${id}/availability`,'POST',{available});
+      await fetchState();
+    } catch(e) { alert(e.message); }
+  }
+
+  async function deleteMenuItem(id) {
+    const item = (state.menu||[]).find(m=>Number(m.id)===Number(id));
+    if (!confirm(`Delete ${item?.name || `item #${id}`}?`)) return;
+    try {
+      await api(`/api/menu/${id}`,'DELETE');
+      showToast('Menu item deleted');
+      await fetchState();
+    } catch(e) { alert(e.message); }
+  }
 
   async function addMenuItem() {
     const name = document.getElementById('menu-name').value.trim();
@@ -1568,6 +1607,8 @@
       if (imgFile&&created?.id) await apiUploadImage(`/api/menu/${created.id}/image`,imgFile);
       ['menu-name','menu-price','menu-cat','menu-emoji','menu-desc'].forEach(id=>{ const el=document.getElementById(id); if(el)el.value=''; });
       if (imgInput) imgInput.value='';
+      showToast('Menu item saved');
+      await fetchState();
     } catch(e) { alert(e.message); }
   }
 
@@ -1596,22 +1637,60 @@
     } catch(e) { alert(e.message); }
   }
 
+  async function editMenuItem(id) {
+    const item = (state.menu||[]).find(m=>Number(m.id)===Number(id));
+    if (!item) { alert('Menu item not found. Refresh and try again.'); return; }
+
+    const name = prompt('Food name', item.name || '');
+    if (name === null) return;
+    const priceText = prompt('Price', item.price || '');
+    if (priceText === null) return;
+    const cat = prompt('Category', item.cat || 'general');
+    if (cat === null) return;
+    const desc = prompt('Description', item.desc || item.description || '');
+    if (desc === null) return;
+    const emoji = prompt('Emoji', item.emoji || '🍽️');
+    if (emoji === null) return;
+
+    const price = Number(String(priceText).replace(/[^\d.]/g,''));
+    if (!name.trim()) { alert('Food name is required.'); return; }
+    if (!Number.isFinite(price) || price <= 0) { alert('Enter a valid price.'); return; }
+    if (!cat.trim()) { alert('Category is required.'); return; }
+
+    try {
+      await api(`/api/menu/${id}`,'PATCH',{
+        name:name.trim(),
+        price,
+        cat:cat.trim(),
+        desc:desc.trim(),
+        emoji:emoji.trim()
+      });
+      showToast('Menu item updated');
+      await fetchState();
+    } catch(e) { alert(e.message); }
+  }
+
   async function deleteMenuItemByInput() {
-    const id = Number(document.getElementById('menu-delete-id').value||0);
+    const input = document.getElementById('menu-delete-id');
+    const id = Number(input?.value || prompt('Delete item ID') || 0);
     if (!id) { alert('Enter a valid item ID.'); return; }
     await deleteMenuItem(id);
-    document.getElementById('menu-delete-id').value='';
+    if (input) input.value='';
   }
 
   async function renameMenuItemByInput() {
-    const id = Number(document.getElementById('menu-edit-id').value||0);
-    const name = document.getElementById('menu-edit-name').value.trim();
+    const idInput = document.getElementById('menu-edit-id');
+    const nameInput = document.getElementById('menu-edit-name');
+    const id = Number(idInput?.value || prompt('Edit item ID') || 0);
+    const name = String(nameInput?.value || prompt('New food name') || '').trim();
     if (!id) { alert('Enter a valid item ID.'); return; }
     if (!name) { alert('Enter the new name.'); return; }
     try {
       await api(`/api/menu/${id}/name`,'PATCH',{name});
-      document.getElementById('menu-edit-id').value='';
-      document.getElementById('menu-edit-name').value='';
+      if (idInput) idInput.value='';
+      if (nameInput) nameInput.value='';
+      showToast('Menu item renamed');
+      await fetchState();
     } catch(e) { alert(e.message); }
   }
 
@@ -1847,15 +1926,19 @@
   }
 
   // ── RENDER ALL ───────────────────────────────────────────
+  function safeRender(name, fn) {
+    try { fn(); } catch (e) { console.error(`Render failed: ${name}`, e); }
+  }
+
   function renderAll() {
-    renderDashboard();
-    renderKitchen();
-    renderTracking();
-    renderMenuManagement();
-    renderMenuOrders();
-    renderHistoryTable();
-    renderPrintControls();
-    renderAuditLogs();
+    safeRender('dashboard', renderDashboard);
+    safeRender('kitchen', renderKitchen);
+    safeRender('tracking', renderTracking);
+    safeRender('menu', renderMenuManagement);
+    safeRender('menuOrders', renderMenuOrders);
+    safeRender('history', renderHistoryTable);
+    safeRender('printControls', renderPrintControls);
+    safeRender('auditLogs', renderAuditLogs);
   }
 
   // ── CLOCK ────────────────────────────────────────────────

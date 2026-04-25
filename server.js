@@ -21,7 +21,8 @@ const io = new Server(server, { cors: { origin: true, credentials: true } });
 const PORT = Number(process.env.PORT || 3000);
 const NODE_ENV = String(process.env.NODE_ENV || 'development').trim();
 const DATABASE_URL = String(process.env.DATABASE_URL || '').trim();
-const MANAGEMENT_AUTH_SECRET = String(process.env.MANAGEMENT_AUTH_SECRET || '').trim() || crypto.randomBytes(32).toString('hex');
+const MANAGEMENT_AUTH_SECRET = String(process.env.MANAGEMENT_AUTH_SECRET || '').trim()
+  || crypto.createHash('sha256').update(`management:${DATABASE_URL}`).digest('hex');
 const MANAGEMENT_SETUP_KEY = String(process.env.MANAGEMENT_SETUP_KEY || '').trim();
 const MANAGEMENT_DEFAULT_PASSWORD = String(process.env.MANAGEMENT_DEFAULT_PASSWORD || '').trim();
 const MANAGEMENT_DEV_FALLBACK_PASSWORD = String(process.env.MANAGEMENT_DEV_FALLBACK_PASSWORD || '').trim() || 'admin123';
@@ -416,6 +417,7 @@ async function getMenu(restaurantId) {
     ...row,
     id: Number(row.id),
     price: Number(row.price),
+    desc: row.description,
     available: typeof row.available === 'boolean' ? (row.available ? 1 : 0) : Number(row.available)
   }));
 }
@@ -941,6 +943,7 @@ app.use(helmet({
       scriptSrc: ["'self'", "'unsafe-inline'", "https://checkout.razorpay.com", "https://cdn.razorpay.com"],
       scriptSrcElem: ["'self'", "'unsafe-inline'", "https://checkout.razorpay.com", "https://cdn.razorpay.com"],
       frameSrc: ["'self'", "https://checkout.razorpay.com", "https://api.razorpay.com"],
+      imgSrc: ["'self'", "data:", "blob:", "https:", "http:"],
       connectSrc: ["'self'", "https://api.razorpay.com", "https://lumberjack.razorpay.com"],
       scriptSrcAttr: ["'unsafe-inline'"]
     }
@@ -1188,6 +1191,43 @@ app.patch('/api/menu/:id/name', requireManagementAuth, async (req, res) => {
 
   await broadcastState(req.management.restaurantId);
   return res.json({ ok: true, id: item.id, name: item.name });
+});
+
+app.patch('/api/menu/:id', requireManagementAuth, async (req, res) => {
+  const menuItemId = Number(req.params.id);
+  const name = String(req.body?.name || '').trim();
+  const description = String(req.body?.desc || req.body?.description || '').trim();
+  const price = Math.round(Number(req.body?.price || 0));
+  const category = String(req.body?.cat || req.body?.category || '').trim().toLowerCase();
+  const emoji = String(req.body?.emoji || '').trim();
+  const actor = `${getActor(req)}:${req.management.restaurantCode}`;
+
+  if (!menuItemId) return res.status(400).json({ error: 'Valid menu item ID is required' });
+  if (!name) return res.status(400).json({ error: 'Menu item name is required' });
+  if (!Number.isFinite(price) || price <= 0) return res.status(400).json({ error: 'Price must be greater than 0' });
+  if (!category) return res.status(400).json({ error: 'Category is required' });
+
+  const result = await pool.query(
+    `UPDATE menu_items
+     SET name = $1, description = $2, price = $3, category = $4, emoji = $5
+     WHERE id = $6 AND restaurant_id = $7
+     RETURNING id, name, description, price, category, emoji`,
+    [name, description || 'Custom menu item', price, category, emoji || '🍽️', menuItemId, req.management.restaurantId]
+  );
+  const item = result.rows[0];
+  if (!item) return res.status(404).json({ error: 'Menu item not found' });
+
+  await logAudit(pool, {
+    action: 'menu_item_updated',
+    entityType: 'menu_item',
+    entityId: menuItemId,
+    actor,
+    restaurantId: req.management.restaurantId,
+    details: { name: item.name, price: Number(item.price), cat: item.category }
+  });
+
+  await broadcastState(req.management.restaurantId);
+  return res.json({ ok: true, item });
 });
 
 app.post('/api/menu', requireManagementAuth, async (req, res) => {
