@@ -1570,43 +1570,91 @@
     } catch(e) { alert(e.message); }
   }
 
+  function parseCsvLine(line) {
+    const values = [];
+    let cur = '';
+    let quoted = false;
+    for (let i = 0; i < String(line || '').length; i += 1) {
+      const ch = line[i];
+      if (ch === '"') {
+        if (quoted && line[i + 1] === '"') {
+          cur += '"';
+          i += 1;
+        } else {
+          quoted = !quoted;
+        }
+      } else if (ch === ',' && !quoted) {
+        values.push(cur.trim());
+        cur = '';
+      } else {
+        cur += ch;
+      }
+    }
+    values.push(cur.trim());
+    return values;
+  }
+
+  function parseMenuCsvItems(csvText) {
+    const lines = String(csvText || '').replace(/^\uFEFF/, '').split(/\r?\n/).filter(r => r.trim());
+    if (!lines.length) return { items: [], errors: ['CSV is empty'] };
+
+    const header = parseCsvLine(lines[0]).map(v => v.toLowerCase());
+    const hasHeader = header.includes('item') || header.includes('name') || header.includes('price');
+    const itemIndex = hasHeader ? (header.indexOf('item') >= 0 ? header.indexOf('item') : header.indexOf('name')) : -1;
+    const priceIndex = hasHeader ? header.indexOf('price') : -1;
+    const categoryIndex = hasHeader ? header.indexOf('category') : -1;
+    const items = [];
+    const errors = [];
+
+    (hasHeader ? lines.slice(1) : lines).forEach((row, i) => {
+      const cols = parseCsvLine(row);
+      const lineNumber = i + (hasHeader ? 2 : 1);
+      const looksCategoryItemPrice = categoryIndex >= 0 || (!hasHeader && Number.isNaN(Number(String(cols[1] || '').replace(/[^\d.]/g, ''))) && !Number.isNaN(Number(String(cols[2] || '').replace(/[^\d.]/g, ''))));
+      const name = hasHeader
+        ? String(cols[itemIndex] || '').trim()
+        : String(cols[looksCategoryItemPrice ? 1 : 0] || '').trim();
+      const priceRaw = hasHeader
+        ? cols[priceIndex]
+        : cols[looksCategoryItemPrice ? 2 : 1];
+      const category = hasHeader
+        ? String(cols[categoryIndex] || 'general').trim()
+        : String(cols[looksCategoryItemPrice ? 0 : 2] || 'general').trim();
+      const price = Number(String(priceRaw || '').replace(/[^\d.]/g, ''));
+
+      if (!name || !priceRaw) {
+        errors.push(`Row ${lineNumber}: Missing`);
+        return;
+      }
+      if (!Number.isFinite(price) || price <= 0) {
+        errors.push(`Row ${lineNumber}: Invalid price`);
+        return;
+      }
+
+      items.push({ name, price, category: category || 'general' });
+    });
+
+    return { items, errors };
+  }
+
   async function importMenuCsv() {
     const input = document.getElementById('menu-csv-file');
     const file = input?.files?.[0];
     if (!file) { showToast('Select CSV first', '#ef4444'); return; }
     try {
       const csvText = await file.text();
-      const rows = csvText.split('\n').filter(r => r.trim());
-      const items = [];
-      const errors = [];
-
-      rows.forEach((row, i) => {
-        const [name, price, category] = row.split(',');
-
-        if (!name || !price) {
-          errors.push(`Row ${i + 1}: Missing`);
-          return;
-        }
-
-        if (isNaN(price)) {
-          errors.push(`Row ${i + 1}: Invalid price`);
-          return;
-        }
-
-        items.push({
-          name: name.trim(),
-          price: Number(price),
-          category: (category || 'general').trim()
-        });
-      });
+      const { items, errors } = parseMenuCsvItems(csvText);
 
       if (errors.length) {
         alert(errors.slice(0, 5).join('\n'));
         return;
       }
+      if (!items.length) {
+        showToast('No menu items found', '#ef4444');
+        return;
+      }
 
       await api('/api/menu/bulk','POST',{items});
-      showToast('Menu uploaded');
+      showToast(`Menu uploaded: ${items.length} items`);
       input.value='';
       await fetchState();
     } catch(e) { alert(e.message); }
