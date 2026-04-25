@@ -152,6 +152,14 @@
       content: ''; width: 6px; height: 6px; background: var(--sage);
       border-radius: 50%; animation: pulse 2s infinite;
     }
+    .live-dot.offline {
+      color: #dc2626;
+      background: #fef2f2;
+    }
+    .live-dot.offline::before {
+      background: #dc2626;
+      animation: none;
+    }
     @keyframes pulse {
       0%, 100% { opacity: 1; transform: scale(1); }
       50% { opacity: 0.5; transform: scale(0.8); }
@@ -952,7 +960,7 @@
         <div class="page-title" id="page-title">Place Order</div>
       </div>
       <div style="display:flex;align-items:center;gap:12px;">
-        <div class="live-dot">Live</div>
+        <div class="live-dot" id="live-status-dot">Live</div>
         <div id="clock"></div>
       </div>
     </div>
@@ -1328,15 +1336,24 @@
     document.getElementById('resto-addr').textContent = r.address || 'Miyapur';
     const banner = document.getElementById('resto-banner');
     const badge = document.getElementById('resto-status-badge');
+    const liveDot = document.getElementById('live-status-dot');
     if (isOpen) {
       banner.style.display = 'none';
       badge.textContent = '🟢 Open';
       badge.className = 'resto-badge badge-open';
+      if (liveDot) {
+        liveDot.textContent = 'Live';
+        liveDot.classList.remove('offline');
+      }
     } else {
       banner.style.display = 'flex';
       banner.textContent = `⚠️ Outlet not accepting orders.${r.reopenNote ? ` Back by ${r.reopenNote}` : ''}`;
       badge.textContent = '🔴 Closed';
       badge.className = 'resto-badge badge-closed';
+      if (liveDot) {
+        liveDot.textContent = 'Offline';
+        liveDot.classList.add('offline');
+      }
     }
   }
 
@@ -1883,7 +1900,7 @@
 
   // ── PLACE ORDER ───────────────────────────────────────────
   async function placeOrder() {
-    const restaurant = selectedRestaurant();
+    const restaurant = appState.restaurant || selectedRestaurant();
     if (restaurant?.acceptingOrders === false) { alert('Outlet not accepting orders.'); return; }
     syncCartWithMenu(); renderCart();
     if (!cart.length) { showWarn('Add items to place an order.'); return; }
