@@ -640,6 +640,11 @@
 </head>
 <body>
 
+<!-- TABLES TOGGLE BUTTON -->
+<div style="padding: 18px 24px 0 24px;">
+  <button id="tables-toggle-btn" onclick="toggleTables()" style="padding:10px 22px;border-radius:10px;border:1.5px solid var(--border);background:var(--cream);font-weight:700;cursor:pointer;">Tables: Off</button>
+</div>
+
 <!-- ── AUTH GATE ─────────────────────────────────────────── -->
 <div id="auth-gate">
   <div class="auth-wrap">
@@ -959,6 +964,30 @@
 </div>
 
 <script>
+    // ── TABLES TOGGLE ─────────────────────────────────────────────
+    let tablesEnabled = false;
+    function toggleTables() {
+      tablesEnabled = !tablesEnabled;
+      const btn = document.getElementById('tables-toggle-btn');
+      btn.textContent = tablesEnabled ? 'Tables: On' : 'Tables: Off';
+      updateTablesUI();
+    }
+
+    function updateTablesUI() {
+      // Hide or show all elements with class 'table-group' or id 'table-group'
+      document.querySelectorAll('.table-group, #table-group').forEach(el => {
+        el.style.display = tablesEnabled ? '' : 'none';
+      });
+      // Optionally, disable table-related inputs/buttons if needed
+    }
+
+    // On page load, ensure tables are off
+    window.addEventListener('DOMContentLoaded', () => {
+      tablesEnabled = false;
+      const btn = document.getElementById('tables-toggle-btn');
+      if (btn) btn.textContent = 'Tables: Off';
+      updateTablesUI();
+    });
   // ── STATE ────────────────────────────────────────────────
   const MGMT_TOKEN_KEY = 'mgmt_auth_token';
   const AUTO_PRINT_KEY = 'mgmt_auto_print';
