@@ -862,7 +862,7 @@
                   <input class="inp" id="menu-delete-id" type="number" min="1" placeholder="Delete item ID" />
                   <input class="inp" id="menu-edit-id" type="number" min="1" placeholder="Edit name by ID" />
                   <input class="inp" id="menu-edit-name" placeholder="New food name" />
-                  <input class="inp" id="menu-csv-file" type="file" accept=".csv,text/csv" style="grid-column:span 2;" />
+                  <input class="inp" id="menu-csv-file" type="file" accept=".csv,text/csv" onchange="previewMenuCsv()" style="grid-column:span 2;" />
                   <div id="csv-drop" style="
                     grid-column:span 2;
                     border:2px dashed var(--border);
@@ -972,6 +972,8 @@
   let autoPrintPopupBlockedNotified = false;
   const tableOrderDrafts = {};
   let outletOpen = true;
+  let csvPreviewItems = null;
+  let csvPreviewErrors = [];
 
   function money(v) {
     return `₹${Number(v||0).toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2})}`;
@@ -1472,19 +1474,43 @@
   function renderMenuManagement() {
     const el = document.getElementById('menu-admin-list');
     if (!el) return;
+    if (csvPreviewItems) {
+      el.innerHTML = `
+        <div style="padding:12px 16px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;gap:12px;align-items:center;">
+          <div>
+            <div style="font-size:12px;font-weight:800;color:var(--text1);">CSV Preview</div>
+            <div style="font-size:11px;color:var(--text3);">${csvPreviewItems.length} items ready to import${csvPreviewErrors.length ? ` · ${csvPreviewErrors.length} skipped` : ''}</div>
+          </div>
+          <button class="btn-primary" onclick="importMenuCsv()">Import CSV</button>
+        </div>
+        ${csvPreviewItems.length ? csvPreviewItems.map((item, index)=>`
+          <div class="menu-item-row">
+            <div class="menu-thumb-empty">${esc(item.emoji||'🍽️')}</div>
+            <div class="menu-info">
+              <div class="menu-name">#${index + 1} · ${esc(item.name)}</div>
+              <div class="menu-meta">${esc(item.category||'general')} · ${money(item.price)}</div>
+            </div>
+            <div class="menu-actions">
+              <span style="font-size:11px;color:var(--text3);">Import to upload photo</span>
+            </div>
+          </div>
+        `).join('') : '<div style="padding:16px;font-size:12px;color:var(--text3);">No valid CSV rows found.</div>'}
+      `;
+      return;
+    }
     const rows = (state.menu||[]).slice().sort((a,b)=>Number(a.id)-Number(b.id));
     if (!rows.length) { el.innerHTML='<div style="padding:16px;font-size:12px;color:var(--text3);">No menu items.</div>'; return; }
     el.innerHTML = rows.map(item=>{
       const avail = Number(item.available)===1;
       return `
         <div class="menu-item-row">
-          ${item.imageUrl?`<img class="menu-thumb" src="${esc(item.imageUrl)}" alt="${esc(item.name)}" />`:`<div class="menu-thumb-empty">${esc(item.emoji||'🍽️')}</div>`}
+          ${item.imageUrl?`<img id="menu-thumb-${item.id}" class="menu-thumb" src="${esc(item.imageUrl)}" alt="${esc(item.name)}" />`:`<div id="menu-thumb-${item.id}" class="menu-thumb-empty">${esc(item.emoji||'🍽️')}</div>`}
           <div class="menu-info">
             <div class="menu-name">#${item.id} · ${esc(item.name)}</div>
             <div class="menu-meta">${esc(item.cat)} · ${money(item.price)}</div>
           </div>
           <div class="menu-actions">
-            <input id="menu-image-${item.id}" type="file" accept="image/*" class="inp" style="width:140px;font-size:10px;padding:5px;" />
+            <input id="menu-image-${item.id}" type="file" accept="image/*" onchange="previewMenuImage(${item.id})" class="inp" style="width:140px;font-size:10px;padding:5px;" />
             <button class="state-btn" onclick="uploadMenuImage(${item.id})">Upload</button>
             <button class="state-btn avail ${avail?'active':''}" onclick="setMenuAvailability(${item.id},true)">Available</button>
             <button class="state-btn unavail ${!avail?'active':''}" onclick="setMenuAvailability(${item.id},false)">Unavailable</button>
@@ -1636,6 +1662,51 @@
     return { items, errors };
   }
 
+  async function previewMenuCsv() {
+    const input = document.getElementById('menu-csv-file');
+    const file = input?.files?.[0];
+    if (!file) {
+      csvPreviewItems = null;
+      csvPreviewErrors = [];
+      renderMenuManagement();
+      return;
+    }
+
+    try {
+      const csvText = await file.text();
+      const parsed = parseMenuCsvItems(csvText);
+      csvPreviewItems = parsed.items;
+      csvPreviewErrors = parsed.errors;
+      renderMenuManagement();
+      showToast(`CSV loaded: ${parsed.items.length} items`);
+    } catch (e) {
+      csvPreviewItems = null;
+      csvPreviewErrors = [];
+      showToast(e.message || 'Could not read CSV', '#ef4444');
+      renderMenuManagement();
+    }
+  }
+
+  function previewMenuImage(id) {
+    const input = document.getElementById(`menu-image-${id}`);
+    const file = input?.files?.[0];
+    const thumb = document.getElementById(`menu-thumb-${id}`);
+    if (!file || !thumb) return;
+
+    const url = URL.createObjectURL(file);
+    if (thumb.tagName === 'IMG') {
+      thumb.src = url;
+      return;
+    }
+
+    const img = document.createElement('img');
+    img.id = `menu-thumb-${id}`;
+    img.className = 'menu-thumb';
+    img.alt = 'Selected menu image';
+    img.src = url;
+    thumb.replaceWith(img);
+  }
+
   async function importMenuCsv() {
     const input = document.getElementById('menu-csv-file');
     const file = input?.files?.[0];
@@ -1655,6 +1726,8 @@
 
       await api('/api/menu/bulk','POST',{items});
       showToast(`Menu uploaded: ${items.length} items`);
+      csvPreviewItems = null;
+      csvPreviewErrors = [];
       input.value='';
       await fetchState();
     } catch(e) { alert(e.message); }
@@ -1802,7 +1875,7 @@
         const file = e.dataTransfer.files[0];
         if (file && file.name.toLowerCase().endsWith('.csv')) {
           csvInput.files = e.dataTransfer.files;
-          showToast('CSV loaded');
+          previewMenuCsv();
         } else {
           showToast('Drop a CSV file', '#ef4444');
         }
