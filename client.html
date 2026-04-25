@@ -296,6 +296,126 @@
     /* ── TABLE GROUP ──────────────────────────────────── */
     .table-group { margin-bottom: 14px; display: none; }
 
+    /* MENU SEARCH BAR */
+    .menu-search-wrap {
+      position: relative; margin-bottom: 18px;
+    }
+    .menu-search-icon {
+      position: absolute; left: 16px; top: 50%; transform: translateY(-50%);
+      width: 18px; height: 18px; color: var(--ink-l); pointer-events: none;
+      transition: color 0.2s;
+    }
+    .menu-search-inp {
+      width: 100%;
+      padding: 13px 44px 13px 46px;
+      border: 1.5px solid var(--border);
+      border-radius: 14px;
+      background: var(--white);
+      font-family: 'DM Sans', sans-serif;
+      font-size: 14px; color: var(--ink);
+      outline: none; transition: all 0.25s ease;
+      box-shadow: 0 2px 10px rgba(26,19,16,0.05);
+    }
+    .menu-search-inp::placeholder { color: var(--ink-xl); }
+    .menu-search-inp:focus {
+      border-color: var(--clay);
+      box-shadow: 0 0 0 4px rgba(232,96,58,0.1), 0 2px 10px rgba(26,19,16,0.05);
+      background: var(--white);
+    }
+    .menu-search-wrap:focus-within .menu-search-icon { color: var(--clay); }
+    .menu-search-clear {
+      position: absolute; right: 14px; top: 50%; transform: translateY(-50%);
+      width: 24px; height: 24px; border-radius: 50%;
+      background: var(--ink-xl); color: white; border: none;
+      font-size: 13px; cursor: pointer; display: none;
+      align-items: center; justify-content: center;
+      transition: all 0.2s; line-height: 1;
+    }
+    .menu-search-clear:hover { background: var(--ink); }
+    .menu-search-clear.visible { display: flex; }
+
+    /* SEARCH DROPDOWN */
+    .search-dropdown {
+      position: absolute; top: calc(100% + 8px); left: 0; right: 0;
+      background: var(--white); border: 1.5px solid var(--clay-m);
+      border-radius: 14px; box-shadow: var(--shadow-lg);
+      z-index: 200; overflow: hidden;
+      max-height: 400px; overflow-y: auto;
+      display: none; animation: dropIn 0.2s ease both;
+    }
+    .search-dropdown.open { display: block; }
+    @keyframes dropIn {
+      from { opacity: 0; transform: translateY(-8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .search-dropdown::-webkit-scrollbar { width: 4px; }
+    .search-dropdown::-webkit-scrollbar-thumb { background: var(--border); border-radius: 99px; }
+    .search-result-item {
+      display: flex; align-items: center; gap: 12px;
+      padding: 11px 16px; cursor: pointer;
+      border-bottom: 1px solid var(--border);
+      transition: background 0.15s;
+    }
+    .search-result-item:last-child { border-bottom: none; }
+    .search-result-item:hover, .search-result-item.focused { background: var(--clay-l); }
+    .search-result-img {
+      width: 52px; height: 52px; border-radius: 10px;
+      object-fit: cover; border: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+    .search-result-emoji {
+      width: 52px; height: 52px; border-radius: 10px;
+      background: linear-gradient(135deg, #f8f0e6, #f0e8d8);
+      border: 1px solid var(--border); flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 22px;
+    }
+    .search-result-info { flex: 1; min-width: 0; }
+    .search-result-name {
+      font-family: 'Playfair Display', serif;
+      font-size: 16px; font-weight: 600; color: var(--ink);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .search-result-name mark {
+      background: var(--clay-m); color: var(--clay-d);
+      border-radius: 3px; padding: 0 2px;
+    }
+    .search-result-meta { font-size: 12px; color: var(--ink-l); margin-top: 2px; }
+    .search-result-cat {
+      display: inline-block; font-size: 10px; font-weight: 700;
+      letter-spacing: 0.5px; text-transform: uppercase;
+      color: var(--clay); background: var(--clay-l);
+      border-radius: 99px; padding: 1px 8px; margin-top: 3px;
+    }
+    .search-result-price {
+      font-family: 'Playfair Display', serif;
+      font-size: 18px; font-weight: 700; color: var(--clay);
+      flex-shrink: 0;
+    }
+    .search-result-add {
+      width: 32px; height: 32px; border-radius: 50%;
+      background: linear-gradient(135deg, var(--clay), var(--clay-d));
+      color: white; border: none; font-size: 20px; font-weight: 300;
+      cursor: pointer; display: flex; align-items: center; justify-content: center;
+      box-shadow: 0 4px 12px rgba(232,96,58,0.35); flex-shrink: 0;
+      transition: all 0.2s; line-height: 1;
+    }
+    .search-result-add:hover { transform: scale(1.12); box-shadow: 0 6px 18px rgba(232,96,58,0.45); }
+    .search-result-add:disabled { background: var(--border); box-shadow: none; cursor: not-allowed; opacity: 0.5; }
+    .search-no-results { padding: 28px 20px; text-align: center; }
+    .search-no-results-icon { font-size: 36px; margin-bottom: 10px; }
+    .search-no-results-title {
+      font-family: 'Playfair Display', serif;
+      font-size: 18px; color: var(--ink-m); margin-bottom: 4px;
+    }
+    .search-no-results-sub { font-size: 13px; color: var(--ink-xl); }
+    .search-section-header {
+      padding: 8px 16px 4px;
+      font-size: 10px; font-weight: 700; letter-spacing: 0.8px;
+      text-transform: uppercase; color: var(--ink-xl);
+      background: var(--cream); border-bottom: 1px solid var(--border);
+    }
+
     /* ── CATEGORY TABS ────────────────────────────────── */
     .cat-scroll-wrap {
       overflow-x: auto; scrollbar-width: none;
@@ -742,6 +862,11 @@
       .otype-label { margin-bottom: 8px; }
       .otype-tabs { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .otype-tab { font-size: 14px; padding: 13px 8px; }
+      .menu-search-wrap { margin-bottom: 12px; }
+      .menu-search-inp { font-size: 16px; padding: 12px 42px 12px 44px; }
+      .search-dropdown { max-height: min(420px, 70dvh); }
+      .search-result-item { padding: 10px 12px; gap: 10px; }
+      .search-result-price { font-size: 16px; }
       .menu-grid { grid-template-columns: 1fr; gap: 14px; }
       .menu-card {
         width: 100%;
@@ -909,6 +1034,26 @@
               <div class="delivery-lock-msg">📍 Share your location to proceed with delivery</div>
               <button class="loc-btn" id="share-loc-btn" onclick="shareDeliveryLocation()">📍 Share My Location</button>
               <div class="loc-status" id="loc-status">Location pending…</div>
+            </div>
+
+            <!-- Menu Search Bar -->
+            <div class="menu-search-wrap" id="menu-search-wrap">
+              <svg class="menu-search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+              </svg>
+              <input
+                class="menu-search-inp"
+                id="menu-search-inp"
+                type="search"
+                autocomplete="off"
+                spellcheck="false"
+                placeholder="Search dishes, categories..."
+                oninput="onSearchInput(this.value)"
+                onkeydown="onSearchKeyDown(event)"
+                onfocus="onSearchFocus()"
+              />
+              <button class="menu-search-clear" id="menu-search-clear" onclick="clearSearch()" title="Clear search">x</button>
+              <div class="search-dropdown" id="search-dropdown"></div>
             </div>
 
             <!-- Category Tabs -->
@@ -1363,6 +1508,187 @@
   }
   window.placeholderHTML = placeholderHTML;
 
+  let searchQuery = '';
+  let searchFocusIndex = -1;
+  let searchResultItems = [];
+
+  function highlightMatch(text, query) {
+    if (!query) return esc(text);
+    const safe = String(query).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const re = new RegExp(`(${safe})`, 'gi');
+    return esc(text).replace(re, '<mark>$1</mark>');
+  }
+
+  function getSearchResults(query) {
+    if (!query || !query.trim()) return [];
+    const q = query.trim().toLowerCase();
+    return (appState.menu || [])
+      .filter(m => {
+        const nameMatch = String(m.name || '').toLowerCase().includes(q);
+        const catMatch = String(m.cat || '').toLowerCase().includes(q);
+        const descMatch = String(m.desc || '').toLowerCase().includes(q);
+        return nameMatch || catMatch || descMatch;
+      })
+      .sort((a, b) => {
+        const an = String(a.name || '').toLowerCase().includes(q);
+        const bn = String(b.name || '').toLowerCase().includes(q);
+        if (an && !bn) return -1;
+        if (!an && bn) return 1;
+        return 0;
+      })
+      .slice(0, 12);
+  }
+
+  function renderSearchDropdown(query) {
+    const dropdown = document.getElementById('search-dropdown');
+    if (!dropdown) return;
+
+    if (!query || !query.trim()) {
+      dropdown.classList.remove('open');
+      dropdown.innerHTML = '';
+      searchResultItems = [];
+      searchFocusIndex = -1;
+      return;
+    }
+
+    const results = getSearchResults(query);
+    searchResultItems = results;
+    searchFocusIndex = -1;
+
+    if (!results.length) {
+      dropdown.innerHTML = `
+        <div class="search-no-results">
+          <div class="search-no-results-title">No results for "${esc(query)}"</div>
+          <div class="search-no-results-sub">Try a different dish name or category</div>
+        </div>
+      `;
+      dropdown.classList.add('open');
+      return;
+    }
+
+    const available = results.filter(m => Number(m.available) === 1);
+    const unavailable = results.filter(m => Number(m.available) !== 1);
+    let html = '';
+    if (available.length) {
+      html += `<div class="search-section-header">Available (${available.length})</div>`;
+      html += available.map((m, i) => buildResultRow(m, query, i)).join('');
+    }
+    if (unavailable.length) {
+      html += `<div class="search-section-header">Unavailable</div>`;
+      html += unavailable.map((m, i) => buildResultRow(m, query, available.length + i)).join('');
+    }
+    dropdown.innerHTML = html;
+    dropdown.classList.add('open');
+  }
+
+  function buildResultRow(m, query, idx) {
+    const avail = Number(m.available) === 1;
+    const imgUrl = String(m.imageUrl || '').trim();
+    const fallback = esc(m.emoji || 'Food');
+    const imgHtml = imgUrl
+      ? `<img class="search-result-img" src="${esc(imgUrl)}" alt="${esc(m.name)}" onerror="this.outerHTML='<div class=&quot;search-result-emoji&quot;>${fallback}</div>'" />`
+      : `<div class="search-result-emoji">${fallback}</div>`;
+    const qtyInCart = (cart.find(l => Number(l.menuItemId) === Number(m.id))?.qty) || 0;
+    return `
+      <div class="search-result-item" data-idx="${idx}" data-id="${Number(m.id)}"
+           onclick="searchSelectItem(${Number(m.id)})"
+           onmouseenter="searchHoverFocus(${idx})">
+        ${imgHtml}
+        <div class="search-result-info">
+          <div class="search-result-name">${highlightMatch(m.name, query)}</div>
+          ${m.desc ? `<div class="search-result-meta">${esc(String(m.desc).slice(0, 60))}${String(m.desc).length > 60 ? '...' : ''}</div>` : ''}
+          ${m.cat ? `<div class="search-result-cat">${esc(m.cat)}</div>` : ''}
+        </div>
+        <div class="search-result-price">${money(m.price)}</div>
+        <button class="search-result-add"
+          ${!avail ? 'disabled title="Unavailable"' : ''}
+          onclick="event.stopPropagation(); searchAddToCart(${Number(m.id)})">
+          ${qtyInCart > 0 ? `<span style="font-size:13px;font-weight:700;">${qtyInCart}</span>` : '+'}
+        </button>
+      </div>
+    `;
+  }
+
+  function searchSelectItem(menuItemId) {
+    searchAddToCart(menuItemId);
+    const gridEl = document.getElementById(`mq-${menuItemId}`);
+    if (gridEl) gridEl.closest('.menu-card')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+
+  function searchAddToCart(menuItemId) {
+    addToCart(Number(menuItemId));
+    const q = document.getElementById('menu-search-inp')?.value || '';
+    renderSearchDropdown(q);
+  }
+
+  function searchHoverFocus(idx) {
+    searchFocusIndex = idx;
+    updateSearchFocusStyle();
+  }
+
+  function updateSearchFocusStyle() {
+    document.querySelectorAll('.search-result-item').forEach((el, i) => {
+      el.classList.toggle('focused', i === searchFocusIndex);
+    });
+  }
+
+  function onSearchInput(value) {
+    searchQuery = value;
+    const clearBtn = document.getElementById('menu-search-clear');
+    if (clearBtn) clearBtn.classList.toggle('visible', value.length > 0);
+    renderSearchDropdown(value);
+  }
+
+  function onSearchFocus() {
+    if (searchQuery) renderSearchDropdown(searchQuery);
+  }
+
+  function onSearchKeyDown(e) {
+    const dropdown = document.getElementById('search-dropdown');
+    if (!dropdown || !dropdown.classList.contains('open')) return;
+    const items = dropdown.querySelectorAll('.search-result-item');
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      searchFocusIndex = Math.min(searchFocusIndex + 1, items.length - 1);
+      updateSearchFocusStyle();
+      items[searchFocusIndex]?.scrollIntoView({ block: 'nearest' });
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      searchFocusIndex = Math.max(searchFocusIndex - 1, 0);
+      updateSearchFocusStyle();
+      items[searchFocusIndex]?.scrollIntoView({ block: 'nearest' });
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      if (searchFocusIndex >= 0 && searchFocusIndex < searchResultItems.length) {
+        const item = searchResultItems[searchFocusIndex];
+        if (item) searchSelectItem(item.id);
+      }
+    } else if (e.key === 'Escape') {
+      clearSearch();
+    }
+  }
+
+  function clearSearch() {
+    searchQuery = '';
+    const inp = document.getElementById('menu-search-inp');
+    const clearBtn = document.getElementById('menu-search-clear');
+    const dropdown = document.getElementById('search-dropdown');
+    if (inp) inp.value = '';
+    if (clearBtn) clearBtn.classList.remove('visible');
+    if (dropdown) { dropdown.classList.remove('open'); dropdown.innerHTML = ''; }
+    searchResultItems = [];
+    searchFocusIndex = -1;
+    if (inp) inp.focus();
+  }
+
+  document.addEventListener('click', function(e) {
+    const wrap = document.getElementById('menu-search-wrap');
+    if (wrap && !wrap.contains(e.target)) {
+      const dropdown = document.getElementById('search-dropdown');
+      if (dropdown) dropdown.classList.remove('open');
+    }
+  });
+
   function refreshMenuQty(id) {
     const el = document.getElementById(`mq-${id}`);
     if (!el) return;
@@ -1396,6 +1722,8 @@
     refreshMenuQty(menuItemId);
     saveDraft();
     syncMobileCartFab();
+    const q = document.getElementById('menu-search-inp')?.value || '';
+    if (q) renderSearchDropdown(q);
   }
 
   function syncCartWithMenu() {
