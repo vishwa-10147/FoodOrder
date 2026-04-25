@@ -686,24 +686,89 @@
       #sidebar { display: none; }
       #mobile-nav { display: block; }
       #mobile-cart-fab { display: block; }
-      body { padding-bottom: env(safe-area-inset-bottom); }
+      html, body { width: 100%; max-width: 100%; overflow-x: hidden; }
+      body { padding-bottom: env(safe-area-inset-bottom); background: var(--cream); }
+      #app, #main, .content, .menu-col { width: 100%; max-width: 100%; min-width: 0; }
       .order-layout { flex-direction: column; }
       .cart-col { display: none; width: 100%; position: static; }
       .pay-layout { grid-template-columns: 1fr; }
-      .section-inner { padding: 16px 16px 100px; }
+      .section-inner { width: 100%; max-width: 100%; padding: 12px 14px 96px; overflow-x: hidden; }
       .topbar { padding: 0 16px; height: 56px; }
       .page-title { font-size: 18px; }
       .resto-name { font-size: 28px; }
       .menu-grid { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 14px; }
       .field-row { grid-template-columns: 1fr; }
+      .topbar > div:last-child { gap: 8px; font-size: 13px; flex-shrink: 0; }
+      .live-dot { padding: 5px 10px; font-size: 12px; }
+      .resto-hero, .customer-card, .schedule-card, .delivery-card { border-radius: 18px; margin-bottom: 14px; }
+      .resto-hero-body { padding: 16px; }
+      .resto-row { gap: 6px; }
+      .resto-badge { font-size: 11px; padding: 4px 8px; }
+      .customer-card { padding: 14px; }
+      .card-title { margin-bottom: 10px; }
+      .field-inp { width: 100%; min-width: 0; font-size: 16px; padding: 12px 14px; }
+      .otype-wrap { margin-bottom: 14px; }
+      .otype-tabs {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px;
+      }
+      .otype-tab {
+        width: 100%;
+        min-width: 0;
+        padding: 12px 8px;
+        border-radius: 14px;
+        font-size: 13px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .cat-scroll-wrap {
+        width: calc(100vw - 28px);
+        margin-left: 0;
+        margin-bottom: 14px;
+        overflow-x: auto;
+      }
+      .cat-tabs { width: max-content; max-width: none; padding-right: 8px; }
+      .cat-btn { padding: 9px 15px; font-size: 13px; }
     }
     @media (max-width: 500px) {
-      .menu-grid { grid-template-columns: 1fr 1fr; gap: 12px; }
-      .menu-img-wrap { height: 140px; }
-      .menu-name { font-size: 17px; }
-      .menu-price { font-size: 18px; }
-      .otype-tab { min-width: 0; font-size: 12px; padding: 9px 10px; }
-      .resto-name { font-size: 24px; }
+      .topbar { padding: 0 14px; }
+      .page-title { font-size: 24px; }
+      .section-inner { padding: 10px 14px 92px; }
+      .resto-hero { display: none; }
+      .customer-card { padding: 12px; margin-bottom: 16px; }
+      .customer-card .card-title { display: none; }
+      .otype-label { margin-bottom: 8px; }
+      .otype-tabs { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .otype-tab { font-size: 14px; padding: 13px 8px; }
+      .menu-grid { grid-template-columns: 1fr; gap: 14px; }
+      .menu-card {
+        width: 100%;
+        max-width: 100%;
+        border-radius: 18px;
+        box-shadow: 0 8px 28px rgba(26,19,16,0.08);
+      }
+      .menu-card:hover { transform: none; }
+      .menu-img-wrap { height: 168px; }
+      .menu-body { padding: 14px 16px 16px; }
+      .menu-name {
+        font-size: 22px;
+        white-space: normal;
+        overflow-wrap: anywhere;
+        line-height: 1.15;
+      }
+      .menu-desc {
+        font-size: 13px;
+        min-height: 0;
+        margin-bottom: 18px;
+      }
+      .menu-foot { min-height: 38px; }
+      .menu-price { font-size: 24px; }
+      .qty-btn { width: 34px; height: 34px; font-size: 18px; }
+      .placeholder-emoji { width: 64px; height: 64px; font-size: 34px; }
+      .placeholder-lbl { font-size: 11px; }
+      .global-warn { max-width: calc(100vw - 28px); white-space: normal; text-align: center; }
     }
     @media (max-width: 350px) {
       .menu-grid { grid-template-columns: 1fr; }
