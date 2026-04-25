@@ -1181,6 +1181,7 @@
   let deliveryLocation = { lat: null, lng: null };
   let clientOrderIds = new Set();
   let pollTimer = null;
+  let lastStateSignature = '';
 
   // ── UTILS ────────────────────────────────────────────────
   function resolveApiUrl(path) {
@@ -2062,6 +2063,35 @@
     renderMenu();
     renderCart();
     syncMobileCartFab();
+    lastStateSignature = stateSignature();
+  }
+
+  function stateSignature() {
+    return JSON.stringify({
+      restaurant: appState.restaurant ? {
+        id: appState.restaurant.id,
+        name: appState.restaurant.name,
+        acceptingOrders: appState.restaurant.acceptingOrders,
+        reopenNote: appState.restaurant.reopenNote
+      } : null,
+      menu: (appState.menu || []).map(m => ({
+        id: m.id,
+        name: m.name,
+        price: m.price,
+        cat: m.cat,
+        desc: m.desc,
+        imageUrl: m.imageUrl,
+        available: m.available
+      })),
+      orders: (appState.orders || []).map(o => ({
+        id: o.id,
+        status: o.status,
+        paid: o.paid,
+        progress: o.progress,
+        total: o.total,
+        updatedAt: o.updatedAt
+      }))
+    });
   }
 
   // ── INIT ─────────────────────────────────────────────────
@@ -2130,6 +2160,9 @@
     pollTimer = setInterval(async () => {
       try {
         await loadState();
+        const nextSignature = stateSignature();
+        if (nextSignature === lastStateSignature) return;
+        lastStateSignature = nextSignature;
         const activeView = document.querySelector('.content.active')?.id?.replace('view-','') || 'order';
         renderRestoHero();
         if (activeView === 'order') { syncCartWithMenu(); renderCategories(); renderMenu(); renderCart(); syncMobileCartFab(); }
