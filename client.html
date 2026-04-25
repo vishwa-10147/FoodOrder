@@ -2,1476 +2,1749 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Client Site - Tableside</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Tableside — Order Fresh</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;600;700;800&family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <style>
-    @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Urbanist:wght@400;500;600;700;800&display=swap');
-
     :root {
-      --charcoal: #1f1a17;
-      --accent: #b66545;
-      --accent-light: #f5e8de;
-      --accent-dark: #8b4a30;
-      --warn: #9f5d18;
-      --warn-light: #fcf1df;
-      --info: #20476e;
-      --info-light: #e9f0f8;
-      --border: 0.5px solid var(--color-border-tertiary);
-      --radius: var(--border-radius-lg);
+      --clay:    #e8603a;
+      --clay-d:  #c44b28;
+      --clay-l:  #fdf1ec;
+      --clay-m:  #f9d4c5;
+      --cream:   #faf7f3;
+      --paper:   #f4f0ea;
+      --ink:     #1a1310;
+      --ink-m:   #4a3f38;
+      --ink-l:   #8a7d74;
+      --ink-xl:  #b5a99f;
+      --sage:    #2d6a4f;
+      --sage-l:  #e8f4ee;
+      --gold:    #c9892a;
+      --gold-l:  #fdf3e0;
+      --white:   #ffffff;
+      --border:  #e6ddd5;
+      --radius:  16px;
+      --shadow:  0 4px 24px rgba(26,19,16,0.1);
+      --shadow-lg: 0 16px 48px rgba(26,19,16,0.15);
     }
-    * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Urbanist', var(--font-sans), sans-serif; }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
     body {
-      padding: 18px;
-      background:
-        radial-gradient(circle at 10% 8%, rgba(227, 195, 157, 0.34) 0%, rgba(227, 195, 157, 0) 30%),
-        radial-gradient(circle at 90% 92%, rgba(189, 205, 230, 0.3) 0%, rgba(189, 205, 230, 0) 35%),
-        linear-gradient(140deg, #f2eeea 0%, #f7f5f2 100%);
+      font-family: 'DM Sans', sans-serif;
+      background: var(--paper);
+      color: var(--ink);
+      min-height: 100dvh;
+      overflow-x: hidden;
     }
-    #app { display: flex; min-height: 680px; border: 1px solid #e6dfd7; border-radius: 12px; overflow: hidden; background: #fcfbf9; box-shadow: 0 12px 28px rgba(46, 37, 30, 0.09); }
 
-    #sidebar { width: 230px; background: #fbf8f4; border-right: 1px solid #e7ddd3; }
-    .logo { padding: 24px 18px; border-bottom: 1px solid #e9dfd7; }
-    .logo h1 { font-size: 32px; color: #171412; letter-spacing: 0.2px; font-family: 'Cormorant Garamond', serif; font-weight: 600; }
-    .logo p { font-size: 11px; color: #7f756d; margin-top: 1px; letter-spacing: 0.15px; }
-    .nav { padding: 12px 0; }
-    .nav-item { padding: 11px 16px; cursor: pointer; font-size: 13px; color: #5f544b; border-left: 3px solid transparent; transition: all 0.25s ease; letter-spacing: 0.2px; text-transform: uppercase; font-weight: 700; }
-    .nav-item:hover { background: #f1e8df; color: #2a231e; }
-    .nav-item.active { background: #ead6c7; color: #2a231e; font-weight: 800; border-left-color: #b66545; }
+    /* ── MOBILE NAV BAR ─────────────────────────────────── */
+    #mobile-nav {
+      display: none;
+      position: fixed;
+      bottom: 0; left: 0; right: 0;
+      background: var(--white);
+      border-top: 1px solid var(--border);
+      z-index: 100;
+      padding: 8px 0 env(safe-area-inset-bottom);
+      box-shadow: 0 -8px 32px rgba(26,19,16,0.1);
+    }
+    .mnav-inner { display: flex; justify-content: space-around; }
+    .mnav-btn {
+      display: flex; flex-direction: column; align-items: center; gap: 3px;
+      padding: 8px 16px; border: none; background: none; cursor: pointer;
+      color: var(--ink-l); font-family: 'DM Sans', sans-serif;
+      font-size: 10px; font-weight: 600; letter-spacing: 0.5px;
+      text-transform: uppercase; transition: color 0.2s;
+      position: relative;
+    }
+    .mnav-btn.active { color: var(--clay); }
+    .mnav-btn svg { width: 22px; height: 22px; }
+    .mnav-badge {
+      position: absolute; top: 4px; right: 8px;
+      background: var(--clay); color: white;
+      border-radius: 99px; font-size: 9px; font-weight: 700;
+      min-width: 16px; height: 16px; padding: 0 4px;
+      display: flex; align-items: center; justify-content: center;
+      display: none;
+    }
 
-    #main { flex: 1; display: flex; flex-direction: column; }
-    .topbar { height: 58px; padding: 0 22px; border-bottom: 1px solid #e6ddd4; background: rgba(252, 250, 247, 0.94); display: flex; align-items: center; justify-content: space-between; backdrop-filter: blur(8px); }
-    .title { font-size: 17px; font-weight: 700; color: #2d251f; letter-spacing: 0.2px; text-transform: uppercase; }
-    .time { font-size: 12px; color: #736860; font-weight: 700; }
+    /* ── LAYOUT ─────────────────────────────────────────── */
+    #app { display: flex; min-height: 100dvh; }
 
-    .content { display: none; flex: 1; padding: 22px; overflow-y: auto; }
+    /* ── SIDEBAR ─────────────────────────────────────────── */
+    #sidebar {
+      width: 260px; flex-shrink: 0;
+      background: var(--ink);
+      display: flex; flex-direction: column;
+      position: sticky; top: 0; height: 100dvh;
+      overflow: hidden;
+    }
+
+    .logo-area {
+      padding: 32px 24px 24px;
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+    }
+    .logo-mark {
+      display: flex; align-items: center; gap: 10px; margin-bottom: 6px;
+    }
+    .logo-icon {
+      width: 36px; height: 36px; background: var(--clay);
+      border-radius: 10px; display: flex; align-items: center; justify-content: center;
+      font-size: 18px; flex-shrink: 0;
+    }
+    .logo-text {
+      font-family: 'Playfair Display', serif;
+      font-size: 22px; font-weight: 700; color: var(--white);
+      letter-spacing: -0.3px;
+    }
+    .logo-sub {
+      font-size: 12px; color: rgba(255,255,255,0.4);
+      font-weight: 400; letter-spacing: 0.2px;
+    }
+
+    .nav { padding: 16px 0; flex: 1; }
+    .nav-item {
+      display: flex; align-items: center; gap: 12px;
+      padding: 13px 24px; cursor: pointer;
+      font-size: 13px; font-weight: 600; letter-spacing: 0.2px;
+      color: rgba(255,255,255,0.5); border-left: 3px solid transparent;
+      transition: all 0.2s ease; position: relative;
+    }
+    .nav-item:hover { color: rgba(255,255,255,0.85); background: rgba(255,255,255,0.04); }
+    .nav-item.active {
+      color: var(--white); border-left-color: var(--clay);
+      background: rgba(232,96,58,0.12);
+    }
+    .nav-item svg { width: 18px; height: 18px; flex-shrink: 0; opacity: 0.7; }
+    .nav-item.active svg { opacity: 1; }
+
+    .sidebar-footer {
+      padding: 20px 24px;
+      border-top: 1px solid rgba(255,255,255,0.06);
+      font-size: 11px; color: rgba(255,255,255,0.25);
+    }
+
+    /* ── MAIN ─────────────────────────────────────────── */
+    #main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+
+    .topbar {
+      position: sticky; top: 0; z-index: 50;
+      background: rgba(250,247,243,0.92);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border);
+      padding: 0 28px;
+      height: 64px;
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .topbar-left { display: flex; align-items: center; gap: 12px; }
+    .page-title {
+      font-family: 'Playfair Display', serif;
+      font-size: 20px; font-weight: 700; color: var(--ink);
+    }
+    .live-dot {
+      display: flex; align-items: center; gap: 6px;
+      font-size: 11px; font-weight: 600; color: var(--sage);
+      background: var(--sage-l); padding: 4px 10px; border-radius: 99px;
+    }
+    .live-dot::before {
+      content: ''; width: 6px; height: 6px; background: var(--sage);
+      border-radius: 50%; animation: pulse 2s infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.5; transform: scale(0.8); }
+    }
+    #clock { font-size: 12px; font-weight: 600; color: var(--ink-l); }
+
+    /* ── CONTENT SECTIONS ─────────────────────────────── */
+    .content { display: none; flex: 1; }
     .content.active { display: block; }
-    @keyframes riseIn {
-      from { opacity: 0; transform: translateY(8px); }
+
+    .section-inner { padding: 24px 28px 100px; max-width: 1100px; }
+
+    /* ── RESTAURANT HERO ─────────────────────────────── */
+    .resto-hero {
+      background: var(--white);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+      margin-bottom: 24px;
+      box-shadow: var(--shadow);
+    }
+    .resto-hero-banner {
+      background: #fef3cd; color: #92400e;
+      font-size: 13px; font-weight: 600;
+      padding: 10px 18px;
+      display: none; align-items: center; gap: 8px;
+      border-bottom: 1px solid #fde68a;
+    }
+    .resto-hero-body { padding: 20px 22px; }
+    .resto-name {
+      font-family: 'Playfair Display', serif;
+      font-size: 36px; font-weight: 700; color: var(--ink);
+      line-height: 1; margin-bottom: 8px;
+    }
+    .resto-row { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 6px; }
+    .resto-badge {
+      display: inline-flex; align-items: center; gap: 5px;
+      font-size: 12px; font-weight: 600; padding: 4px 10px;
+      border-radius: 99px;
+    }
+    .badge-rating { background: #e8f4ee; color: #2d6a4f; }
+    .badge-price { background: var(--gold-l); color: var(--gold); }
+    .badge-open { background: var(--sage-l); color: var(--sage); }
+    .badge-closed { background: #fef2f2; color: #dc2626; }
+    .resto-cuisine {
+      font-size: 13px; font-weight: 500; color: var(--clay);
+      text-decoration: underline; text-decoration-color: var(--clay-m);
+    }
+    .resto-addr { font-size: 13px; color: var(--ink-m); margin-top: 4px; }
+
+    /* ── ORDER TYPE TABS ─────────────────────────────── */
+    .otype-wrap { margin-bottom: 20px; }
+    .otype-label { font-size: 11px; font-weight: 700; letter-spacing: 0.8px; color: var(--ink-l); text-transform: uppercase; margin-bottom: 10px; }
+    .otype-tabs {
+      display: flex; gap: 8px; flex-wrap: wrap;
+    }
+    .otype-tab {
+      flex: 1; min-width: 100px;
+      padding: 10px 14px; border-radius: 12px;
+      border: 1.5px solid var(--border);
+      background: var(--white); color: var(--ink-m);
+      font-family: 'DM Sans', sans-serif; font-size: 13px; font-weight: 600;
+      cursor: pointer; transition: all 0.2s ease; text-align: center;
+    }
+    .otype-tab:hover { border-color: var(--clay-m); color: var(--clay-d); }
+    .otype-tab.active {
+      background: var(--clay); color: white;
+      border-color: var(--clay); box-shadow: 0 4px 16px rgba(232,96,58,0.3);
+    }
+
+    /* ── CUSTOMER FIELDS ─────────────────────────────── */
+    .customer-card {
+      background: var(--white); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 18px 20px;
+      margin-bottom: 20px; box-shadow: var(--shadow);
+    }
+    .card-title {
+      font-size: 13px; font-weight: 700; letter-spacing: 0.5px;
+      text-transform: uppercase; color: var(--ink-l);
+      margin-bottom: 14px; display: flex; align-items: center; gap: 8px;
+    }
+    .card-title::after {
+      content: ''; flex: 1; height: 1px; background: var(--border);
+    }
+    .field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .field-group { display: flex; flex-direction: column; gap: 5px; }
+    .field-lbl { font-size: 11px; font-weight: 700; color: var(--ink-l); letter-spacing: 0.4px; text-transform: uppercase; }
+    .field-inp {
+      border: 1.5px solid var(--border); border-radius: 10px;
+      padding: 10px 13px; font-family: 'DM Sans', sans-serif;
+      font-size: 14px; font-weight: 400; color: var(--ink);
+      background: var(--cream); transition: all 0.2s;
+      outline: none;
+    }
+    .field-inp:focus { border-color: var(--clay); background: white; box-shadow: 0 0 0 3px rgba(232,96,58,0.12); }
+    .field-inp::placeholder { color: var(--ink-xl); }
+
+    /* ── SCHEDULE ─────────────────────────────────────── */
+    .schedule-card {
+      background: #fffbf5; border: 1.5px solid #f5d68e;
+      border-radius: var(--radius); padding: 14px 18px;
+      margin-bottom: 16px; display: none;
+    }
+    .eta-msg {
+      font-size: 12px; color: var(--gold); font-weight: 600;
+      margin-bottom: 10px; display: flex; align-items: center; gap: 6px;
+    }
+
+    /* ── DELIVERY SECTION ─────────────────────────────── */
+    .delivery-card {
+      background: #eefaf5; border: 1.5px solid #a7e8c8;
+      border-radius: var(--radius); padding: 14px 18px;
+      margin-bottom: 16px; display: none;
+    }
+    .delivery-lock-msg {
+      font-size: 13px; color: #0a5c38; font-weight: 600;
+      margin-bottom: 10px;
+    }
+    .loc-btn {
+      width: 100%; padding: 11px; border-radius: 10px;
+      background: var(--sage); color: white; border: none;
+      font-family: 'DM Sans', sans-serif; font-size: 13px; font-weight: 700;
+      cursor: pointer; transition: all 0.2s;
+    }
+    .loc-btn:hover { background: #235f45; }
+    .loc-status { font-size: 12px; color: #0a5c38; margin-top: 6px; font-weight: 500; }
+    .delivery-info-bar {
+      display: none; align-items: center; gap: 8px;
+      background: var(--gold-l); border: 1px solid #f5d68e;
+      border-radius: 12px; padding: 10px 14px;
+      font-size: 13px; font-weight: 600; color: var(--gold);
+      margin-bottom: 14px;
+    }
+    .delivery-unlocked-chip {
+      display: none; align-items: center; gap: 6px;
+      background: var(--sage-l); color: var(--sage);
+      border: 1px solid #a7e8c8; border-radius: 99px;
+      padding: 6px 14px; font-size: 12px; font-weight: 700;
+      margin-bottom: 14px; width: fit-content;
+    }
+
+    /* ── TABLE GROUP ──────────────────────────────────── */
+    .table-group { margin-bottom: 14px; display: none; }
+
+    /* ── CATEGORY TABS ────────────────────────────────── */
+    .cat-scroll-wrap {
+      overflow-x: auto; scrollbar-width: none;
+      margin-bottom: 20px; -webkit-overflow-scrolling: touch;
+    }
+    .cat-scroll-wrap::-webkit-scrollbar { display: none; }
+    .cat-tabs { display: flex; gap: 8px; width: max-content; }
+    .cat-btn {
+      padding: 8px 18px; border-radius: 99px;
+      border: 1.5px solid var(--border);
+      background: var(--white); color: var(--ink-m);
+      font-family: 'DM Sans', sans-serif; font-size: 13px; font-weight: 600;
+      cursor: pointer; transition: all 0.2s; white-space: nowrap;
+    }
+    .cat-btn:hover { border-color: var(--clay-m); color: var(--clay-d); }
+    .cat-btn.active { background: var(--clay); color: white; border-color: var(--clay); }
+
+    /* ── MENU GRID ────────────────────────────────────── */
+    .menu-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+      gap: 18px;
+      margin-bottom: 28px;
+    }
+    .menu-card {
+      background: var(--white); border: 1px solid var(--border);
+      border-radius: var(--radius); overflow: hidden;
+      box-shadow: var(--shadow); transition: all 0.25s ease;
+      animation: fadeUp 0.3s ease both;
+    }
+    .menu-card:hover { transform: translateY(-3px); box-shadow: var(--shadow-lg); border-color: var(--clay-m); }
+    .menu-card.unavail { opacity: 0.55; pointer-events: none; }
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(12px); }
       to { opacity: 1; transform: translateY(0); }
     }
 
-    .customer-wrap { display:flex; flex-direction:column; gap:16px; }
-    .menu-panel { flex:1; }
-    .cart-panel { width:100%; flex-shrink:0; }
-    .order-type-tabs { display:flex; background:#f4ede6; border-radius:0; padding:4px; margin-bottom:14px; border:1px solid #e6ddd4; }
-    .order-type-tab { flex:1; text-align:center; padding:9px 6px; font-size:12px; cursor:pointer; color:#675c54; border-radius:0; transition: all 0.2s ease; text-transform:uppercase; font-weight:700; letter-spacing:0.25px; }
-    .order-type-tab.active { background:#b66545; color:#fff; font-weight:700; box-shadow:none; }
-    .field-label { font-size:11px; color:var(--color-text-secondary); margin-bottom:4px; }
-    .field-input, .notes-input { width:100%; border:1px solid #d9dee7; border-radius:10px; padding:8px 10px; background:var(--color-background-primary); color:var(--color-text-primary); font-size:12px; }
-    .field-input:focus, .notes-input:focus { outline:none; border-color:#86d8bc; box-shadow:0 0 0 3px rgba(29, 158, 117, 0.12); }
-    .schedule-grid { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:10px; }
-    .notes-input { resize:none; margin:10px 0 8px; }
-    .eta { display:none; align-items:center; gap:6px; font-size:11px; color:var(--accent-dark); background:var(--accent-light); padding:6px 8px; border-radius:var(--border-radius-md); margin-bottom:10px; }
-    .delivery-info { display:none; align-items:center; gap:8px; font-size:13px; font-weight:600; color:#b45309; background:#fff1dd; padding:10px 12px; border-radius:10px; margin-bottom:12px; border:1px solid #ffd9b8; }
-    .delivery-status-chip { display:none; align-items:center; gap:8px; font-size:12px; font-weight:700; color:#0e6b3f; background:#defae7; padding:8px 12px; border-radius:999px; margin-bottom:12px; border:1px solid #9fe1cb; width:fit-content; }
-    .checkout-warning { display:none; margin-top:10px; padding:10px 12px; border-radius:10px; background:#fff1f2; color:#b91c1c; border:1px solid #fecdd3; font-size:13px; font-weight:600; box-shadow:0 1px 2px rgba(185,28,28,0.08); }
-    .delivery-form { display:none; margin-bottom:12px; padding:14px; background:linear-gradient(180deg, #f8fdff 0%, #f0f9ff 100%); border-radius:14px; border:1px solid #d4e6f7; box-shadow:0 8px 20px rgba(15, 23, 42, 0.06); }
-    .delivery-form-title { font-weight:800; margin-bottom:10px; color:#0f172a; font-size:14px; letter-spacing:0.2px; }
-
-    .menu-categories { display:flex; gap:9px; margin-bottom:16px; flex-wrap:wrap; }
-    .cat { padding:7px 16px; border-radius:0; border:1px solid #e8ddd2; font-size:12px; cursor:pointer; color:#5f554c; background:#f8f4ef; transition: all 0.2s ease; font-weight:700; text-transform:uppercase; letter-spacing:0.35px; }
-    .cat:hover { border-color:#ceb6a2; color:#3a3029; }
-    .cat.active { background:#b66545; border-color:#b66545; color:white; }
-
-    .menu-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:18px; }
-    .menu-item { border:1px solid #e4dbd2; border-radius:0; background:#fff; padding:0 0 13px; box-shadow:none; transition: transform 0.22s ease, box-shadow 0.22s ease, border-color 0.22s ease; animation: riseIn 0.28s ease both; }
-    .menu-item:hover { transform: translateY(-2px); box-shadow:0 8px 18px rgba(62, 43, 29, 0.1); border-color:#d2b9a6; }
-    .menu-item.unavailable { opacity:0.67; }
-    .menu-photo-shell { position:relative; width:100%; height:178px; border-radius:0; overflow:hidden; margin-bottom:12px; border-bottom:1px solid #ece4dc; background:#f8f5f1; }
-    .menu-photo { width:100%; height:100%; object-fit:cover; display:block; filter:saturate(1.08) contrast(1.03); transform:scale(1.01); }
-    .menu-photo-shell::after { content:''; position:absolute; inset:auto 0 0 0; height:44%; background:linear-gradient(180deg, rgba(0, 0, 0, 0) 0%, rgba(15, 23, 42, 0.24) 100%); pointer-events:none; }
-    .menu-photo-placeholder {
-      position:absolute;
-      inset:0;
-      display:flex;
-      align-items:center;
-      justify-content:center;
-      flex-direction:column;
-      gap:8px;
-      background:
-        radial-gradient(circle at 15% 15%, rgba(225, 187, 145, 0.48) 0%, rgba(225, 187, 145, 0) 44%),
-        radial-gradient(circle at 88% 88%, rgba(205, 214, 226, 0.42) 0%, rgba(205, 214, 226, 0) 46%),
-        linear-gradient(145deg, #f8f2eb 0%, #f5f0ea 100%);
-      transition:opacity 0.2s ease;
+    .menu-img-wrap {
+      position: relative; width: 100%; height: 180px;
+      background: linear-gradient(135deg, #f8f0e6 0%, #f0e8d8 100%);
+      overflow: hidden;
     }
-    .menu-photo-placeholder::before {
-      content:attr(data-emoji);
-      width:58px;
-      height:58px;
-      border-radius:999px;
-      display:flex;
-      align-items:center;
-      justify-content:center;
-      font-size:28px;
-      background:linear-gradient(180deg, #ffffff 0%, #fff3ea 100%);
-      border:1px solid #e6d4c3;
-      box-shadow:0 8px 14px rgba(160, 104, 70, 0.2);
+    .menu-img {
+      width: 100%; height: 100%; object-fit: cover; display: block;
+      transition: transform 0.4s ease;
     }
-    .menu-photo-label {
-      font-size:11px;
-      font-weight:700;
-      letter-spacing:0.2px;
-      color:#6f655d;
-      background:rgba(255, 255, 255, 0.88);
-      border:1px solid #dfd7cf;
-      border-radius:999px;
-      padding:4px 10px;
+    .menu-card:hover .menu-img { transform: scale(1.04); }
+    .menu-img-overlay {
+      position: absolute; inset: 0;
+      background: linear-gradient(to top, rgba(26,19,16,0.18) 0%, transparent 60%);
     }
-    .menu-photo-shell.has-image .menu-photo-placeholder { opacity:0; pointer-events:none; }
-    .menu-photo-shell.is-empty .menu-photo { display:none; }
-    .menu-photo-shell.is-empty::after { display:none; }
-    .name {
-      font-size:clamp(27px, 2.5vw, 34px);
-      color:#1f1a17;
-      font-weight:600;
-      line-height:1;
-      padding:0 12px;
-      font-family:'Cormorant Garamond', serif;
-      white-space:nowrap;
-      overflow:hidden;
-      text-overflow:ellipsis;
+    .menu-img-placeholder {
+      position: absolute; inset: 0;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      gap: 10px;
     }
-    .desc {
-      font-size:14px;
-      color:#6f665f;
-      margin:8px 0 10px;
-      line-height:1.28;
-      min-height:36px;
-      padding:0 12px;
-      display:-webkit-box;
-      -webkit-line-clamp:2;
-      line-clamp:2;
-      -webkit-box-orient:vertical;
-      overflow:hidden;
+    .placeholder-emoji {
+      font-size: 40px; width: 72px; height: 72px; border-radius: 50%;
+      background: white; display: flex; align-items: center; justify-content: center;
+      box-shadow: 0 8px 20px rgba(26,19,16,0.12);
     }
-    .foot { display:flex; justify-content:space-between; align-items:center; padding:0 12px; gap:10px; }
-    .price {
-      font-size:clamp(26px, 2.2vw, 32px);
-      color:#b66545;
-      font-weight:600;
-      font-family:'Cormorant Garamond', serif;
-      white-space:nowrap;
-      flex-shrink:0;
+    .placeholder-lbl {
+      font-size: 11px; font-weight: 700; color: var(--ink-l);
+      background: white; padding: 4px 12px; border-radius: 99px;
+      border: 1px solid var(--border);
     }
-    .add { width:30px; height:30px; border-radius:50%; background:linear-gradient(180deg, #fb923c 0%, #ea580c 100%); color:white; border:none; cursor:pointer; font-size:18px; box-shadow:0 5px 10px rgba(194, 65, 12, 0.35); }
-    .add:disabled { background:var(--color-background-secondary); color:var(--color-text-tertiary); cursor:not-allowed; }
-    .menu-qty-controls { display:flex; align-items:center; gap:8px; }
-    .menu-qty-btn { width:32px; height:32px; border-radius:0; border:1px solid #dfc8b7; background:#fcf7f1; color:#8b4a30; font-size:18px; line-height:1; cursor:pointer; display:flex; align-items:center; justify-content:center; box-shadow:none; }
-    .menu-qty-btn:hover { background:#f5ebe1; }
-    .menu-qty-btn:disabled { opacity:0.5; cursor:not-allowed; }
-    .menu-qty-value { min-width:18px; text-align:center; font-size:14px; font-weight:700; color:#2c241e; }
-    .unavailable-badge { display:inline-block; margin-top:4px; font-size:10px; padding:2px 7px; border-radius:999px; background:var(--warn-light); color:var(--warn); }
+    .unavail-tag {
+      position: absolute; top: 10px; right: 10px;
+      background: rgba(26,19,16,0.7); color: white;
+      font-size: 10px; font-weight: 700; padding: 3px 10px;
+      border-radius: 99px; letter-spacing: 0.5px;
+    }
 
-    .box { border:1px solid #e6ddd4; border-radius:0; background:#fff; padding:15px; box-shadow:none; }
-    .box h3 { font-size:40px; color:#1e1915; margin-bottom:12px; font-weight:600; font-family:'Cormorant Garamond', serif; }
-    .cart-items { min-height:80px; margin-bottom:12px; }
-    .cart-item { display:flex; gap:8px; align-items:center; padding:6px 0; border-bottom:var(--border); }
-    .cart-item:last-child { border-bottom:none; }
-    .qty { width:20px; height:20px; border-radius:4px; background:var(--color-background-secondary); display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:500; }
-    .cart-qty-controls { display:flex; align-items:center; gap:6px; }
-    .cart-qty-btn { width:20px; height:20px; border-radius:5px; border:var(--border); background:var(--color-background-primary); color:var(--color-text-primary); font-size:13px; line-height:1; cursor:pointer; display:flex; align-items:center; justify-content:center; }
-    .cart-qty-btn:hover { background:var(--color-background-secondary); }
-    .nm { flex:1; font-size:12px; color:var(--color-text-primary); }
-    .pr { font-size:12px; color:var(--color-text-secondary); }
-    .empty { font-size:12px; color:var(--color-text-tertiary); text-align:center; padding:20px 0; }
-    .row { display:flex; justify-content:space-between; font-size:12px; color:var(--color-text-secondary); margin-bottom:5px; }
-    .row.total { font-size:16px; font-weight:700; color:#231d18; margin-top:8px; }
-    .btn { width:100%; background:#b66545; color:white; border:none; border-radius:0; padding:12px; font-size:14px; font-weight:800; cursor:pointer; box-shadow:none; letter-spacing:0.15px; text-transform:uppercase; }
-    .btn:hover { filter: brightness(1.05); transform: translateY(-1px); }
+    .menu-body { padding: 14px 14px 14px; }
+    .menu-name {
+      font-family: 'Playfair Display', serif;
+      font-size: 22px; font-weight: 600; color: var(--ink);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      margin-bottom: 5px;
+    }
+    .menu-desc {
+      font-size: 12px; color: var(--ink-l); line-height: 1.5;
+      display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+      overflow: hidden; min-height: 36px; margin-bottom: 12px;
+      /* Standard property for compatibility */
+      line-clamp: 2;
+      /* fallback for browsers not supporting line-clamp */
+      text-overflow: ellipsis;
+      white-space: normal;
+    }
+    .menu-foot { display: flex; align-items: center; justify-content: space-between; }
+    .menu-price {
+      font-family: 'Playfair Display', serif;
+      font-size: 24px; font-weight: 700; color: var(--clay);
+    }
+    .qty-ctrl { display: flex; align-items: center; gap: 6px; }
+    .qty-btn {
+      width: 32px; height: 32px; border-radius: 99px;
+      border: 1.5px solid var(--border); background: var(--cream);
+      color: var(--ink); font-size: 16px; font-weight: 700;
+      cursor: pointer; display: flex; align-items: center; justify-content: center;
+      transition: all 0.2s; line-height: 1;
+    }
+    .qty-btn:hover { background: var(--clay); color: white; border-color: var(--clay); }
+    .qty-val { min-width: 22px; text-align: center; font-size: 15px; font-weight: 700; color: var(--ink); }
 
-    .track-pills { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px; }
-    .pill { font-size:12px; border:1px solid #dde2eb; border-radius:999px; padding:6px 12px; cursor:pointer; color:var(--color-text-secondary); background:var(--color-background-primary); transition: all 0.2s ease; }
-    .pill.active { background:var(--charcoal); color:white; border-color:var(--charcoal); }
-    .track-card { border:1px solid #dfe7f2; border-radius:16px; background:linear-gradient(180deg, #ffffff 0%, #f8fbff 100%); padding:15px; box-shadow:0 8px 16px rgba(2, 6, 23, 0.08); }
-    .progress { height:5px; border-radius:999px; background:var(--color-background-secondary); overflow:hidden; margin:8px 0; }
-    .fill { height:100%; background:var(--accent); }
+    /* ── ORDER PANEL (right side on desktop, bottom sheet on mobile) ── */
+    .order-layout { display: flex; gap: 24px; align-items: flex-start; }
+    .menu-col { flex: 1; min-width: 0; }
+    .cart-col { width: 340px; flex-shrink: 0; position: sticky; top: 88px; }
 
-    .payment-wrap { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
-    .pay-card { border:1px solid #dfe7f2; border-radius:16px; background:linear-gradient(180deg, #ffffff 0%, #f8fbff 100%); padding:18px; box-shadow:0 10px 18px rgba(2, 6, 23, 0.08); }
-    .pay-card h3 { font-size:14px; color:var(--color-text-primary); margin-bottom:14px; font-weight:600; }
-    .methods { display:flex; gap:6px; margin-bottom:12px; }
-    .method { flex:1; font-size:12px; border:1px solid #dbe1ec; border-radius:10px; padding:8px; text-align:center; color:var(--color-text-secondary); cursor:pointer; transition: all 0.2s ease; }
-    .method:hover { border-color:var(--accent); color:var(--accent-dark); background:var(--accent-light); }
-    .method.active { border-color:var(--accent); background:var(--accent-light); color:var(--accent-dark); font-weight:600; }
-    .upi-id-group { margin-bottom:12px; }
-    .upi-id-help { font-size:11px; color:var(--color-text-secondary); margin-top:4px; }
-    .sum-row { display:flex; justify-content:space-between; font-size:13px; color:var(--color-text-secondary); padding:5px 0; border-bottom:var(--border); }
-    .sum-row.total { border-bottom:none; font-size:15px; font-weight:500; color:var(--color-text-primary); padding-top:8px; }
-    .receipt { border:1px solid #dfe7f2; border-radius:16px; padding:13px; background:linear-gradient(180deg, #ffffff 0%, #fbfdff 100%); box-shadow:0 10px 18px rgba(2, 6, 23, 0.08); }
-    .receipt-title { font-size:16px; font-weight:700; color:var(--color-text-primary); letter-spacing:0.1px; line-height:1.2; }
-    .receipt-subtitle { font-size:11px; color:#0f766e; text-transform:uppercase; letter-spacing:0.7px; margin-top:2px; font-weight:700; }
-    .receipt-bill { font-size:12px; color:var(--color-text-secondary); margin-top:2px; line-height:1.3; }
-    .receipt-meta { margin-top:6px; background:var(--color-background-secondary); border-radius:10px; padding:7px 8px; }
-    .receipt-meta-row { display:flex; justify-content:space-between; gap:8px; font-size:12px; color:var(--color-text-secondary); margin-top:3px; }
-    .receipt-meta-row:first-child { margin-top:0; }
-    .receipt-meta-row span:last-child { color:var(--color-text-primary); font-weight:600; }
-    .receipt-divider { border-top:1px solid #ebecef; margin:8px 0; }
-    .receipt-grid-head, .receipt-grid-row { display:grid; grid-template-columns:minmax(0, 1fr) 54px 76px 90px; gap:8px; align-items:center; }
-    .receipt-grid-head { font-size:11px; color:var(--color-text-tertiary); text-transform:uppercase; letter-spacing:0.5px; font-weight:600; }
-    .receipt-grid-row { font-size:13px; color:var(--color-text-primary); margin-top:5px; }
-    .receipt-grid-row span:nth-child(2), .receipt-grid-row span:nth-child(3), .receipt-grid-row span:nth-child(4),
-    .receipt-grid-head span:nth-child(2), .receipt-grid-head span:nth-child(3), .receipt-grid-head span:nth-child(4) { text-align:right; }
-    .receipt-total-line { display:flex; justify-content:space-between; font-size:13px; color:var(--color-text-primary); margin-top:5px; }
-    .receipt-total-line.grand { margin-top:7px; padding:8px 10px; border-radius:10px; background:#dcfdf3; color:#0f5132; font-size:15px; font-weight:700; }
-    .receipt-foot { margin-top:9px; font-size:12px; color:var(--color-text-secondary); border-top:1px solid #ebecef; padding-top:7px; }
-    .mode-note { margin-bottom:12px; border:var(--border); border-radius:var(--border-radius-md); background:var(--warn-light); color:var(--warn); padding:10px; font-size:12px; }
-    .restaurant-hero { border:1px solid #e4dad0; border-radius:0; background:#fff; overflow:hidden; margin-bottom:18px; box-shadow:none; }
-    .restaurant-hero-banner { background:#ffedd9; color:#9a3412; font-weight:700; font-size:14px; padding:12px 14px; display:none; align-items:center; gap:8px; }
-    .restaurant-hero-body { padding:14px; }
-    .restaurant-name { font-size:68px; font-weight:600; color:#1d1814; margin-bottom:8px; letter-spacing:0.2px; font-family:'Cormorant Garamond', serif; line-height:0.94; }
-    .restaurant-meta { font-size:16px; font-weight:600; color:#0f172a; margin-bottom:10px; }
-    .restaurant-cuisines { color:#0f766e; font-size:13px; font-weight:700; text-decoration:underline; margin-bottom:10px; }
-    .restaurant-line { font-size:14px; color:#334155; margin:5px 0; }
-    .restaurant-line strong { color:#111827; }
+    .cart-card {
+      background: var(--white); border: 1px solid var(--border);
+      border-radius: var(--radius); overflow: hidden;
+      box-shadow: var(--shadow);
+    }
+    .cart-header {
+      padding: 18px 20px 16px;
+      border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .cart-title {
+      font-family: 'Playfair Display', serif;
+      font-size: 24px; font-weight: 700; color: var(--ink);
+    }
+    .cart-count {
+      background: var(--clay); color: white;
+      width: 26px; height: 26px; border-radius: 50%;
+      font-size: 12px; font-weight: 700;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .cart-items { padding: 12px 20px; min-height: 80px; }
+    .cart-empty {
+      text-align: center; padding: 24px 0;
+      font-size: 13px; color: var(--ink-xl);
+      display: flex; flex-direction: column; align-items: center; gap: 8px;
+    }
+    .cart-empty-icon { font-size: 32px; }
+    .cart-item {
+      display: flex; align-items: center; gap: 8px;
+      padding: 8px 0; border-bottom: 1px solid var(--border);
+    }
+    .cart-item:last-child { border-bottom: none; }
+    .c-qty-ctrl { display: flex; align-items: center; gap: 4px; }
+    .c-qty-btn {
+      width: 22px; height: 22px; border-radius: 6px;
+      border: 1px solid var(--border); background: var(--cream);
+      font-size: 14px; cursor: pointer; display: flex;
+      align-items: center; justify-content: center; color: var(--ink);
+      transition: all 0.15s;
+    }
+    .c-qty-btn:hover { background: var(--clay); color: white; border-color: var(--clay); }
+    .c-qty-val {
+      width: 20px; text-align: center; font-size: 12px; font-weight: 700;
+      background: var(--paper); border-radius: 4px; padding: 2px 0; color: var(--ink);
+    }
+    .c-name { flex: 1; font-size: 13px; color: var(--ink); font-weight: 500; }
+    .c-price { font-size: 13px; font-weight: 700; color: var(--ink-m); }
 
-    @media (max-width: 980px) {
-      body { padding: 10px; }
-      #app { flex-direction: column; min-height: auto; }
-      #sidebar { width: 100%; border-right: none; border-bottom: var(--border); }
-      .nav { display: flex; overflow-x: auto; padding: 0; }
-      .nav-item { white-space: nowrap; }
-      .content { padding: 12px; }
-      .customer-wrap { flex-direction: column; }
-      .cart-panel { width: 100%; position: static; }
+    .cart-notes {
+      padding: 0 20px 12px;
+    }
+    .notes-area {
+      width: 100%; border: 1.5px solid var(--border);
+      border-radius: 10px; padding: 9px 12px;
+      font-family: 'DM Sans', sans-serif; font-size: 13px; color: var(--ink);
+      background: var(--cream); resize: none; outline: none; transition: all 0.2s;
+    }
+    .notes-area:focus { border-color: var(--clay); background: white; }
+
+    .cart-totals {
+      padding: 12px 20px 16px;
+      border-top: 1px solid var(--border);
+      background: var(--cream);
+    }
+    .tot-row {
+      display: flex; justify-content: space-between;
+      font-size: 13px; color: var(--ink-l); margin-bottom: 5px;
+    }
+    .tot-row.grand {
+      font-size: 17px; font-weight: 700; color: var(--ink);
+      margin-top: 8px; padding-top: 8px; border-top: 2px dashed var(--border);
+    }
+    .tot-row.grand span:last-child { color: var(--clay); }
+
+    .place-btn {
+      width: 100%; padding: 14px;
+      background: linear-gradient(135deg, var(--clay) 0%, var(--clay-d) 100%);
+      color: white; border: none; font-family: 'DM Sans', sans-serif;
+      font-size: 15px; font-weight: 700; cursor: pointer;
+      transition: all 0.2s; letter-spacing: 0.3px;
+    }
+    .place-btn:hover { filter: brightness(1.06); }
+
+    .checkout-warn {
+      display: none; padding: 10px 20px;
+      background: #fef2f2; color: #dc2626;
+      font-size: 13px; font-weight: 600;
+      border-top: 1px solid #fecaca;
+    }
+
+    /* ── TRACKING ─────────────────────────────────────── */
+    .track-pills { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 20px; }
+    .track-pill {
+      padding: 7px 14px; border-radius: 99px; cursor: pointer;
+      font-size: 12px; font-weight: 600; border: 1.5px solid var(--border);
+      color: var(--ink-m); background: var(--white); transition: all 0.2s;
+    }
+    .track-pill.active { background: var(--ink); color: white; border-color: var(--ink); }
+
+    .receipt-card {
+      background: var(--white); border: 1px solid var(--border);
+      border-radius: var(--radius); overflow: hidden;
+      box-shadow: var(--shadow); max-width: 560px;
+    }
+    .receipt-head {
+      background: var(--ink); color: white;
+      padding: 20px 22px;
+    }
+    .receipt-brand {
+      font-family: 'Playfair Display', serif;
+      font-size: 24px; font-weight: 700;
+    }
+    .receipt-tag {
+      font-size: 10px; font-weight: 700; letter-spacing: 1px;
+      text-transform: uppercase; color: rgba(255,255,255,0.5);
+      margin-top: 2px;
+    }
+    .receipt-body { padding: 20px 22px; }
+    .receipt-meta-grid {
+      display: grid; grid-template-columns: 1fr 1fr;
+      gap: 8px; background: var(--cream);
+      border-radius: 10px; padding: 12px 14px;
+      margin-bottom: 16px;
+    }
+    .rmg-item { font-size: 12px; }
+    .rmg-label { color: var(--ink-l); margin-bottom: 2px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; }
+    .rmg-val { color: var(--ink); font-weight: 600; }
+    .r-table-head, .r-table-row {
+      display: grid; grid-template-columns: 1fr 42px 72px 80px;
+      gap: 6px; align-items: center;
+    }
+    .r-table-head {
+      font-size: 10px; font-weight: 700; letter-spacing: 0.5px;
+      text-transform: uppercase; color: var(--ink-l);
+      padding-bottom: 8px; border-bottom: 1px solid var(--border);
+      margin-bottom: 4px;
+    }
+    .r-table-head span:not(:first-child), .r-table-row span:not(:first-child) { text-align: right; }
+    .r-table-row { font-size: 13px; color: var(--ink); padding: 5px 0; border-bottom: 1px solid #f5f0ea; }
+    .r-table-row:last-child { border-bottom: none; }
+    .receipt-divider { height: 1px; background: var(--border); margin: 12px 0; }
+    .receipt-tot-line { display: flex; justify-content: space-between; font-size: 13px; color: var(--ink-m); margin-bottom: 4px; }
+    .receipt-grand {
+      display: flex; justify-content: space-between;
+      background: var(--clay-l); border: 1px solid var(--clay-m);
+      border-radius: 10px; padding: 12px 14px;
+      font-size: 16px; font-weight: 700; color: var(--clay-d);
+      margin-top: 8px;
+    }
+    .receipt-foot {
+      padding: 12px 22px;
+      border-top: 1px solid var(--border);
+      background: var(--cream);
+      font-size: 12px; color: var(--ink-l);
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .paid-badge { background: var(--sage-l); color: var(--sage); font-weight: 700; font-size: 11px; padding: 3px 10px; border-radius: 99px; }
+    .unpaid-badge { background: #fef2f2; color: #dc2626; font-weight: 700; font-size: 11px; padding: 3px 10px; border-radius: 99px; }
+
+    .progress-wrap { margin: 16px 0 6px; }
+    .progress-bar { height: 6px; border-radius: 99px; background: var(--border); overflow: hidden; }
+    .progress-fill { height: 100%; background: linear-gradient(90deg, var(--clay), var(--clay-d)); border-radius: 99px; transition: width 0.5s ease; }
+    .progress-info { font-size: 11px; color: var(--ink-l); margin-top: 5px; font-weight: 600; }
+
+    .retry-btn {
+      display: block; width: 100%; padding: 12px; margin-top: 14px;
+      background: var(--clay); color: white; border: none;
+      border-radius: 10px; font-family: 'DM Sans', sans-serif;
+      font-size: 14px; font-weight: 700; cursor: pointer;
+      transition: all 0.2s;
+    }
+    .retry-btn:hover { filter: brightness(1.06); }
+    .no-orders-msg { font-size: 14px; color: var(--ink-l); padding: 24px 0; }
+
+    /* ── PAYMENT ──────────────────────────────────────── */
+    .pay-layout { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+    .pay-card {
+      background: var(--white); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 22px;
+      box-shadow: var(--shadow);
+    }
+    .pay-title {
+      font-family: 'Playfair Display', serif;
+      font-size: 22px; font-weight: 700; color: var(--ink);
+      margin-bottom: 18px;
+    }
+    .pay-methods { display: flex; gap: 8px; margin-bottom: 18px; }
+    .pay-method {
+      flex: 1; padding: 10px; border-radius: 10px;
+      border: 1.5px solid var(--border); text-align: center;
+      font-size: 13px; font-weight: 600; color: var(--ink-m);
+      cursor: pointer; transition: all 0.2s;
+    }
+    .pay-method:hover { border-color: var(--clay-m); color: var(--clay-d); }
+    .pay-method.active { border-color: var(--clay); background: var(--clay-l); color: var(--clay-d); }
+    .upi-group { margin-bottom: 16px; }
+    .pay-btn {
+      width: 100%; padding: 14px;
+      background: linear-gradient(135deg, var(--clay), var(--clay-d));
+      color: white; border: none; border-radius: 10px;
+      font-family: 'DM Sans', sans-serif; font-size: 15px; font-weight: 700;
+      cursor: pointer; transition: all 0.2s;
+    }
+    .pay-btn:hover:not(:disabled) { filter: brightness(1.06); }
+    .pay-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    /* ── MOBILE CART BOTTOM SHEET ─────────────────────── */
+    #mobile-cart-fab {
+      display: none;
+      position: fixed; bottom: 76px; left: 0; right: 0;
+      padding: 0 16px; z-index: 90;
+    }
+    .mobile-cart-pill {
+      display: flex; align-items: center; justify-content: space-between;
+      background: var(--ink); color: white;
+      border-radius: 14px; padding: 14px 18px;
+      box-shadow: 0 8px 32px rgba(26,19,16,0.3);
+      cursor: pointer;
+    }
+    .mcp-left { display: flex; align-items: center; gap: 10px; }
+    .mcp-badge {
+      background: var(--clay); width: 28px; height: 28px;
+      border-radius: 8px; display: flex; align-items: center; justify-content: center;
+      font-size: 13px; font-weight: 700;
+    }
+    .mcp-label { font-size: 14px; font-weight: 600; }
+    .mcp-total { font-size: 15px; font-weight: 700; color: var(--clay-m); }
+
+    .mobile-cart-sheet {
+      display: none;
+      position: fixed; inset: 0; z-index: 200;
+    }
+    .mcs-overlay {
+      position: absolute; inset: 0; background: rgba(26,19,16,0.5);
+      backdrop-filter: blur(4px);
+    }
+    .mcs-panel {
+      position: absolute; bottom: 0; left: 0; right: 0;
+      background: white; border-radius: 20px 20px 0 0;
+      max-height: 90dvh; overflow-y: auto;
+      padding-bottom: env(safe-area-inset-bottom);
+    }
+    .mcs-drag { width: 40px; height: 4px; background: var(--border); border-radius: 99px; margin: 12px auto 16px; }
+    .mobile-cart-sheet.open { display: block; }
+    .mcs-panel .cart-card { box-shadow: none; border: none; border-radius: 0; }
+
+    /* ── CHECKOUT WARNING ─────────────────────────────── */
+    .global-warn {
+      position: fixed; bottom: calc(env(safe-area-inset-bottom) + 72px);
+      left: 50%; transform: translateX(-50%);
+      background: #1a1310; color: #fecaca;
+      padding: 10px 18px; border-radius: 10px;
+      font-size: 13px; font-weight: 600;
+      box-shadow: var(--shadow-lg); z-index: 300;
+      white-space: nowrap;
+      display: none; animation: slideUp 0.3s ease;
+    }
+    @keyframes slideUp {
+      from { opacity: 0; transform: translateX(-50%) translateY(10px); }
+      to { opacity: 1; transform: translateX(-50%) translateY(0); }
+    }
+
+    /* ── DELIVERY UNLOCK POPUP ─────────────────────────── */
+    .unlock-popup {
+      position: fixed; top: 50%; left: 50%;
+      transform: translate(-50%, -50%) scale(0.9);
+      background: var(--sage-l); color: var(--sage);
+      border: 2px solid #a7e8c8; border-radius: var(--radius);
+      padding: 24px 32px; font-size: 18px; font-weight: 700;
+      text-align: center; z-index: 400; box-shadow: var(--shadow-lg);
+      opacity: 0; transition: all 0.3s ease; pointer-events: none;
+    }
+    .unlock-popup.show { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+
+    /* ── RESPONSIVE ──────────────────────────────────── */
+    @media (max-width: 900px) {
+      #sidebar { display: none; }
+      #mobile-nav { display: block; }
+      #mobile-cart-fab { display: block; }
+      body { padding-bottom: env(safe-area-inset-bottom); }
+      .order-layout { flex-direction: column; }
+      .cart-col { display: none; width: 100%; position: static; }
+      .pay-layout { grid-template-columns: 1fr; }
+      .section-inner { padding: 16px 16px 100px; }
+      .topbar { padding: 0 16px; height: 56px; }
+      .page-title { font-size: 18px; }
+      .resto-name { font-size: 28px; }
+      .menu-grid { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 14px; }
+      .field-row { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 500px) {
+      .menu-grid { grid-template-columns: 1fr 1fr; gap: 12px; }
+      .menu-img-wrap { height: 140px; }
+      .menu-name { font-size: 17px; }
+      .menu-price { font-size: 18px; }
+      .otype-tab { min-width: 0; font-size: 12px; padding: 9px 10px; }
+      .resto-name { font-size: 24px; }
+    }
+    @media (max-width: 350px) {
       .menu-grid { grid-template-columns: 1fr; }
-      .payment-wrap { grid-template-columns: 1fr; }
-      .restaurant-name { font-size:44px; }
-      .name { font-size:30px; }
-      .price { font-size:28px; }
-    }
-
-    @media (max-width: 640px) {
-      .logo { padding: 16px 14px; }
-      .logo h1 { font-size: 15px; }
-      .logo p { font-size: 11px; }
-      .order-type-tabs { flex-wrap: wrap; }
-      .order-type-tab { min-width: 33%; }
-      .schedule-grid { grid-template-columns: 1fr; }
-      .methods { flex-wrap: wrap; }
-      .method { min-width: 30%; }
-      .menu-photo-shell { height: 152px; }
-      .name { font-size:28px; }
-      .price { font-size:26px; }
     }
   </style>
 </head>
 <body>
-  <div id="app">
-    <aside id="sidebar">
-      <div class="logo">
-        <h1>Tableside</h1>
-        <p>Hello User</p>
+
+<!-- GLOBAL WARN TOAST -->
+<div class="global-warn" id="global-warn"></div>
+
+<!-- DELIVERY UNLOCK POPUP -->
+<div class="unlock-popup" id="unlock-popup">🏍️ Delivery Unlocked!</div>
+
+<!-- MOBILE CART SHEET -->
+<div class="mobile-cart-sheet" id="mobile-cart-sheet">
+  <div class="mcs-overlay" onclick="closeMobileCart()"></div>
+  <div class="mcs-panel" id="mcs-panel">
+    <div class="mcs-drag"></div>
+    <!-- Cart content injected here -->
+    <div id="mcs-cart-content"></div>
+  </div>
+</div>
+
+<div id="app">
+  <!-- SIDEBAR -->
+  <aside id="sidebar">
+    <div class="logo-area">
+      <div class="logo-mark">
+        <div class="logo-icon">🍽️</div>
+        <div class="logo-text">Tableside</div>
       </div>
-      <nav class="nav">
-        <div class="nav-item active" data-view="order" onclick="switchView('order', this)">Place order</div>
-        <div class="nav-item" data-view="tracking" onclick="switchView('tracking', this)">Track order</div>
-        <div class="nav-item" data-view="payment" onclick="switchView('payment', this)">Payment</div>
-      </nav>
-    </aside>
-
-    <main id="main">
-      <div class="topbar">
-        <div class="title" id="title">Place Order</div>
-        <div class="time" id="time">Live</div>
+      <div class="logo-sub">Fresh food, fast orders</div>
+    </div>
+    <nav class="nav">
+      <div class="nav-item active" data-view="order" onclick="switchView('order',this)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 01-8 0"/></svg>
+        Place Order
       </div>
+      <div class="nav-item" data-view="tracking" onclick="switchView('tracking',this)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        Track Order
+      </div>
+      <div class="nav-item" data-view="payment" onclick="switchView('payment',this)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
+        Payment
+      </div>
+    </nav>
+    <div class="sidebar-footer">© 2025 Tableside</div>
+  </aside>
 
-      <section class="content active" id="view-order">
-        <div class="customer-wrap">
-          <div class="menu-panel">
-            <div class="restaurant-hero" id="restaurant-hero">
-              <div class="restaurant-hero-banner" id="restaurant-hero-banner">⚠️ Outlet is not accepting orders at the moment.</div>
-              <div class="restaurant-hero-body">
-                <div class="restaurant-name" id="restaurant-name">Restaurant</div>
-                <div class="restaurant-meta" id="restaurant-meta">4.1 (1.4K+ ratings) • ₹150 for two</div>
-                <div class="restaurant-cuisines" id="restaurant-cuisines">South Indian, Indian</div>
-                <div class="restaurant-line"><strong>Outlet</strong> <span id="restaurant-address">Miyapur</span></div>
-                <div class="restaurant-line" id="restaurant-status-line"><strong>Open & accepting orders</strong></div>
+  <!-- MAIN -->
+  <main id="main">
+    <div class="topbar">
+      <div class="topbar-left">
+        <div class="page-title" id="page-title">Place Order</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:12px;">
+        <div class="live-dot">Live</div>
+        <div id="clock"></div>
+      </div>
+    </div>
+
+    <!-- ORDER VIEW -->
+    <section class="content active" id="view-order">
+      <div class="section-inner">
+        <div class="order-layout">
+          <!-- Left: Menu -->
+          <div class="menu-col">
+            <!-- Restaurant Hero -->
+            <div class="resto-hero" id="resto-hero">
+              <div class="resto-hero-banner" id="resto-banner">⚠️ Outlet is not accepting orders at the moment.</div>
+              <div class="resto-hero-body">
+                <div class="resto-name" id="resto-name">Restaurant</div>
+                <div class="resto-row">
+                  <span class="resto-badge badge-rating" id="resto-rating">⭐ 4.1 · 1.4K+ ratings</span>
+                  <span class="resto-badge badge-price">₹150 for two</span>
+                  <span class="resto-badge badge-open" id="resto-status-badge">🟢 Open</span>
+                </div>
+                <div class="resto-cuisine" id="resto-cuisine">South Indian, Indian</div>
+                <div class="resto-addr">📍 <span id="resto-addr">Miyapur</span></div>
               </div>
             </div>
 
-            <div class="cart-panel">
-              <div class="box">
-                <h3>Your order</h3>
-                <div class="cart-items" id="cart-items"><div class="empty">Nothing added yet</div></div>
-                <textarea id="notes" class="notes-input" rows="2" placeholder="Add notes (allergies, spice level...)"></textarea>
-                <div class="row"><span>Subtotal</span><span id="sub">₹0</span></div>
-                <div class="row"><span>CGST (2.5%)</span><span id="cgst">₹0</span></div>
-                <div class="row"><span>SGST (2.5%)</span><span id="sgst">₹0</span></div>
-                <div class="row total"><span>Grand Total</span><span id="total">₹0</span></div>
-                <button class="btn" id="place-btn" onclick="placeOrder()">Place order & checkout →</button>
-                <div class="checkout-warning" id="checkout-warning"></div>
+            <!-- Customer Details -->
+            <div class="customer-card">
+              <div class="card-title">Your Details</div>
+              <div class="field-row">
+                <div class="field-group">
+                  <label class="field-lbl">Your Name</label>
+                  <input class="field-inp" id="customer-name" type="text" placeholder="Enter your name" />
+                </div>
+                <div class="field-group">
+                  <label class="field-lbl">Mobile Number</label>
+                  <input class="field-inp" id="customer-mobile" type="tel" placeholder="Enter mobile number" />
+                </div>
               </div>
             </div>
 
-            <div class="delivery-info" id="delivery-info">🏍️ Home delivery available after ₹500/-</div>
-            <div class="delivery-status-chip" id="delivery-status-chip">🏍️ Delivery unlocked</div>
-
-            <div class="delivery-form" style="display:block;">
-              <div class="delivery-form-title">Customer Details</div>
-              <div class="field-label">Your Name</div>
-              <input id="customer-name" class="field-input" type="text" placeholder="Enter your name" />
-              <div class="field-label" style="margin-top:8px;">Mobile Number</div>
-              <input id="customer-mobile" class="field-input" type="tel" placeholder="Enter mobile number" />
-            </div>
-
-            <div class="order-type-tabs">
-              <div class="order-type-tab active" onclick="setOrderType(this, 'dine')">Dine-in</div>
-              <div class="order-type-tab" onclick="setOrderType(this, 'takeaway')">Takeaway</div>
-              <div class="order-type-tab" onclick="setOrderType(this, 'preorder')">Pre-order</div>
-              <div class="order-type-tab" id="delivery-tab" onclick="setOrderType(this, 'delivery')">🏍️ Delivery</div>
-            </div>
-
-            <div id="table-group" style="margin-bottom:10px; display:none;">
-              <div class="field-label">Select available table</div>
-              <select id="table-number" class="field-input"></select>
-            </div>
-            <div id="schedule-group" style="display:none; margin-bottom:10px;">
-              <div class="field-label">Schedule date & time</div>
-              <div class="schedule-grid">
-                <input id="schedule-date" class="field-input" type="date" />
-                <input id="schedule-time" class="field-input" type="time" />
+            <!-- Order Type -->
+            <div class="otype-wrap">
+              <div class="otype-label">Order Type</div>
+              <div class="otype-tabs">
+                <div class="otype-tab active" onclick="setOrderType(this,'dine')">🪑 Dine-in</div>
+                <div class="otype-tab" onclick="setOrderType(this,'takeaway')">🥡 Takeaway</div>
+                <div class="otype-tab" onclick="setOrderType(this,'preorder')">📅 Pre-order</div>
+                <div class="otype-tab" id="delivery-tab" onclick="setOrderType(this,'delivery')">🏍️ Delivery</div>
               </div>
             </div>
-            <div id="eta" class="eta">🕐 Schedule your pickup time and we will have it ready.</div>
 
-            <div id="delivery-form" class="delivery-form">
-              <div class="delivery-form-title">🏍️ Delivery Location</div>
-              <button class="btn" id="share-location-btn" onclick="shareDeliveryLocation()" style="width:100%; margin-top:10px; background:#0e6b3f; color:#fff;">📍 Share Location</button>
-              <div id="location-status" style="font-size:12px; margin-top:6px; color:#0f766e;">Location pending...</div>
+            <!-- Table -->
+            <div class="table-group" id="table-group">
+              <div class="field-lbl" style="margin-bottom:6px;">Select Table</div>
+              <select class="field-inp" id="table-number"></select>
             </div>
 
-            <div class="menu-categories" id="cat-tabs"></div>
+            <!-- Schedule -->
+            <div class="schedule-card" id="schedule-card">
+              <div class="eta-msg">🕐 Schedule your pickup/order time</div>
+              <div class="field-row">
+                <div class="field-group">
+                  <label class="field-lbl">Date</label>
+                  <input class="field-inp" id="schedule-date" type="date" />
+                </div>
+                <div class="field-group">
+                  <label class="field-lbl">Time</label>
+                  <input class="field-inp" id="schedule-time" type="time" />
+                </div>
+              </div>
+            </div>
 
-            <div class="menu-grid" id="menu"></div>
+            <!-- Delivery info bars -->
+            <div class="delivery-info-bar" id="delivery-info-bar">🏍️ Minimum ₹500 required for home delivery</div>
+            <div class="delivery-unlocked-chip" id="delivery-chip">✅ Delivery unlocked</div>
+
+            <!-- Delivery location -->
+            <div class="delivery-card" id="delivery-card">
+              <div class="delivery-lock-msg">📍 Share your location to proceed with delivery</div>
+              <button class="loc-btn" id="share-loc-btn" onclick="shareDeliveryLocation()">📍 Share My Location</button>
+              <div class="loc-status" id="loc-status">Location pending…</div>
+            </div>
+
+            <!-- Category Tabs -->
+            <div class="cat-scroll-wrap">
+              <div class="cat-tabs" id="cat-tabs"></div>
+            </div>
+
+            <!-- Menu Grid -->
+            <div class="menu-grid" id="menu-grid"></div>
+          </div>
+
+          <!-- Right: Cart (Desktop) -->
+          <div class="cart-col">
+            <div class="cart-card" id="desktop-cart">
+              <div class="cart-header">
+                <div class="cart-title">Your Order</div>
+                <div class="cart-count" id="cart-count-badge">0</div>
+              </div>
+              <div class="cart-items" id="cart-items"></div>
+              <div class="cart-notes">
+                <textarea class="notes-area" id="notes" rows="2" placeholder="Special requests, allergies, spice level…"></textarea>
+              </div>
+              <div class="cart-totals">
+                <div class="tot-row"><span>Subtotal</span><span id="sub-total">₹0.00</span></div>
+                <div class="tot-row"><span>CGST (2.5%)</span><span id="cgst">₹0.00</span></div>
+                <div class="tot-row"><span>SGST (2.5%)</span><span id="sgst">₹0.00</span></div>
+                <div class="tot-row grand"><span>Grand Total</span><span id="grand-total">₹0.00</span></div>
+              </div>
+              <button class="place-btn" onclick="placeOrder()">Place Order & Checkout →</button>
+              <div class="checkout-warn" id="checkout-warn"></div>
+            </div>
           </div>
         </div>
-      </section>
+      </div>
+    </section>
 
-      <section class="content" id="view-tracking">
-        <div class="track-pills" id="tpills"></div>
-        <div class="track-card" id="tcard"></div>
-      </section>
+    <!-- TRACKING VIEW -->
+    <section class="content" id="view-tracking">
+      <div class="section-inner">
+        <div class="track-pills" id="track-pills"></div>
+        <div id="track-card"></div>
+      </div>
+    </section>
 
-      <section class="content" id="view-payment">
-        <div class="payment-wrap">
+    <!-- PAYMENT VIEW -->
+    <section class="content" id="view-payment">
+      <div class="section-inner">
+        <div class="pay-layout">
           <div class="pay-card">
-            <h3>Payment details</h3>
-            <div class="methods">
-              <div class="method active" onclick="setMethod(this, 'card')">Card/UPI</div>
+            <div class="pay-title">Payment</div>
+            <div class="pay-methods">
+              <div class="pay-method active" onclick="setMethod(this,'card')">💳 Card / UPI</div>
             </div>
-            <div class="upi-id-group" id="upi-id-group" style="display:none;">
-              <div class="field-label">UPI ID</div>
-              <input id="upi-id" class="field-input" type="text" placeholder="example@okhdfcbank" />
-              <div class="upi-id-help">Enter your UPI ID to start a direct UPI collect flow.</div>
+            <div class="upi-group" id="upi-group" style="display:none;">
+              <label class="field-lbl" style="margin-bottom:5px;">UPI ID</label>
+              <input class="field-inp" id="upi-id" type="text" placeholder="example@okhdfcbank" />
             </div>
-            <button class="btn" id="pay-btn" onclick="payOrder()">Continue payment</button>
+            <button class="pay-btn" id="pay-btn" onclick="payOrder()">Continue Payment</button>
           </div>
           <div class="pay-card">
-            <h3>Order summary</h3>
+            <div class="pay-title">Order Summary</div>
             <div id="pay-summary"></div>
           </div>
         </div>
-      </section>
-    </main>
+      </div>
+    </section>
+  </main>
+</div>
+
+<!-- Mobile Cart FAB -->
+<div id="mobile-cart-fab" style="display:none;">
+  <div class="mobile-cart-pill" onclick="openMobileCart()">
+    <div class="mcp-left">
+      <div class="mcp-badge" id="mcp-badge">0</div>
+      <div class="mcp-label">View Order</div>
+    </div>
+    <div class="mcp-total" id="mcp-total">₹0</div>
   </div>
+</div>
 
-  <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
-  <script>
-    const CLIENT_SELECTED_RESTAURANT_KEY = 'foodorder_selected_restaurant_code';
-    let state = { menu: [], tables: [], orders: [], stats: {} };
-    let restaurants = [];
-    let selectedRestaurantCode = 'default';
-    let statePollTimer = null;
-    let cart = [];
-    let currentCat = 'all';
-    let orderType = 'dine';
-    let selectedTrackingOrderId = null;
-    let pendingPaymentOrderId = null;
-    let selectedPaymentMethod = 'card';
-    let razorpayConfig = { enabled: false, keyId: null };
-    let currentCartTotal = 0;
-    let deliveryUnlockedShown = false;
+<!-- Mobile Bottom Nav -->
+<nav id="mobile-nav">
+  <div class="mnav-inner">
+    <button class="mnav-btn active" data-view="order" onclick="switchView('order',this)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 01-8 0"/></svg>
+      <span class="mnav-badge" id="cart-mobile-badge">0</span>
+      Order
+    </button>
+    <button class="mnav-btn" data-view="tracking" onclick="switchView('tracking',this)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+      Track
+    </button>
+    <button class="mnav-btn" data-view="payment" onclick="switchView('payment',this)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
+      Payment
+    </button>
+  </div>
+</nav>
 
-    const CLIENT_ORDER_IDS_KEY = 'foodorder_client_order_ids';
-    const CLIENT_SELECTED_ORDER_KEY = 'foodorder_selected_tracking_order_id';
-    const CLIENT_PENDING_ORDER_KEY = 'foodorder_pending_payment_order_id';
-    const CLIENT_UPI_ID_KEY = 'foodorder_upi_id';
-    const CLIENT_LAST_ORDER_KEY = 'foodorder_last_order_id';
-    const LOCAL_API_ORIGIN = 'http://localhost:3000';
-    const PAYMENT_TEST_MODE = false;
-    let clientOrderIds = new Set();
+<script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+<script>
+  // ── STATE ────────────────────────────────────────────────
+  const LOCAL_API_ORIGIN = 'http://localhost:3000';
+  const PAYMENT_TEST_MODE = false;
+  const CLIENT_ORDER_IDS_KEY = 'ts_order_ids';
+  const CLIENT_SELECTED_ORDER_KEY = 'ts_selected_order';
+  const CLIENT_PENDING_ORDER_KEY = 'ts_pending_order';
+  const CLIENT_UPI_KEY = 'ts_upi_id';
+  const CLIENT_LAST_ORDER_KEY = 'ts_last_order';
+  const CLIENT_RESTAURANT_KEY = 'ts_restaurant';
+  const DRAFT_KEY_PREFIX = 'ts_draft_';
 
-    function resolveApiUrl(path) {
-      const rawPath = String(path || '').trim();
-      if (!rawPath) return rawPath;
-      if (/^https?:\/\//i.test(rawPath)) return rawPath;
+  let appState = { menu: [], tables: [], orders: [], restaurant: null };
+  let restaurants = [];
+  let selectedRestaurantCode = 'default';
+  let cart = [];
+  let currentCat = 'all';
+  let orderType = 'dine';
+  let selectedTrackingOrderId = null;
+  let pendingPaymentOrderId = null;
+  let selectedPaymentMethod = 'card';
+  let razorpayConfig = { enabled: false, keyId: null };
+  let currentCartTotal = 0;
+  let deliveryUnlockedShown = false;
+  let deliveryLocation = { lat: null, lng: null };
+  let clientOrderIds = new Set();
+  let pollTimer = null;
 
-      const normalized = rawPath.startsWith('/') ? rawPath : `/${rawPath}`;
-      const host = String(window.location.hostname || '').toLowerCase();
-      const protocol = String(window.location.protocol || '').toLowerCase();
-      const port = String(window.location.port || '');
-      const isLocalHost = host === 'localhost' || host === '127.0.0.1';
-      const isBackendOrigin = isLocalHost && port === '3000';
+  // ── UTILS ────────────────────────────────────────────────
+  function resolveApiUrl(path) {
+    const p = String(path || '').trim();
+    if (!p) return p;
+    if (/^https?:\/\//i.test(p)) return p;
+    const norm = p.startsWith('/') ? p : `/${p}`;
+    const host = String(window.location.hostname || '').toLowerCase();
+    const proto = String(window.location.protocol || '');
+    const port = String(window.location.port || '');
+    const isLocal = host === 'localhost' || host === '127.0.0.1';
+    if (proto === 'file:' || (isLocal && port !== '3000')) return `${LOCAL_API_ORIGIN}${norm}`;
+    return norm;
+  }
 
-      if (protocol === 'file:' || (isLocalHost && !isBackendOrigin)) {
-        return `${LOCAL_API_ORIGIN}${normalized}`;
-      }
-      return normalized;
+  function money(v) {
+    return `₹${Number(v || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  }
+
+  function esc(v) {
+    return String(v || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+  }
+
+  async function api(path, method = 'GET', body) {
+    const res = await fetch(resolveApiUrl(path), {
+      method, headers: { 'Content-Type': 'application/json' },
+      body: body ? JSON.stringify(body) : undefined
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: 'Request failed' }));
+      throw new Error(err.error || 'Request failed');
     }
+    return res.json();
+  }
 
-    function money(v) { return `₹${Number(v || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`; }
+  function loadNumArr(key) {
+    try {
+      const p = JSON.parse(localStorage.getItem(key) || '[]');
+      return Array.isArray(p) ? p.map(Number).filter(n => n > 0 && isFinite(n)) : [];
+    } catch { return []; }
+  }
 
-    function loadStoredNumberArray(key) {
-      try {
-        const raw = localStorage.getItem(key);
-        if (!raw) return [];
-        const parsed = JSON.parse(raw);
-        if (!Array.isArray(parsed)) return [];
-        return parsed.map((value) => Number(value)).filter((value) => Number.isFinite(value) && value > 0);
-      } catch (_error) {
-        return [];
-      }
+  function saveNumArr(key, arr) {
+    try { localStorage.setItem(key, JSON.stringify(arr)); } catch {}
+  }
+
+  function rememberOrder(id) {
+    const n = Number(id);
+    if (!n) return;
+    clientOrderIds.add(n);
+    saveNumArr(CLIENT_ORDER_IDS_KEY, Array.from(clientOrderIds));
+    try { localStorage.setItem(CLIENT_LAST_ORDER_KEY, String(n)); } catch {}
+  }
+
+  function getLastOrderId() {
+    try { return Number(localStorage.getItem(CLIENT_LAST_ORDER_KEY) || 0) || 0; } catch { return 0; }
+  }
+
+  function draftKey() {
+    return `${DRAFT_KEY_PREFIX}${String(selectedRestaurantCode || 'default').trim() || 'default'}`;
+  }
+
+  function saveDraft() {
+    const d = {
+      cart: cart.map(l => ({ menuItemId: Number(l.menuItemId), qty: Number(l.qty) })),
+      notes: String(document.getElementById('notes')?.value || ''),
+      orderType: String(orderType),
+      scheduleDate: String(document.getElementById('schedule-date')?.value || ''),
+      scheduleTime: String(document.getElementById('schedule-time')?.value || ''),
+      category: String(currentCat)
+    };
+    try { localStorage.setItem(draftKey(), JSON.stringify(d)); } catch {}
+  }
+
+  function clearDraft() {
+    try { localStorage.removeItem(draftKey()); } catch {}
+  }
+
+  function restoreDraft() {
+    cart = [];
+    let d = null;
+    try { d = JSON.parse(localStorage.getItem(draftKey()) || 'null'); } catch {}
+    if (!d || typeof d !== 'object') return;
+    applyOrderTypeUI(d.orderType);
+    currentCat = String(d.category || 'all');
+    const dateIn = document.getElementById('schedule-date');
+    const timeIn = document.getElementById('schedule-time');
+    const notesIn = document.getElementById('notes');
+    if (dateIn && d.scheduleDate) dateIn.value = d.scheduleDate;
+    if (timeIn && d.scheduleTime) timeIn.value = d.scheduleTime;
+    if (notesIn) notesIn.value = String(d.notes || '');
+    const menuMap = new Map((appState.menu || []).map(m => [Number(m.id), m]));
+    cart = (Array.isArray(d.cart) ? d.cart : []).map(l => {
+      const item = menuMap.get(Number(l.menuItemId));
+      if (!item || Number(item.available) !== 1 || l.qty <= 0) return null;
+      return { menuItemId: Number(item.id), name: item.name, price: Number(item.price), qty: Number(l.qty) };
+    }).filter(Boolean);
+  }
+
+  function setSelectedTracking(id) {
+    selectedTrackingOrderId = Number(id) || null;
+    if (selectedTrackingOrderId) try { localStorage.setItem(CLIENT_SELECTED_ORDER_KEY, String(selectedTrackingOrderId)); } catch {}
+  }
+
+  function setPendingPayment(id) {
+    pendingPaymentOrderId = Number(id) || null;
+    if (pendingPaymentOrderId) {
+      try { localStorage.setItem(CLIENT_PENDING_ORDER_KEY, String(pendingPaymentOrderId)); } catch {}
+    } else {
+      try { localStorage.removeItem(CLIENT_PENDING_ORDER_KEY); } catch {}
     }
+  }
 
-    function saveStoredNumberArray(key, values) {
-      try {
-        localStorage.setItem(key, JSON.stringify(values));
-      } catch (_error) {
-      }
+  function clientOrders() {
+    return (appState.orders || []).filter(o => clientOrderIds.has(Number(o.id)));
+  }
+
+  function selectedRestaurant() {
+    return restaurants.find(r => String(r.code) === String(selectedRestaurantCode)) || null;
+  }
+
+  // ── VIEWS ────────────────────────────────────────────────
+  function switchView(view, el) {
+    const v = ['order','tracking','payment'].includes(view) ? view : 'order';
+    document.querySelectorAll('.content').forEach(c => c.classList.remove('active'));
+    document.getElementById(`view-${v}`).classList.add('active');
+    document.querySelectorAll('.nav-item, .mnav-btn').forEach(n => n.classList.remove('active'));
+    document.querySelectorAll(`[data-view="${v}"]`).forEach(n => n.classList.add('active'));
+    document.getElementById('page-title').textContent = { order: 'Place Order', tracking: 'Track Order', payment: 'Payment' }[v];
+    try { history.pushState({ view: v }, '', `#${v}`); } catch {}
+    if (v === 'tracking') renderTracking();
+    if (v === 'payment') renderPayment();
+  }
+
+  // ── RESTAURANT ───────────────────────────────────────────
+  function renderRestoHero() {
+    const r = appState.restaurant || selectedRestaurant();
+    if (!r) return;
+    const isOpen = r.acceptingOrders !== false;
+    document.getElementById('resto-name').textContent = r.name || 'Restaurant';
+    document.getElementById('resto-rating').textContent = `⭐ ${Number(r.rating || 4.1).toFixed(1)} · ${r.ratingCount || '1.4K+'} ratings`;
+    document.getElementById('resto-cuisine').textContent = r.cuisines || 'South Indian, Indian';
+    document.getElementById('resto-addr').textContent = r.address || 'Miyapur';
+    const banner = document.getElementById('resto-banner');
+    const badge = document.getElementById('resto-status-badge');
+    if (isOpen) {
+      banner.style.display = 'none';
+      badge.textContent = '🟢 Open';
+      badge.className = 'resto-badge badge-open';
+    } else {
+      banner.style.display = 'flex';
+      banner.textContent = `⚠️ Outlet not accepting orders.${r.reopenNote ? ` Back by ${r.reopenNote}` : ''}`;
+      badge.textContent = '🔴 Closed';
+      badge.className = 'resto-badge badge-closed';
     }
+  }
 
-    function rememberClientOrder(orderId) {
-      const numericOrderId = Number(orderId || 0);
-      if (!numericOrderId) return;
-      clientOrderIds.add(numericOrderId);
-      saveStoredNumberArray(CLIENT_ORDER_IDS_KEY, Array.from(clientOrderIds));
-      try { localStorage.setItem(CLIENT_LAST_ORDER_KEY, String(numericOrderId)); } catch (_error) {}
-    }
-
-    function getLastClientOrderId() {
-      try {
-        return Number(localStorage.getItem(CLIENT_LAST_ORDER_KEY) || 0) || 0;
-      } catch (_error) {
-        return 0;
-      }
-    }
-
-    function getPlaceOrderDraftKey() {
-      const code = String(selectedRestaurantCode || 'default').trim() || 'default';
-      return `foodorder_place_order_draft_${code}`;
-    }
-
-    function persistPlaceOrderDraft() {
-      const draft = {
-        cart: cart.map((line) => ({ menuItemId: Number(line.menuItemId), qty: Number(line.qty || 0) })).filter((line) => line.menuItemId > 0 && line.qty > 0),
-        notes: String(document.getElementById('notes')?.value || ''),
-        orderType: String(orderType || 'dine'),
-        scheduleDate: String(document.getElementById('schedule-date')?.value || ''),
-        scheduleTime: String(document.getElementById('schedule-time')?.value || ''),
-        category: String(currentCat || 'all')
-      };
-      try {
-        localStorage.setItem(getPlaceOrderDraftKey(), JSON.stringify(draft));
-      } catch (_error) {
-      }
-    }
-
-    function clearPlaceOrderDraft() {
-      try {
-        localStorage.removeItem(getPlaceOrderDraftKey());
-      } catch (_error) {
-      }
-    }
-
-    function applyOrderTypeUi(type) {
-      const safeType = ['dine', 'takeaway', 'preorder'].includes(String(type || '').toLowerCase())
-        ? String(type).toLowerCase()
-        : 'dine';
-      orderType = safeType;
-      document.querySelectorAll('.order-type-tab').forEach((tab) => {
-        const tabType = String(tab.getAttribute('onclick') || '').match(/'([a-z]+)'/)?.[1] || '';
-        tab.classList.toggle('active', tabType === safeType);
-      });
-      const showSchedule = safeType === 'takeaway' || safeType === 'preorder';
-      document.getElementById('eta').style.display = showSchedule ? 'flex' : 'none';
-      document.getElementById('schedule-group').style.display = showSchedule ? 'block' : 'none';
-      document.getElementById('table-group').style.display = 'none';
-    }
-
-    function restorePlaceOrderDraft() {
-      cart = [];
-      let parsed = null;
-      try {
-        parsed = JSON.parse(localStorage.getItem(getPlaceOrderDraftKey()) || 'null');
-      } catch (_error) {
-        parsed = null;
-      }
-      if (!parsed || typeof parsed !== 'object') return;
-
-      applyOrderTypeUi(parsed.orderType);
-      currentCat = String(parsed.category || 'all');
-
-      const dateInput = document.getElementById('schedule-date');
-      const timeInput = document.getElementById('schedule-time');
-      const notesInput = document.getElementById('notes');
-      if (dateInput && parsed.scheduleDate) dateInput.value = String(parsed.scheduleDate);
-      if (timeInput && parsed.scheduleTime) timeInput.value = String(parsed.scheduleTime);
-      if (notesInput) notesInput.value = String(parsed.notes || '');
-
-      const menuMap = new Map((state.menu || []).map((item) => [Number(item.id), item]));
-      const draftCart = Array.isArray(parsed.cart) ? parsed.cart : [];
-      cart = draftCart
-        .map((line) => {
-          const menuItem = menuMap.get(Number(line.menuItemId));
-          const qty = Number(line.qty || 0);
-          if (!menuItem || Number(menuItem.available) !== 1 || qty <= 0) return null;
-          return {
-            menuItemId: Number(menuItem.id),
-            name: menuItem.name,
-            price: Number(menuItem.price || 0),
-            qty
-          };
-        })
-        .filter(Boolean);
-    }
-
-    function setSelectedTrackingOrder(orderId) {
-      selectedTrackingOrderId = Number(orderId || 0) || null;
-      if (selectedTrackingOrderId) {
-        try { localStorage.setItem(CLIENT_SELECTED_ORDER_KEY, String(selectedTrackingOrderId)); } catch (_error) {}
-      }
-    }
-
-    function setPendingPaymentOrder(orderId) {
-      pendingPaymentOrderId = Number(orderId || 0) || null;
-      if (pendingPaymentOrderId) {
-        try { localStorage.setItem(CLIENT_PENDING_ORDER_KEY, String(pendingPaymentOrderId)); } catch (_error) {}
-      } else {
-        try { localStorage.removeItem(CLIENT_PENDING_ORDER_KEY); } catch (_error) {}
-      }
-    }
-
-    function openRetryPayment(orderId) {
-      const numericOrderId = Number(orderId || 0);
-      if (!numericOrderId) return;
-      setPendingPaymentOrder(numericOrderId);
-      switchView('payment', document.querySelector('.nav-item[data-view="payment"]'));
-      renderPayment();
-    }
-
-    function getClientScopedOrders() {
-      const ids = clientOrderIds;
-      return (state.orders || []).filter((order) => ids.has(Number(order.id)));
-    }
-
-    function escapeHtml(value) {
-      return String(value || '')
-        .replaceAll('&', '&amp;')
-        .replaceAll('<', '&lt;')
-        .replaceAll('>', '&gt;')
-        .replaceAll('"', '&quot;')
-        .replaceAll("'", '&#39;');
-    }
-
-    function orderSubtotal(order) {
-      const computed = (order.items || []).reduce((sum, item) => sum + (Number(item.price || 0) * Number(item.qty || 0)), 0);
-      return Number(order.subtotal || computed);
-    }
-
-    // Unified receipt renderer so bill format stays identical across tracking and payment views.
-    function receiptMarkup(order) {
-      const createdAt = new Date(order.createdAt || Date.now());
-      const dateText = createdAt.toLocaleDateString('en-GB');
-      const timeText = createdAt.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: false });
-      const restaurantName = String(state.restaurant?.name || selectedRestaurant()?.name || 'Restaurant');
-      const subtotal = orderSubtotal(order);
-      const totalQty = (order.items || []).reduce((sum, item) => sum + Number(item.qty || 0), 0);
-      const gst = Number(order.gst || order.tax || 0);
-      const cgst = Number(order.cgst || (gst / 2));
-      const sgst = Number(order.sgst || (gst - cgst));
-      const total = Number(order.total || (subtotal + cgst + sgst));
-      const paymentMethodText = escapeHtml((order.paymentMethod || selectedPaymentMethod || '-').toUpperCase());
-
-      return `
-        <div class="receipt">
-          <div class="receipt-title">${escapeHtml(restaurantName)}</div>
-          <div class="receipt-subtitle">Tax Invoice</div>
-          <div class="receipt-meta">
-            <div class="receipt-meta-row"><span>Order ID</span><span>${escapeHtml(order.label || '-')}</span></div>
-            <div class="receipt-meta-row"><span>Date</span><span>${dateText}</span></div>
-            <div class="receipt-meta-row"><span>Time</span><span>${timeText}</span></div>
-            <div class="receipt-meta-row"><span>${order.orderType === 'dine' ? 'Table' : 'Order Type'}</span><span>${order.orderType === 'dine' ? (order.tableNumber ? `T${order.tableNumber}` : '-') : escapeHtml(order.orderType || '-')}</span></div>
-          </div>
-          <div class="receipt-divider"></div>
-          <div class="receipt-grid-head"><span>Item</span><span>Qty</span><span>Rate</span><span>Amount</span></div>
-          ${(order.items || []).map((item) => `
-            <div class="receipt-grid-row">
-              <span>${escapeHtml(item.name)}</span>
-              <span>${Number(item.qty || 0)}</span>
-              <span>${money(item.price || 0)}</span>
-              <span>${money(Number(item.price || 0) * Number(item.qty || 0))}</span>
-            </div>
-          `).join('')}
-          <div class="receipt-divider"></div>
-          <div class="receipt-total-line"><span>Total Qty</span><span>${totalQty}</span></div>
-          <div class="receipt-total-line"><span>Sub Total</span><span>${money(subtotal)}</span></div>
-          <div class="receipt-total-line"><span>CGST @2.5%</span><span>${money(cgst)}</span></div>
-          <div class="receipt-total-line"><span>SGST @2.5%</span><span>${money(sgst)}</span></div>
-          <div class="receipt-divider"></div>
-          <div class="receipt-total-line grand"><span>Grand Total</span><span>${money(total)}</span></div>
-          <div class="receipt-foot">${order.paid ? `Paid via ${paymentMethodText}` : 'Payment pending'} | Status: ${escapeHtml(order.status || '-')}</div>
-        </div>
-      `;
-    }
-
-    async function api(path, method = 'GET', body) {
-      const res = await fetch(resolveApiUrl(path), {
-        method,
-        headers: { 'Content-Type': 'application/json' },
-        body: body ? JSON.stringify(body) : undefined
-      });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({ error: 'Request failed' }));
-        throw new Error(err.error || 'Request failed');
-      }
-      return res.json();
-    }
-
-    function selectedRestaurant() {
-      return restaurants.find((r) => String(r.code) === String(selectedRestaurantCode)) || null;
-    }
-
-    function renderRestaurantSelector() {
-      const select = document.getElementById('restaurant-selector');
-      if (!select) return;
-      select.innerHTML = (restaurants || []).map((restaurant) => `
-        <option value="${escapeHtml(restaurant.code)}">${escapeHtml(restaurant.name)}</option>
-      `).join('');
-
-      const hasSelected = (restaurants || []).some((restaurant) => String(restaurant.code) === String(selectedRestaurantCode));
-      if (!hasSelected && restaurants.length) {
-        const hasGandikota = restaurants.some((restaurant) => String(restaurant.code) === 'gandikotadosa');
-        selectedRestaurantCode = hasGandikota ? 'gandikotadosa' : restaurants[0].code;
-      }
-      if (selectedRestaurantCode) select.value = selectedRestaurantCode;
-    }
-
-    function renderRestaurantHero() {
-      const restaurant = state.restaurant || selectedRestaurant();
-      if (!restaurant) return;
-
-      const banner = document.getElementById('restaurant-hero-banner');
-      const name = document.getElementById('restaurant-name');
-      const meta = document.getElementById('restaurant-meta');
-      const cuisines = document.getElementById('restaurant-cuisines');
-      const address = document.getElementById('restaurant-address');
-      const status = document.getElementById('restaurant-status-line');
-      const isAccepting = restaurant.acceptingOrders !== false;
-      const reopenNote = String(restaurant.reopenNote || '').trim();
-
-      name.textContent = String(restaurant.name || 'Restaurant');
-      meta.textContent = `${Number(restaurant.rating || 4.1).toFixed(1)} (${restaurant.ratingCount || '1.4K+ ratings'}) • ₹${Number(restaurant.priceForTwo || 150)} for two`;
-      cuisines.textContent = String(restaurant.cuisines || 'South Indian, Indian');
-      address.textContent = String(restaurant.address || 'Miyapur');
-
-      if (isAccepting) {
-        banner.style.display = 'none';
-        status.innerHTML = '<strong>Open & accepting orders</strong>';
-      } else {
-        banner.style.display = 'flex';
-        banner.textContent = `⚠️ Uh-oh! Outlet is not accepting orders at the moment.${reopenNote ? ` They should be back by ${reopenNote}` : ''}`;
-        status.innerHTML = '<strong>Closed & not delivering</strong>';
-      }
-    }
-
-    async function loadRestaurants() {
+  async function loadRestaurants() {
+    try {
       const data = await api('/api/public/restaurants');
       restaurants = Array.isArray(data?.restaurants) ? data.restaurants : [];
-      const hasGandikota = restaurants.some((restaurant) => String(restaurant.code) === 'gandikotadosa');
-      if (hasGandikota) {
-        restaurants = restaurants.filter((restaurant) => String(restaurant.code) !== 'default');
+      const hasGandikota = restaurants.some(r => String(r.code) === 'gandikotadosa');
+      if (hasGandikota) restaurants = restaurants.filter(r => String(r.code) !== 'default');
+      if (!restaurants.length) restaurants = [{ code: 'default', name: 'Default Restaurant', address: 'Miyapur', cuisines: 'South Indian, Indian', rating: 4.1, ratingCount: '1.4K+', priceForTwo: 150, acceptingOrders: true }];
+      if (!selectedRestaurantCode || !restaurants.some(r => String(r.code) === String(selectedRestaurantCode))) {
+        selectedRestaurantCode = restaurants.some(r => String(r.code) === 'gandikotadosa') ? 'gandikotadosa' : restaurants[0].code;
       }
-      if (!restaurants.length) {
-        restaurants = [{ code: 'default', name: 'Default Restaurant', address: 'Miyapur', cuisines: 'South Indian, Indian', rating: 4.1, ratingCount: '1.4K+ ratings', priceForTwo: 150, acceptingOrders: true }];
-      }
-      if (!selectedRestaurantCode || !restaurants.some((restaurant) => String(restaurant.code) === String(selectedRestaurantCode))) {
-        selectedRestaurantCode = hasGandikota ? 'gandikotadosa' : restaurants[0].code;
-      }
-      renderRestaurantSelector();
+    } catch {
+      restaurants = [{ code: 'default', name: 'Tableside Restaurant', address: 'Hyderabad', cuisines: 'South Indian, Indian', rating: 4.5, ratingCount: '2K+', priceForTwo: 150, acceptingOrders: true }];
     }
+  }
 
-    async function loadStateForSelectedRestaurant() {
-      const code = String(selectedRestaurantCode || 'default').trim() || 'default';
+  async function loadState() {
+    const code = String(selectedRestaurantCode || 'default');
+    try {
       const data = await api(`/api/public/state?restaurant=${encodeURIComponent(code)}`);
-      state = data;
+      appState = data;
+    } catch {
+      if (!appState.menu) appState = { menu: getDemoMenu(), tables: [], orders: [], restaurant: null };
     }
+  }
 
-    function getActiveView() {
-      const active = document.querySelector('.content.active');
-      if (!active || !active.id) return 'order';
-      return String(active.id).replace('view-', '') || 'order';
-    }
+  // Demo menu so the UI isn't empty when backend is absent
+  function getDemoMenu() {
+    return [
+      { id: 1, name: 'Masala Dosa', desc: 'Crispy golden dosa with spiced potato filling, sambar & chutneys', price: 89, cat: 'breakfast', available: 1, emoji: '🫓' },
+      { id: 2, name: 'Idli Vada', desc: 'Soft steamed idli with crispy vada, sambar & 3 chutneys', price: 69, cat: 'breakfast', available: 1, emoji: '🍚' },
+      { id: 3, name: 'Chole Bhature', desc: 'Fluffy bhature with spicy chickpea curry', price: 129, cat: 'main', available: 1, emoji: '🫔' },
+      { id: 4, name: 'Paneer Butter Masala', desc: 'Rich, creamy tomato-butter gravy with fresh paneer cubes', price: 199, cat: 'main', available: 1, emoji: '🍛' },
+      { id: 5, name: 'Veg Biryani', desc: 'Fragrant basmati rice with seasonal vegetables & whole spices', price: 169, cat: 'rice', available: 1, emoji: '🍱' },
+      { id: 6, name: 'Rasam Rice', desc: 'Comforting pepper rasam with steamed rice & papad', price: 79, cat: 'rice', available: 1, emoji: '🍲' },
+      { id: 7, name: 'Filter Coffee', desc: 'South Indian decoction brewed strong, served in traditional tumbler', price: 39, cat: 'drinks', available: 1, emoji: '☕' },
+      { id: 8, name: 'Fresh Lime Soda', desc: 'Sweet or salted, perfectly chilled — the ultimate summer cooler', price: 49, cat: 'drinks', available: 1, emoji: '🍋' },
+    ];
+  }
 
-    function renderActiveViewOnly() {
-      const activeView = getActiveView();
-      renderRestaurantHero();
+  // ── ORDER TYPE ───────────────────────────────────────────
+  function applyOrderTypeUI(type) {
+    const t = ['dine','takeaway','preorder','delivery'].includes(String(type)) ? String(type) : 'dine';
+    orderType = t;
+    document.querySelectorAll('.otype-tab').forEach(tab => {
+      const match = (tab.getAttribute('onclick') || '').match(/'([a-z]+)'/);
+      tab.classList.toggle('active', match?.[1] === t);
+    });
+    const showSched = t === 'takeaway' || t === 'preorder';
+    document.getElementById('schedule-card').style.display = showSched ? 'block' : 'none';
+    document.getElementById('table-group').style.display = 'none';
+    updateDeliveryUI();
+  }
 
-      if (activeView === 'order') {
-        syncCartWithMenu();
-        renderDineTableOptions();
-        renderCategoryTabs();
-        renderMenu();
-        renderCart();
-        return;
-      }
+  function setOrderType(el, type) {
+    document.querySelectorAll('.otype-tab').forEach(t => t.classList.remove('active'));
+    el.classList.add('active');
+    orderType = type;
+    applyOrderTypeUI(type);
+    saveDraft();
+  }
 
-      if (activeView === 'tracking') {
-        renderTracking();
-        return;
-      }
-
-      if (activeView === 'payment') {
-        renderPayment();
-      }
-    }
-
-    async function onRestaurantChange(code) {
-      persistPlaceOrderDraft();
-      selectedRestaurantCode = String(code || '').trim() || 'default';
-      try { localStorage.setItem(CLIENT_SELECTED_RESTAURANT_KEY, selectedRestaurantCode); } catch (_error) {}
-
-      clientOrderIds = new Set();
-      saveStoredNumberArray(CLIENT_ORDER_IDS_KEY, []);
-      setPendingPaymentOrder(0);
-      setSelectedTrackingOrder(0);
-
-      await loadStateForSelectedRestaurant();
-      restorePlaceOrderDraft();
-      renderAll();
-    }
-
-    function switchView(view, el) {
-      const safeView = ['order', 'tracking', 'payment'].includes(String(view || '').toLowerCase())
-        ? String(view).toLowerCase()
-        : 'order';
-      const targetNav = el || document.querySelector(`.nav-item[data-view="${safeView}"]`);
-
-      document.querySelectorAll('.content').forEach((c) => c.classList.remove('active'));
-      document.getElementById(`view-${safeView}`).classList.add('active');
-      document.querySelectorAll('.nav-item').forEach((n) => n.classList.remove('active'));
-      if (targetNav) targetNav.classList.add('active');
-      document.getElementById('title').textContent = safeView.charAt(0).toUpperCase() + safeView.slice(1);
-
-      const currentStateView = String(history.state?.view || '').toLowerCase();
-      if (currentStateView !== safeView) {
-        history.pushState({ view: safeView }, '', `#${safeView}`);
-      }
-    }
-
-    function setCat(el, cat) {
-      document.querySelectorAll('.cat').forEach((c) => c.classList.remove('active'));
-      if (el) el.classList.add('active');
-      currentCat = cat;
-      renderMenu();
-      persistPlaceOrderDraft();
-    }
-
-    function renderCategoryTabs() {
-      const container = document.getElementById('cat-tabs');
-      if (!container) return;
-
-      const categories = Array.from(new Set((state.menu || []).map((m) => m.cat).filter(Boolean))).sort();
-      const allCats = ['all', ...categories];
-
-      if (!allCats.includes(currentCat)) {
-        currentCat = 'all';
-      }
-
-      container.innerHTML = allCats.map((cat) => {
-        const label = cat === 'all' ? 'All' : cat.charAt(0).toUpperCase() + cat.slice(1);
-        const activeClass = currentCat === cat ? 'active' : '';
-        return `<div class="cat ${activeClass}" onclick="setCat(this, '${cat}')">${label}</div>`;
-      }).join('');
-    }
-
-    function setOrderType(el, type) {
-      document.querySelectorAll('.order-type-tab').forEach((t) => t.classList.remove('active'));
-      el.classList.add('active');
-      orderType = type;
-      const showSchedule = type === 'takeaway' || type === 'preorder';
-      document.getElementById('eta').style.display = showSchedule ? 'flex' : 'none';
-      document.getElementById('schedule-group').style.display = showSchedule ? 'block' : 'none';
-      document.getElementById('table-group').style.display = 'none';
-      const deliveryForm = document.getElementById('delivery-form');
-      if (deliveryForm) {
-        deliveryForm.style.display = type === 'delivery' && currentCartTotal >= 500 ? 'block' : 'none';
-      }
-      if (type === 'delivery' && currentCartTotal < 500) {
-        showCheckoutWarning('Add cart more than 500 for delivery');
+  function updateDeliveryUI() {
+    const isDelivery = orderType === 'delivery';
+    const unlocked = currentCartTotal >= 500;
+    const infoBar = document.getElementById('delivery-info-bar');
+    const chip = document.getElementById('delivery-chip');
+    const delivCard = document.getElementById('delivery-card');
+    if (isDelivery) {
+      if (unlocked) {
+        infoBar.style.display = 'none';
+        chip.style.display = 'inline-flex';
+        delivCard.style.display = 'block';
       } else {
-        clearCheckoutWarning();
+        infoBar.style.display = 'flex';
+        chip.style.display = 'none';
+        delivCard.style.display = 'none';
       }
-      persistPlaceOrderDraft();
+    } else {
+      infoBar.style.display = 'none';
+      chip.style.display = 'none';
+      delivCard.style.display = 'none';
     }
+  }
 
-    function getScheduleText() {
-      if (!(orderType === 'takeaway' || orderType === 'preorder')) return '';
+  function getScheduleText() {
+    if (!['takeaway','preorder'].includes(orderType)) return '';
+    const d = String(document.getElementById('schedule-date').value || '').trim();
+    const t = String(document.getElementById('schedule-time').value || '').trim();
+    return d && t ? `Scheduled for ${d} ${t}` : '';
+  }
 
-      const date = String(document.getElementById('schedule-date').value || '').trim();
-      const time = String(document.getElementById('schedule-time').value || '').trim();
-      if (!date || !time) return '';
-      return `Scheduled for ${date} ${time}`;
-    }
+  function setMethod(el, m) {
+    document.querySelectorAll('.pay-method').forEach(x => x.classList.remove('active'));
+    el.classList.add('active');
+    selectedPaymentMethod = String(m || 'card');
+    document.getElementById('upi-group').style.display = m === 'upi' ? 'block' : 'none';
+  }
 
-    function setMethod(el, method) {
-      document.querySelectorAll('.method').forEach((m) => m.classList.remove('active'));
-      el.classList.add('active');
-      selectedPaymentMethod = String(method || 'card').trim().toLowerCase();
-    }
+  // ── TABLES ───────────────────────────────────────────────
+  function renderTableOptions() {
+    const sel = document.getElementById('table-number');
+    if (!sel) return;
+    const free = (appState.tables || []).filter(t => t.status === 'free').map(t => Number(t.tableNumber)).sort((a,b)=>a-b);
+    if (!free.length) { sel.innerHTML = '<option value="">No free table</option>'; sel.disabled = true; return; }
+    sel.disabled = false;
+    sel.innerHTML = free.map(n => `<option value="${n}">Table ${n}</option>`).join('');
+  }
 
-    function renderDineTableOptions() {
-      const select = document.getElementById('table-number');
-      if (!select) return;
+  // ── CATEGORIES ───────────────────────────────────────────
+  function renderCategories() {
+    const tabs = document.getElementById('cat-tabs');
+    if (!tabs) return;
+    const cats = ['all', ...Array.from(new Set((appState.menu || []).map(m => m.cat).filter(Boolean))).sort()];
+    if (!cats.includes(currentCat)) currentCat = 'all';
+    tabs.innerHTML = cats.map(c => `
+      <div class="cat-btn ${currentCat === c ? 'active' : ''}" onclick="setCat(this,'${c}')">
+        ${c === 'all' ? 'All Items' : c.charAt(0).toUpperCase() + c.slice(1)}
+      </div>
+    `).join('');
+  }
 
-      const current = Number(select.value || 0);
-      const freeTables = (state.tables || [])
-        .filter((table) => table.status === 'free')
-        .map((table) => Number(table.tableNumber))
-        .sort((a, b) => a - b);
+  function setCat(el, cat) {
+    document.querySelectorAll('.cat-btn').forEach(c => c.classList.remove('active'));
+    if (el) el.classList.add('active');
+    currentCat = cat;
+    renderMenu();
+    saveDraft();
+  }
 
-      if (!freeTables.length) {
-        select.innerHTML = '<option value="">No free table available</option>';
-        select.disabled = true;
-        return;
-      }
-
-      select.disabled = false;
-      select.innerHTML = freeTables
-        .map((tableNumber) => `<option value="${tableNumber}">Table ${tableNumber}</option>`)
-        .join('');
-
-      if (freeTables.includes(current)) {
-        select.value = String(current);
-      } else {
-        select.value = String(freeTables[0]);
-      }
-    }
-
-    function renderMenuPhoto(item) {
-      const imageUrl = String(item?.imageUrl || '').trim();
-      const safeName = escapeHtml(String(item?.name || 'Menu item'));
-      const safeEmoji = escapeHtml(String(item?.emoji || '🍽️'));
-
-      if (!imageUrl) {
-        return `
-          <div class="menu-photo-shell is-empty">
-            <div class="menu-photo-placeholder" data-emoji="${safeEmoji}">
-              <span class="menu-photo-label">Photo coming soon</span>
-            </div>
-          </div>
-        `;
-      }
-
+  // ── MENU ─────────────────────────────────────────────────
+  function renderMenu() {
+    const qtyMap = new Map(cart.map(l => [Number(l.menuItemId), Number(l.qty)]));
+    const items = currentCat === 'all' ? appState.menu : appState.menu.filter(m => m.cat === currentCat);
+    const grid = document.getElementById('menu-grid');
+    if (!grid) return;
+    grid.innerHTML = (items || []).map((m, i) => {
+      const qty = qtyMap.get(Number(m.id)) || 0;
+      const avail = Number(m.available) === 1;
+      const imgUrl = String(m.imageUrl || '').trim();
+      const photoHtml = imgUrl
+        ? `<div class="menu-img-wrap"><img class="menu-img" src="${esc(imgUrl)}" alt="${esc(m.name)}" loading="lazy" onerror="this.parentElement.innerHTML=placeholderHTML('${esc(m.emoji||'🍽️')}')"/>
+           <div class="menu-img-overlay"></div>${!avail ? '<div class="unavail-tag">Unavailable</div>' : ''}</div>`
+        : `<div class="menu-img-wrap"><div class="menu-img-overlay" style="display:none"></div>
+           <div class="menu-img-placeholder"><div class="placeholder-emoji">${esc(m.emoji||'🍽️')}</div><div class="placeholder-lbl">Photo coming soon</div></div>
+           ${!avail ? '<div class="unavail-tag">Unavailable</div>' : ''}</div>`;
       return `
-        <div class="menu-photo-shell has-image">
-          <img class="menu-photo" src="${escapeHtml(imageUrl)}" alt="${safeName}" loading="lazy" onerror="this.closest('.menu-photo-shell').classList.remove('has-image'); this.closest('.menu-photo-shell').classList.add('is-empty');" />
-          <div class="menu-photo-placeholder" data-emoji="${safeEmoji}">
-            <span class="menu-photo-label">Photo coming soon</span>
-          </div>
-        </div>
-      `;
-    }
-
-    function renderMenu() {
-      const qtyByMenuItemId = new Map(cart.map((line) => [Number(line.menuItemId), Number(line.qty || 0)]));
-      const menu = currentCat === 'all' ? state.menu : state.menu.filter((m) => m.cat === currentCat);
-      document.getElementById('menu').innerHTML = menu.map((m) => `
-        <div class="menu-item ${Number(m.available) === 1 ? '' : 'unavailable'}">
-          ${renderMenuPhoto(m)}
-          <div class="name">${escapeHtml(m.name)}</div>
-          <div class="desc">${escapeHtml(m.desc || '')}</div>
-          ${Number(m.available) === 1 ? '' : '<div class="unavailable-badge">Temporarily unavailable</div>'}
-          <div class="foot">
-            <span class="price">${money(m.price)}</span>
-            <div class="menu-qty-controls">
-              <button class="menu-qty-btn" ${Number(m.available) === 1 ? '' : 'disabled'} onclick="updateCartQty(${m.id}, -1)">-</button>
-              <span class="menu-qty-value" id="menu-qty-${m.id}">${qtyByMenuItemId.get(Number(m.id)) || 0}</span>
-              <button class="menu-qty-btn" ${Number(m.available) === 1 ? '' : 'disabled'} onclick="updateCartQty(${m.id}, 1)">+</button>
+        <div class="menu-card ${!avail ? 'unavail' : ''}" style="animation-delay:${i * 0.04}s">
+          ${photoHtml}
+          <div class="menu-body">
+            <div class="menu-name">${esc(m.name)}</div>
+            <div class="menu-desc">${esc(m.desc || '')}</div>
+            <div class="menu-foot">
+              <div class="menu-price">${money(m.price)}</div>
+              <div class="qty-ctrl">
+                <button class="qty-btn" onclick="updateCartQty(${m.id},-1)" ${!avail?'disabled':''}>−</button>
+                <div class="qty-val" id="mq-${m.id}">${qty}</div>
+                <button class="qty-btn" onclick="updateCartQty(${m.id},1)" ${!avail?'disabled':''}>+</button>
+              </div>
             </div>
           </div>
         </div>
-      `).join('');
-    }
-
-    function refreshMenuItemQty(menuItemId) {
-      const id = Number(menuItemId || 0);
-      if (!id) return;
-      const qtyEl = document.getElementById(`menu-qty-${id}`);
-      if (!qtyEl) return;
-      const line = cart.find((entry) => Number(entry.menuItemId) === id);
-      qtyEl.textContent = String(Number(line?.qty || 0));
-    }
-
-    function addToCart(menuItemId) {
-      const item = state.menu.find((m) => m.id === menuItemId && Number(m.available) === 1);
-      if (!item) {
-        alert('This item is currently unavailable.');
-        return;
-      }
-      const existing = cart.find((c) => c.menuItemId === menuItemId);
-      if (existing) existing.qty += 1;
-      else cart.push({ menuItemId, name: item.name, price: item.price, qty: 1 });
-      renderCart();
-      refreshMenuItemQty(menuItemId);
-    }
-
-    function updateCartQty(menuItemId, delta) {
-      const id = Number(menuItemId || 0);
-      const change = Number(delta || 0);
-      if (!id || !change) return;
-
-      const line = cart.find((entry) => Number(entry.menuItemId) === id);
-      if (!line) {
-        if (change > 0) {
-          addToCart(id);
-        }
-        return;
-      }
-
-      const nextQty = Number(line.qty || 0) + change;
-      if (nextQty <= 0) {
-        cart = cart.filter((entry) => Number(entry.menuItemId) !== id);
-      } else {
-        line.qty = nextQty;
-      }
-      renderCart();
-      refreshMenuItemQty(id);
-    }
-
-    function syncCartWithMenu() {
-      const availableMap = new Map(
-        (state.menu || [])
-          .filter((m) => Number(m.available) === 1)
-          .map((m) => [Number(m.id), m])
-      );
-
-      cart = cart
-        .filter((line) => availableMap.has(Number(line.menuItemId)))
-        .map((line) => {
-          const source = availableMap.get(Number(line.menuItemId));
-          return {
-            ...line,
-            name: source.name,
-            price: source.price
-          };
-        });
-      persistPlaceOrderDraft();
-    }
-
-    function renderCart() {
-      const box = document.getElementById('cart-items');
-      if (!cart.length) {
-        box.innerHTML = '<div class="empty">Nothing added yet</div>';
-        updateTotals(0);
-        persistPlaceOrderDraft();
-        return;
-      }
-      box.innerHTML = cart.map((i) => `
-        <div class="cart-item">
-          <div class="cart-qty-controls">
-            <button class="cart-qty-btn" onclick="updateCartQty(${i.menuItemId}, -1)">-</button>
-            <div class="qty">${i.qty}</div>
-            <button class="cart-qty-btn" onclick="updateCartQty(${i.menuItemId}, 1)">+</button>
-          </div>
-          <div class="nm">${i.name}</div>
-          <div class="pr">${money(i.price * i.qty)}</div>
-        </div>
-      `).join('');
-      updateTotals(cart.reduce((s, i) => s + i.price * i.qty, 0));
-      persistPlaceOrderDraft();
-    }
-
-    function updateTotals(inclusiveTotal) {
-      currentCartTotal = Number(inclusiveTotal || 0);
-      const subtotal = Number((Number(inclusiveTotal || 0) / 1.05).toFixed(2));
-      const gst = Number((Number(inclusiveTotal || 0) - subtotal).toFixed(2));
-      const cgst = Number((gst / 2).toFixed(2));
-      const sgst = Number((gst - cgst).toFixed(2));
-      document.getElementById('sub').textContent = money(subtotal);
-      document.getElementById('cgst').textContent = money(cgst);
-      document.getElementById('sgst').textContent = money(sgst);
-      document.getElementById('total').textContent = money(Number(inclusiveTotal || 0));
-      updateDeliveryInfo(Number(inclusiveTotal || 0));
-      updateDeliveryLock(Number(inclusiveTotal || 0));
-    }
-
-    function updateDeliveryInfo(total) {
-      const deliveryInfo = document.getElementById('delivery-info');
-      if (!deliveryInfo) return;
-      if (total < 500) {
-        deliveryInfo.style.display = 'flex';
-      } else {
-        deliveryInfo.style.display = 'none';
-      }
-    }
-
-    function updateDeliveryLock(total) {
-      const statusChip = document.getElementById('delivery-status-chip');
-      if (total >= 500) {
-        if (statusChip && orderType === 'delivery') {
-          statusChip.style.display = 'inline-flex';
-        }
-        if (orderType === 'delivery' && !deliveryUnlockedShown) {
-          deliveryUnlockedShown = true;
-          showDeliveryUnlockedPopup();
-        }
-        const deliveryForm = document.getElementById('delivery-form');
-        if (orderType === 'delivery' && deliveryForm) deliveryForm.style.display = 'block';
-      } else {
-        if (statusChip) statusChip.style.display = 'none';
-        deliveryUnlockedShown = false;
-        if (orderType === 'delivery') {
-          const deliveryForm = document.getElementById('delivery-form');
-          if (deliveryForm) deliveryForm.style.display = 'none';
-          showCheckoutWarning('Add cart more than 500 for delivery');
-        }
-      }
-    }
-
-    function showDeliveryUnlockedPopup() {
-      const popup = document.createElement('div');
-      popup.style.position = 'fixed';
-      popup.style.top = '50%';
-      popup.style.left = '50%';
-      popup.style.transform = 'translate(-50%, -50%)';
-      popup.style.background = '#defae7';
-      popup.style.color = '#0e6b3f';
-      popup.style.padding = '20px 30px';
-      popup.style.borderRadius = '12px';
-      popup.style.boxShadow = '0 8px 24px rgba(0,0,0,0.2)';
-      popup.style.zIndex = '9999';
-      popup.style.fontWeight = '700';
-      popup.style.fontSize = '16px';
-      popup.style.textAlign = 'center';
-      popup.textContent = '🏍️ Delivery Unlocked!';
-      document.body.appendChild(popup);
-      setTimeout(() => popup.remove(), 3000);
-    }
-
-    function showCheckoutWarning(message) {
-      const warning = document.getElementById('checkout-warning');
-      if (!warning) return;
-      warning.textContent = String(message || '');
-      warning.style.display = 'block';
-    }
-
-    function clearCheckoutWarning() {
-      const warning = document.getElementById('checkout-warning');
-      if (!warning) return;
-      warning.textContent = '';
-      warning.style.display = 'none';
-    }
-
-    function disableCartModification() {
-      const cartRows = document.querySelectorAll('.cart-item-row');
-      cartRows.forEach(row => {
-        row.querySelectorAll('button').forEach(btn => btn.disabled = true);
-      });
-      const cartButtons = document.querySelectorAll('.cart-buttons button');
-      cartButtons.forEach(btn => {
-        if (!btn.textContent.includes('Place')) btn.disabled = true;
-      });
-    }
-
-    function enableCartModification() {
-      const cartRows = document.querySelectorAll('.cart-item-row');
-      cartRows.forEach(row => {
-        row.querySelectorAll('button').forEach(btn => btn.disabled = false);
-      });
-      const cartButtons = document.querySelectorAll('.cart-buttons button');
-      cartButtons.forEach(btn => btn.disabled = false);
-    }
-
-    let deliveryLocation = { lat: null, lng: null };
-
-    function shareDeliveryLocation() {
-      if (!navigator.geolocation) {
-        alert('Geolocation is not supported by your browser');
-        return;
-      }
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          deliveryLocation.lat = position.coords.latitude;
-          deliveryLocation.lng = position.coords.longitude;
-          document.getElementById('location-status').textContent = `📍 Location shared: ${deliveryLocation.lat.toFixed(4)}, ${deliveryLocation.lng.toFixed(4)}`;
-          document.getElementById('share-location-btn').textContent = '✅ Location Shared';
-          document.getElementById('share-location-btn').style.background = '#0e6b3f';
-        },
-        (error) => {
-          alert('Could not get your location. Please enable location services.');
-          console.error(error);
-        }
-      );
-    }
-
-    async function placeOrder() {
-      const restaurant = selectedRestaurant();
-      if (restaurant && restaurant.acceptingOrders === false) {
-        alert('This outlet is currently not accepting orders.');
-        return;
-      }
-
-      syncCartWithMenu();
-      renderCart();
-      if (!cart.length) return;
-      try {
-        const tableNumber = null;
-
-        const baseNotes = String(document.getElementById('notes').value || '').trim();
-        const scheduleText = getScheduleText();
-        if ((orderType === 'takeaway' || orderType === 'preorder') && !scheduleText) {
-          alert('Please select schedule date and time.');
-          return;
-        }
-
-        const customerName = String(document.getElementById('customer-name')?.value || '').trim();
-        const customerMobile = String(document.getElementById('customer-mobile')?.value || '').trim();
-        if (!customerName || !customerMobile) {
-          alert('Please enter your name and mobile number.');
-          return;
-        }
-
-        if (orderType === 'delivery' && currentCartTotal < 500) {
-          showCheckoutWarning('Add cart more than 500 for delivery');
-          return;
-        }
-
-        clearCheckoutWarning();
-
-        if (orderType === 'delivery') {
-          if (!deliveryLocation.lat || !deliveryLocation.lng) {
-            alert('Please share your location for delivery.');
-            return;
-          }
-        }
-
-        const notes = [baseNotes, scheduleText].filter(Boolean).join(' | ');
-        const orderPayload = {
-          restaurantCode: selectedRestaurantCode,
-          orderType,
-          tableNumber,
-          notes,
-          customerName,
-          customerMobile,
-          items: cart.map((i) => ({ menuItemId: i.menuItemId, qty: i.qty }))
-        };
-
-        if (orderType === 'delivery') {
-          orderPayload.deliveryLat = deliveryLocation.lat;
-          orderPayload.deliveryLng = deliveryLocation.lng;
-        }
-
-        const response = await api('/api/orders', 'POST', orderPayload);
-
-        // Keep client state in sync immediately so payment summary shows the newly placed order without waiting for socket refresh.
-        if (response?.order?.id) {
-          const newOrderId = Number(response.order.id);
-          state.orders = [
-            response.order,
-            ...(state.orders || []).filter((existing) => Number(existing.id) !== newOrderId)
-          ];
-        }
-
-        rememberClientOrder(response.order.id);
-        setPendingPaymentOrder(response.order.id);
-        setSelectedTrackingOrder(response.order.id);
-        cart = [];
-        document.getElementById('notes').value = '';
-        clearPlaceOrderDraft();
-        if (PAYMENT_TEST_MODE) {
-          switchView('tracking', document.querySelector('.nav-item[data-view="tracking"]'));
-        } else {
-          switchView('payment', document.querySelector('.nav-item[data-view="payment"]'));
-        }
-        renderAll();
-      } catch (e) {
-        alert(e.message);
-      }
-    }
-
-    function renderTracking() {
-      const scopedOrders = getClientScopedOrders();
-
-      if (!scopedOrders.length) {
-        document.getElementById('tpills').innerHTML = '';
-        document.getElementById('tcard').textContent = 'No orders from this device yet.';
-        return;
-      }
-
-      if (!selectedTrackingOrderId || !scopedOrders.some((o) => o.id === selectedTrackingOrderId)) {
-        setSelectedTrackingOrder(scopedOrders[0].id);
-      }
-
-      document.getElementById('tpills').innerHTML = scopedOrders.slice(0, 8).map((o) => `
-        <div class="pill ${o.id === selectedTrackingOrderId ? 'active' : ''}" onclick="selectOrder(${o.id})">${o.label}</div>
-      `).join('');
-
-      const o = scopedOrders.find((x) => x.id === selectedTrackingOrderId);
-      const elapsed = Math.floor((Date.now() - o.createdAt) / 60000);
-      const left = o.status === 'delivered' ? 0 : Math.max(0, o.etaMinutes - elapsed);
-      document.getElementById('tcard').innerHTML = `
-        ${receiptMarkup(o)}
-        <div class="progress"><div class="fill" style="width:${o.progress || 0}%;"></div></div>
-        <div style="font-size:11px;color:var(--color-text-secondary);">${o.progress || 0}% complete · ${o.status === 'delivered' ? 'Delivered' : `ETA ${left}m`} · ${o.paid ? 'Paid' : 'Pending payment'}</div>
-        ${PAYMENT_TEST_MODE || o.paid ? '' : '<div style="margin-top:10px;"><button class="btn" onclick="openRetryPayment(' + Number(o.id) + ')">Continue payment</button></div>'}
       `;
+    }).join('');
+  }
+
+  function placeholderHTML(emoji) {
+    return `<div class="menu-img-placeholder"><div class="placeholder-emoji">${emoji}</div><div class="placeholder-lbl">Photo coming soon</div></div>`;
+  }
+  window.placeholderHTML = placeholderHTML;
+
+  function refreshMenuQty(id) {
+    const el = document.getElementById(`mq-${id}`);
+    if (!el) return;
+    const line = cart.find(l => Number(l.menuItemId) === Number(id));
+    el.textContent = String(Number(line?.qty || 0));
+  }
+
+  // ── CART ─────────────────────────────────────────────────
+  function addToCart(menuItemId) {
+    const item = appState.menu.find(m => m.id === menuItemId && Number(m.available) === 1);
+    if (!item) { showWarn('This item is currently unavailable.'); return; }
+    const ex = cart.find(c => c.menuItemId === menuItemId);
+    if (ex) ex.qty++;
+    else cart.push({ menuItemId, name: item.name, price: Number(item.price), qty: 1 });
+    afterCartUpdate(menuItemId);
+  }
+
+  function updateCartQty(menuItemId, delta) {
+    const id = Number(menuItemId); const d = Number(delta);
+    if (!id || !d) return;
+    const line = cart.find(l => Number(l.menuItemId) === id);
+    if (!line) { if (d > 0) addToCart(id); return; }
+    const next = Number(line.qty) + d;
+    if (next <= 0) cart = cart.filter(l => Number(l.menuItemId) !== id);
+    else line.qty = next;
+    afterCartUpdate(id);
+  }
+
+  function afterCartUpdate(menuItemId) {
+    renderCart();
+    refreshMenuQty(menuItemId);
+    saveDraft();
+    syncMobileCartFab();
+  }
+
+  function syncCartWithMenu() {
+    const avail = new Map((appState.menu || []).filter(m => Number(m.available) === 1).map(m => [Number(m.id), m]));
+    cart = cart.filter(l => avail.has(Number(l.menuItemId))).map(l => {
+      const s = avail.get(Number(l.menuItemId));
+      return { ...l, name: s.name, price: Number(s.price) };
+    });
+    saveDraft();
+  }
+
+  function cartHTML() {
+    if (!cart.length) return `<div class="cart-empty"><div class="cart-empty-icon">🛒</div><div>Nothing added yet</div><div style="font-size:11px;color:var(--ink-xl);">Tap + on any item to start</div></div>`;
+    return cart.map(i => `
+      <div class="cart-item">
+        <div class="c-qty-ctrl">
+          <button class="c-qty-btn" onclick="updateCartQty(${i.menuItemId},-1)">−</button>
+          <div class="c-qty-val">${i.qty}</div>
+          <button class="c-qty-btn" onclick="updateCartQty(${i.menuItemId},1)">+</button>
+        </div>
+        <div class="c-name">${esc(i.name)}</div>
+        <div class="c-price">${money(i.price * i.qty)}</div>
+      </div>
+    `).join('');
+  }
+
+  function totalsHTML() {
+    const inclusive = cart.reduce((s,i) => s + i.price * i.qty, 0);
+    const sub = Number((inclusive / 1.05).toFixed(2));
+    const gst = Number((inclusive - sub).toFixed(2));
+    const cgst = Number((gst / 2).toFixed(2));
+    const sgst = Number((gst - cgst).toFixed(2));
+    return { inclusive, sub, cgst, sgst };
+  }
+
+  function renderCart() {
+    const { inclusive, sub, cgst, sgst } = totalsHTML();
+    currentCartTotal = inclusive;
+    ['sub-total','cgst','sgst','grand-total'].forEach((id, i) => {
+      const el = document.getElementById(id);
+      if (el) el.textContent = money([sub, cgst, sgst, inclusive][i]);
+    });
+    const items = document.getElementById('cart-items');
+    if (items) items.innerHTML = cartHTML();
+    const count = cart.reduce((s,i) => s + i.qty, 0);
+    const badge = document.getElementById('cart-count-badge');
+    if (badge) badge.textContent = String(count);
+    const mob = document.getElementById('cart-mobile-badge');
+    if (mob) { mob.textContent = String(count); mob.style.display = count ? 'flex' : 'none'; }
+    updateDeliveryUI();
+    updateDeliveryLock(inclusive);
+
+    // Sync mobile cart sheet if open
+    const sheet = document.getElementById('mobile-cart-sheet');
+    if (sheet && sheet.classList.contains('open')) injectMobileCartContent();
+  }
+
+  function updateDeliveryLock(total) {
+    if (total >= 500 && orderType === 'delivery' && !deliveryUnlockedShown) {
+      deliveryUnlockedShown = true;
+      showUnlockPopup();
     }
+    if (total < 500) deliveryUnlockedShown = false;
+  }
 
-    function renderPayment() {
-      const scopedOrders = getClientScopedOrders().slice().sort((a, b) => Number(b.createdAt || 0) - Number(a.createdAt || 0));
-      const selectedPendingOrder = scopedOrders.find((o) => Number(o.id) === Number(pendingPaymentOrderId));
-      const lastOrderId = Number(getLastClientOrderId());
-      const latestCurrentOrder = scopedOrders.find((o) => Number(o.id) === lastOrderId);
-      const latestUnpaidOrder = scopedOrders.find((o) => Number(o.paid) !== 1) || null;
-      const order = selectedPendingOrder || latestCurrentOrder || latestUnpaidOrder || scopedOrders[0] || null;
-      const sum = document.getElementById('pay-summary');
-      const btn = document.getElementById('pay-btn');
+  function showUnlockPopup() {
+    const p = document.getElementById('unlock-popup');
+    p.classList.add('show');
+    setTimeout(() => p.classList.remove('show'), 2800);
+  }
 
-      if (!order) {
-        sum.innerHTML = '<div class="sum-row">No pending order</div>';
-        btn.textContent = 'Continue payment';
-        btn.disabled = true;
-        return;
-      }
-
-      const isPending = Number(order.paid) !== 1;
-      if (isPending) {
-        setPendingPaymentOrder(order.id);
-      }
-      if (PAYMENT_TEST_MODE) {
-        btn.disabled = true;
-        btn.textContent = 'Payment disabled for testing';
-      } else {
-        btn.disabled = !isPending;
-        btn.textContent = isPending ? 'Continue payment' : 'Already paid';
-      }
-
-      sum.innerHTML = receiptMarkup(order);
+  function syncMobileCartFab() {
+    const fab = document.getElementById('mobile-cart-fab');
+    if (!fab) return;
+    const count = cart.reduce((s,i) => s + i.qty, 0);
+    const isMobile = window.innerWidth <= 900;
+    if (isMobile && count > 0) {
+      fab.style.display = 'block';
+      document.getElementById('mcp-badge').textContent = String(count);
+      document.getElementById('mcp-total').textContent = money(currentCartTotal);
+    } else {
+      fab.style.display = 'none';
     }
+  }
 
-    async function payOrder() {
-      if (PAYMENT_TEST_MODE) {
-        alert('Payment is temporarily disabled for testing. Re-enable before final push.');
-        return;
+  // ── MOBILE CART SHEET ─────────────────────────────────────
+  function injectMobileCartContent() {
+    const { inclusive, sub, cgst, sgst } = totalsHTML();
+    const content = document.getElementById('mcs-cart-content');
+    if (!content) return;
+    content.innerHTML = `
+      <div style="padding:0 16px 16px;">
+        <div style="font-family:'Playfair Display',serif;font-size:26px;font-weight:700;color:var(--ink);margin-bottom:12px;">Your Order</div>
+        <div>${cartHTML()}</div>
+        <textarea class="notes-area" id="mcs-notes" rows="2" style="margin-top:12px;" placeholder="Special requests…">${esc(document.getElementById('notes')?.value || '')}</textarea>
+        <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border);">
+          <div class="tot-row"><span>Subtotal</span><span>${money(sub)}</span></div>
+          <div class="tot-row"><span>CGST (2.5%)</span><span>${money(cgst)}</span></div>
+          <div class="tot-row"><span>SGST (2.5%)</span><span>${money(sgst)}</span></div>
+          <div class="tot-row grand"><span>Grand Total</span><span>${money(inclusive)}</span></div>
+        </div>
+        <button class="place-btn" style="border-radius:12px;margin-top:14px;" onclick="closeMobileCart();placeOrder()">Place Order & Checkout →</button>
+        ${document.getElementById('checkout-warn')?.textContent ? `<div style="margin-top:8px;padding:10px;background:#fef2f2;color:#dc2626;border-radius:10px;font-size:13px;font-weight:600;">${esc(document.getElementById('checkout-warn')?.textContent||'')}</div>` : ''}
+      </div>
+    `;
+    // Sync notes
+    const mcsNotes = document.getElementById('mcs-notes');
+    if (mcsNotes) mcsNotes.addEventListener('input', () => {
+      const n = document.getElementById('notes');
+      if (n) n.value = mcsNotes.value;
+    });
+  }
+
+  function openMobileCart() {
+    injectMobileCartContent();
+    const sheet = document.getElementById('mobile-cart-sheet');
+    sheet.classList.add('open');
+    document.body.style.overflow = 'hidden';
+  }
+
+  function closeMobileCart() {
+    const sheet = document.getElementById('mobile-cart-sheet');
+    sheet.classList.remove('open');
+    document.body.style.overflow = '';
+  }
+
+  // ── WARNINGS ─────────────────────────────────────────────
+  let warnTimer = null;
+  function showWarn(msg) {
+    const el = document.getElementById('global-warn');
+    el.textContent = msg; el.style.display = 'block';
+    const cw = document.getElementById('checkout-warn');
+    if (cw) { cw.textContent = msg; cw.style.display = 'block'; }
+    clearTimeout(warnTimer);
+    warnTimer = setTimeout(() => { el.style.display = 'none'; }, 3000);
+  }
+  function clearWarn() {
+    const el = document.getElementById('global-warn');
+    const cw = document.getElementById('checkout-warn');
+    if (el) el.style.display = 'none';
+    if (cw) { cw.textContent = ''; cw.style.display = 'none'; }
+  }
+
+  // ── DELIVERY LOCATION ─────────────────────────────────────
+  function shareDeliveryLocation() {
+    if (!navigator.geolocation) { showWarn('Geolocation not supported'); return; }
+    navigator.geolocation.getCurrentPosition(pos => {
+      deliveryLocation.lat = pos.coords.latitude;
+      deliveryLocation.lng = pos.coords.longitude;
+      document.getElementById('loc-status').textContent = `📍 Shared: ${deliveryLocation.lat.toFixed(4)}, ${deliveryLocation.lng.toFixed(4)}`;
+      const btn = document.getElementById('share-loc-btn');
+      btn.textContent = '✅ Location Shared'; btn.style.background = '#235f45';
+    }, err => { showWarn('Could not get location. Enable location services.'); console.error(err); });
+  }
+
+  // ── PLACE ORDER ───────────────────────────────────────────
+  async function placeOrder() {
+    const restaurant = selectedRestaurant();
+    if (restaurant?.acceptingOrders === false) { alert('Outlet not accepting orders.'); return; }
+    syncCartWithMenu(); renderCart();
+    if (!cart.length) { showWarn('Add items to place an order.'); return; }
+    const customerName = String(document.getElementById('customer-name')?.value || '').trim();
+    const customerMobile = String(document.getElementById('customer-mobile')?.value || '').trim();
+    if (!customerName || !customerMobile) { alert('Please enter your name and mobile number.'); return; }
+    const schedText = getScheduleText();
+    if (['takeaway','preorder'].includes(orderType) && !schedText) { alert('Please select schedule date & time.'); return; }
+    if (orderType === 'delivery' && currentCartTotal < 500) { showWarn('Minimum ₹500 required for delivery.'); return; }
+    if (orderType === 'delivery' && (!deliveryLocation.lat || !deliveryLocation.lng)) { alert('Please share your location for delivery.'); return; }
+    clearWarn();
+    const baseNotes = String(document.getElementById('notes')?.value || '').trim();
+    const notes = [baseNotes, schedText].filter(Boolean).join(' | ');
+    const payload = {
+      restaurantCode: selectedRestaurantCode, orderType,
+      tableNumber: null, notes, customerName, customerMobile,
+      items: cart.map(i => ({ menuItemId: i.menuItemId, qty: i.qty }))
+    };
+    if (orderType === 'delivery') { payload.deliveryLat = deliveryLocation.lat; payload.deliveryLng = deliveryLocation.lng; }
+    try {
+      const res = await api('/api/orders', 'POST', payload);
+      if (res?.order?.id) {
+        const newId = Number(res.order.id);
+        appState.orders = [res.order, ...(appState.orders || []).filter(o => Number(o.id) !== newId)];
       }
-      if (!pendingPaymentOrderId) return;
-      try {
-        const order = state.orders.find((o) => o.id === pendingPaymentOrderId);
-        if (!order) {
-          alert('Pending order not found for payment.');
-          return;
-        }
-
-        if (!razorpayConfig.enabled || !razorpayConfig.keyId) {
-          alert('Online payment is not configured yet. Please configure Razorpay keys.');
-          return;
-        }
-
-        const upiIdInput = document.getElementById('upi-id');
-        const upiId = String(upiIdInput?.value || '').trim();
-        if (selectedPaymentMethod === 'upi') {
-          const upiPattern = /^[a-zA-Z0-9._-]{2,}@[a-zA-Z]{2,}$/;
-          if (!upiPattern.test(upiId)) {
-            alert('Please enter a valid UPI ID (example@bank).');
-            return;
-          }
-          try { localStorage.setItem(CLIENT_UPI_ID_KEY, upiId); } catch (_error) {}
-        }
-
-        const gateway = await api(`/api/orders/${pendingPaymentOrderId}/razorpay-order`, 'POST', {
-          paymentMethod: selectedPaymentMethod
-        });
-
-        const preferredInstrument = selectedPaymentMethod === 'upi'
-          ? { method: 'upi' }
-          : { method: 'card' };
-        const alternateInstrument = selectedPaymentMethod === 'upi'
-          ? { method: 'card' }
-          : { method: 'upi' };
-
-        const methodOptions = selectedPaymentMethod === 'upi'
-          ? { upi: true, card: true, netbanking: false, wallet: false, emi: false, paylater: false }
-          : { upi: true, card: true, netbanking: false, wallet: false, emi: false, paylater: false };
-
-        const checkout = new Razorpay({
-          key: gateway.keyId,
-          amount: gateway.amountPaise,
-          currency: gateway.currency || 'INR',
-          name: 'FoodOrder',
-          description: `Payment for ${order.label}`,
-          order_id: gateway.gatewayOrderId,
-          method: methodOptions,
-          prefill: {
-            method: selectedPaymentMethod,
-            ...(selectedPaymentMethod === 'upi' ? { vpa: upiId } : {})
-          },
-          config: {
-            display: {
-              blocks: {
-                preferred: {
-                  name: selectedPaymentMethod === 'upi' ? 'Pay using UPI' : 'Pay using Card',
-                  instruments: [preferredInstrument]
-                },
-                alternate: {
-                  name: selectedPaymentMethod === 'upi' ? 'Pay using Card' : 'Pay using UPI',
-                  instruments: [alternateInstrument]
-                }
-              },
-              sequence: ['block.preferred', 'block.alternate'],
-              preferences: {
-                show_default_blocks: false
-              }
-            }
-          },
-          handler: async function (response) {
-            try {
-              const verification = await api(`/api/orders/${pendingPaymentOrderId}/razorpay/verify`, 'POST', {
-                paymentMethod: selectedPaymentMethod,
-                razorpayOrderId: response.razorpay_order_id,
-                razorpayPaymentId: response.razorpay_payment_id,
-                razorpaySignature: response.razorpay_signature
-              });
-              const paidOrder = verification?.order;
-              if (paidOrder?.id) {
-                state.orders = [
-                  paidOrder,
-                  ...(state.orders || []).filter((existing) => Number(existing.id) !== Number(paidOrder.id))
-                ];
-              }
-              if (Number(paidOrder?.paid) === 1) {
-                setPendingPaymentOrder(0);
-              }
-              renderAll();
-            } catch (error) {
-              alert(error.message || 'Payment verification failed');
-            }
-          }
-        });
-
-        checkout.on('payment.failed', function (response) {
-          const reason = response?.error?.description || response?.error?.reason || 'Payment failed';
-          alert(reason);
-        });
-
-        checkout.open();
-      } catch (e) {
-        alert(e.message);
-      }
-    }
-
-    function selectOrder(id) {
-      setSelectedTrackingOrder(id);
-      renderTracking();
-    }
-
-    function renderAll() {
-      renderRestaurantHero();
-      syncCartWithMenu();
-      renderDineTableOptions();
-      renderCategoryTabs();
-      renderMenu();
-      renderCart();
-      renderTracking();
+      rememberOrder(res.order.id);
+      setPendingPayment(res.order.id);
+      setSelectedTracking(res.order.id);
+      cart = []; document.getElementById('notes').value = '';
+      clearDraft(); renderCart(); syncMobileCartFab();
+      if (PAYMENT_TEST_MODE) switchView('tracking', null);
+      else switchView('payment', null);
       renderPayment();
+    } catch (e) { alert(e.message); }
+  }
+
+  // ── RECEIPT ───────────────────────────────────────────────
+  function receiptMarkup(o) {
+    const created = new Date(o.createdAt || Date.now());
+    const sub = (o.items || []).reduce((s,i) => s + Number(i.price||0)*Number(i.qty||0), 0);
+    const gst = Number(o.gst || o.tax || 0);
+    const cgst = Number(o.cgst || (gst / 2));
+    const sgst = Number(o.sgst || (gst - cgst));
+    const total = Number(o.total || (sub + cgst + sgst));
+    const restoName = esc(appState.restaurant?.name || selectedRestaurant()?.name || 'Restaurant');
+    return `
+      <div class="receipt-card">
+        <div class="receipt-head">
+          <div class="receipt-brand">${restoName}</div>
+          <div class="receipt-tag">Tax Invoice · ${esc(o.label || '-')}</div>
+        </div>
+        <div class="receipt-body">
+          <div class="receipt-meta-grid">
+            <div class="rmg-item"><div class="rmg-label">Order ID</div><div class="rmg-val">${esc(o.label||'-')}</div></div>
+            <div class="rmg-item"><div class="rmg-label">Date</div><div class="rmg-val">${created.toLocaleDateString('en-GB')}</div></div>
+            <div class="rmg-item"><div class="rmg-label">Time</div><div class="rmg-val">${created.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:false})}</div></div>
+            <div class="rmg-item"><div class="rmg-label">${o.orderType==='dine'?'Table':'Type'}</div><div class="rmg-val">${o.orderType==='dine'?(o.tableNumber?`T${o.tableNumber}`:'-'):esc(o.orderType||'-')}</div></div>
+          </div>
+          <div class="r-table-head"><span>Item</span><span>Qty</span><span>Rate</span><span>Amount</span></div>
+          ${(o.items||[]).map(i => `<div class="r-table-row"><span>${esc(i.name)}</span><span>${i.qty}</span><span>${money(i.price)}</span><span>${money(Number(i.price)*Number(i.qty))}</span></div>`).join('')}
+          <div class="receipt-divider"></div>
+          <div class="receipt-tot-line"><span>Subtotal</span><span>${money(sub)}</span></div>
+          <div class="receipt-tot-line"><span>CGST @2.5%</span><span>${money(cgst)}</span></div>
+          <div class="receipt-tot-line"><span>SGST @2.5%</span><span>${money(sgst)}</span></div>
+          <div class="receipt-grand"><span>Grand Total</span><span>${money(total)}</span></div>
+        </div>
+        <div class="receipt-foot">
+          <span>${o.paid ? 'Paid via ' + esc((o.paymentMethod||'card').toUpperCase()) : 'Payment pending'} · Status: ${esc(o.status||'-')}</span>
+          <span class="${o.paid ? 'paid-badge' : 'unpaid-badge'}">${o.paid ? '✅ Paid' : '⏳ Pending'}</span>
+        </div>
+      </div>
+    `;
+  }
+
+  // ── TRACKING ──────────────────────────────────────────────
+  function renderTracking() {
+    const orders = clientOrders();
+    const pills = document.getElementById('track-pills');
+    const card = document.getElementById('track-card');
+    if (!orders.length) {
+      pills.innerHTML = '';
+      card.innerHTML = '<div class="no-orders-msg">No orders from this device yet.</div>';
+      return;
     }
-
-    function updateTime() {
-      const now = new Date();
-      document.getElementById('time').textContent = `Live · ${now.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}`;
+    if (!selectedTrackingOrderId || !orders.some(o => o.id === selectedTrackingOrderId)) {
+      setSelectedTracking(orders[0].id);
     }
+    pills.innerHTML = orders.slice(0,8).map(o => `
+      <div class="track-pill ${o.id === selectedTrackingOrderId ? 'active' : ''}" onclick="selectOrder(${o.id})">${esc(o.label)}</div>
+    `).join('');
+    const o = orders.find(x => x.id === selectedTrackingOrderId);
+    const elapsed = Math.floor((Date.now() - o.createdAt) / 60000);
+    const eta = o.status === 'delivered' ? 0 : Math.max(0, (o.etaMinutes||15) - elapsed);
+    card.innerHTML = `
+      ${receiptMarkup(o)}
+      <div class="progress-wrap" style="max-width:560px;">
+        <div class="progress-bar"><div class="progress-fill" style="width:${o.progress||0}%"></div></div>
+        <div class="progress-info">${o.progress||0}% complete · ${o.status === 'delivered' ? 'Delivered 🎉' : `ETA ~${eta} min`} · ${o.paid ? 'Paid' : 'Payment pending'}</div>
+      </div>
+      ${PAYMENT_TEST_MODE || o.paid ? '' : `<div style="max-width:560px;"><button class="retry-btn" onclick="openRetryPayment(${Number(o.id)})">Continue Payment →</button></div>`}
+    `;
+  }
 
-    (async function init() {
-      window.addEventListener('popstate', (event) => {
-        const stateView = String(event.state?.view || '').toLowerCase();
-        const hashView = String(window.location.hash || '').replace(/^#/, '').toLowerCase();
-        const targetView = ['order', 'tracking', 'payment'].includes(stateView)
-          ? stateView
-          : (['order', 'tracking', 'payment'].includes(hashView) ? hashView : 'order');
+  function selectOrder(id) { setSelectedTracking(id); renderTracking(); }
 
-        document.querySelectorAll('.content').forEach((c) => c.classList.remove('active'));
-        document.getElementById(`view-${targetView}`).classList.add('active');
-        document.querySelectorAll('.nav-item').forEach((n) => n.classList.remove('active'));
-        const nav = document.querySelector(`.nav-item[data-view="${targetView}"]`);
-        if (nav) nav.classList.add('active');
-        document.getElementById('title').textContent = targetView.charAt(0).toUpperCase() + targetView.slice(1);
-      });
+  function openRetryPayment(id) {
+    setPendingPayment(id);
+    switchView('payment', null);
+    renderPayment();
+  }
 
-      updateTime();
-      setInterval(updateTime, 30000);
+  // ── PAYMENT ───────────────────────────────────────────────
+  function renderPayment() {
+    const orders = clientOrders().sort((a,b) => Number(b.createdAt||0) - Number(a.createdAt||0));
+    const selected = orders.find(o => Number(o.id) === Number(pendingPaymentOrderId));
+    const lastId = getLastOrderId();
+    const latest = orders.find(o => Number(o.id) === lastId);
+    const unpaid = orders.find(o => Number(o.paid) !== 1);
+    const order = selected || latest || unpaid || orders[0] || null;
+    const sum = document.getElementById('pay-summary');
+    const btn = document.getElementById('pay-btn');
+    if (!order) {
+      sum.innerHTML = '<div style="font-size:13px;color:var(--ink-l);">No pending order found.</div>';
+      btn.disabled = true; btn.textContent = 'Continue Payment'; return;
+    }
+    const isPending = Number(order.paid) !== 1;
+    if (isPending) setPendingPayment(order.id);
+    btn.disabled = PAYMENT_TEST_MODE || !isPending;
+    btn.textContent = PAYMENT_TEST_MODE ? 'Payment disabled for testing' : isPending ? 'Continue Payment' : 'Already Paid';
+    sum.innerHTML = receiptMarkup(order);
+  }
 
-      const today = new Date();
-      const yyyy = today.getFullYear();
-      const mm = String(today.getMonth() + 1).padStart(2, '0');
-      const dd = String(today.getDate()).padStart(2, '0');
-      const todayText = `${yyyy}-${mm}-${dd}`;
-      const dateInput = document.getElementById('schedule-date');
-      dateInput.min = todayText;
-      dateInput.value = todayText;
-
-      const timeInput = document.getElementById('schedule-time');
-      const hh = String(today.getHours()).padStart(2, '0');
-      const mi = String(today.getMinutes()).padStart(2, '0');
-      timeInput.value = `${hh}:${mi}`;
-
-      const notesInput = document.getElementById('notes');
-      if (notesInput) {
-        notesInput.addEventListener('input', persistPlaceOrderDraft);
-      }
-      dateInput.addEventListener('change', persistPlaceOrderDraft);
-      timeInput.addEventListener('change', persistPlaceOrderDraft);
-
-      clientOrderIds = new Set(loadStoredNumberArray(CLIENT_ORDER_IDS_KEY));
-      setSelectedTrackingOrder(Number(localStorage.getItem(CLIENT_SELECTED_ORDER_KEY) || 0));
-      setPendingPaymentOrder(Number(localStorage.getItem(CLIENT_PENDING_ORDER_KEY) || 0));
-      selectedRestaurantCode = String(localStorage.getItem(CLIENT_SELECTED_RESTAURANT_KEY) || 'default').trim() || 'default';
-
-      await loadRestaurants();
-      await loadStateForSelectedRestaurant();
-      try {
-        razorpayConfig = await api('/api/payments/razorpay/config');
-      } catch (_error) {
-        razorpayConfig = { enabled: false, keyId: null };
-      }
-
-      const upiIdInput = document.getElementById('upi-id');
-      if (upiIdInput) {
-        try { upiIdInput.value = String(localStorage.getItem(CLIENT_UPI_ID_KEY) || ''); } catch (_error) {}
-      }
-
-      restorePlaceOrderDraft();
-
-      // Restore lock state
-      renderAll();
-
-      const initialHashView = String(window.location.hash || '').replace(/^#/, '').toLowerCase();
-      const initialView = ['order', 'tracking', 'payment'].includes(initialHashView) ? initialHashView : 'order';
-      history.replaceState({ view: initialView }, '', `#${initialView}`);
-      document.querySelectorAll('.content').forEach((c) => c.classList.remove('active'));
-      document.getElementById(`view-${initialView}`).classList.add('active');
-      document.querySelectorAll('.nav-item').forEach((n) => n.classList.remove('active'));
-      const initialNav = document.querySelector(`.nav-item[data-view="${initialView}"]`);
-      if (initialNav) initialNav.classList.add('active');
-      document.getElementById('title').textContent = initialView.charAt(0).toUpperCase() + initialView.slice(1);
-
-      if (statePollTimer) clearInterval(statePollTimer);
-      statePollTimer = setInterval(async () => {
-        try {
-          await loadStateForSelectedRestaurant();
-          renderActiveViewOnly();
-        } catch (_error) {
+  async function payOrder() {
+    if (PAYMENT_TEST_MODE) { alert('Payment disabled for testing.'); return; }
+    if (!pendingPaymentOrderId) return;
+    try {
+      const order = appState.orders.find(o => o.id === pendingPaymentOrderId);
+      if (!order) { alert('Order not found.'); return; }
+      if (!razorpayConfig.enabled || !razorpayConfig.keyId) { alert('Payment not configured. Please configure Razorpay.'); return; }
+      const gateway = await api(`/api/orders/${pendingPaymentOrderId}/razorpay-order`, 'POST', { paymentMethod: selectedPaymentMethod });
+      const rzp = new Razorpay({
+        key: gateway.keyId, amount: gateway.amountPaise,
+        currency: gateway.currency || 'INR', name: 'Tableside',
+        description: `Payment for ${order.label}`, order_id: gateway.gatewayOrderId,
+        handler: async function(response) {
+          try {
+            const v = await api(`/api/orders/${pendingPaymentOrderId}/razorpay/verify`, 'POST', {
+              paymentMethod: selectedPaymentMethod,
+              razorpayOrderId: response.razorpay_order_id,
+              razorpayPaymentId: response.razorpay_payment_id,
+              razorpaySignature: response.razorpay_signature
+            });
+            if (v?.order?.id) {
+              appState.orders = [v.order, ...(appState.orders||[]).filter(o => Number(o.id) !== Number(v.order.id))];
+            }
+            if (Number(v?.order?.paid) === 1) setPendingPayment(0);
+            renderPayment(); renderTracking();
+          } catch (err) { alert(err.message || 'Verification failed'); }
         }
-      }, 7000);
-    })();
-  </script>
+      });
+      rzp.on('payment.failed', r => alert(r?.error?.description || 'Payment failed'));
+      rzp.open();
+    } catch (e) { alert(e.message); }
+  }
+
+  // ── CLOCK ────────────────────────────────────────────────
+  function updateClock() {
+    const el = document.getElementById('clock');
+    if (el) el.textContent = new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true });
+  }
+
+  // ── RENDER ALL ───────────────────────────────────────────
+  function renderAll() {
+    renderRestoHero();
+    syncCartWithMenu();
+    renderTableOptions();
+    renderCategories();
+    renderMenu();
+    renderCart();
+    syncMobileCartFab();
+  }
+
+  // ── INIT ─────────────────────────────────────────────────
+  (async function init() {
+    window.addEventListener('popstate', e => {
+      const v = ['order','tracking','payment'].includes(String(e.state?.view||'')) ? e.state.view : 'order';
+      document.querySelectorAll('.content').forEach(c => c.classList.remove('active'));
+      document.getElementById(`view-${v}`).classList.add('active');
+      document.querySelectorAll('.nav-item,.mnav-btn').forEach(n => n.classList.remove('active'));
+      document.querySelectorAll(`[data-view="${v}"]`).forEach(n => n.classList.add('active'));
+      document.getElementById('page-title').textContent = { order: 'Place Order', tracking: 'Track Order', payment: 'Payment' }[v];
+    });
+
+    window.addEventListener('resize', syncMobileCartFab);
+
+    updateClock(); setInterval(updateClock, 30000);
+
+    // Set default date/time
+    const today = new Date();
+    const pad = n => String(n).padStart(2,'0');
+    const todayStr = `${today.getFullYear()}-${pad(today.getMonth()+1)}-${pad(today.getDate())}`;
+    const dateIn = document.getElementById('schedule-date');
+    if (dateIn) { dateIn.min = todayStr; dateIn.value = todayStr; }
+    const timeIn = document.getElementById('schedule-time');
+    if (timeIn) timeIn.value = `${pad(today.getHours())}:${pad(today.getMinutes())}`;
+
+    // Restore persisted state
+    clientOrderIds = new Set(loadNumArr(CLIENT_ORDER_IDS_KEY));
+    setSelectedTracking(Number(localStorage.getItem(CLIENT_SELECTED_ORDER_KEY) || 0));
+    setPendingPayment(Number(localStorage.getItem(CLIENT_PENDING_ORDER_KEY) || 0));
+    selectedRestaurantCode = String(localStorage.getItem(CLIENT_RESTAURANT_KEY) || 'default').trim() || 'default';
+
+    try { localStorage.setItem(CLIENT_RESTAURANT_KEY, selectedRestaurantCode); } catch {}
+
+    // Load data
+    await loadRestaurants();
+    await loadState();
+    try { razorpayConfig = await api('/api/payments/razorpay/config'); } catch { razorpayConfig = { enabled: false, keyId: null }; }
+
+    const upiIn = document.getElementById('upi-id');
+    if (upiIn) try { upiIn.value = String(localStorage.getItem(CLIENT_UPI_KEY) || ''); } catch {}
+
+    restoreDraft();
+    renderAll();
+
+    // Handle initial hash
+    const hash = String(window.location.hash || '').replace(/^#/, '').toLowerCase();
+    const initView = ['order','tracking','payment'].includes(hash) ? hash : 'order';
+    try { history.replaceState({ view: initView }, '', `#${initView}`); } catch {}
+    document.querySelectorAll('.content').forEach(c => c.classList.remove('active'));
+    document.getElementById(`view-${initView}`).classList.add('active');
+    document.querySelectorAll('.nav-item,.mnav-btn').forEach(n => n.classList.remove('active'));
+    document.querySelectorAll(`[data-view="${initView}"]`).forEach(n => n.classList.add('active'));
+    document.getElementById('page-title').textContent = { order: 'Place Order', tracking: 'Track Order', payment: 'Payment' }[initView];
+
+    // Notes listener
+    const notesIn = document.getElementById('notes');
+    if (notesIn) notesIn.addEventListener('input', saveDraft);
+    const dateI = document.getElementById('schedule-date');
+    const timeI = document.getElementById('schedule-time');
+    if (dateI) dateI.addEventListener('change', saveDraft);
+    if (timeI) timeI.addEventListener('change', saveDraft);
+
+    // Poll for updates
+    if (pollTimer) clearInterval(pollTimer);
+    pollTimer = setInterval(async () => {
+      try {
+        await loadState();
+        const activeView = document.querySelector('.content.active')?.id?.replace('view-','') || 'order';
+        renderRestoHero();
+        if (activeView === 'order') { syncCartWithMenu(); renderCategories(); renderMenu(); renderCart(); syncMobileCartFab(); }
+        if (activeView === 'tracking') renderTracking();
+        if (activeView === 'payment') renderPayment();
+      } catch {}
+    }, 7000);
+  })();
+</script>
 </body>
 </html>
