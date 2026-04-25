@@ -863,6 +863,17 @@
                   <input class="inp" id="menu-edit-id" type="number" min="1" placeholder="Edit name by ID" />
                   <input class="inp" id="menu-edit-name" placeholder="New food name" />
                   <input class="inp" id="menu-csv-file" type="file" accept=".csv,text/csv" style="grid-column:span 2;" />
+                  <div id="csv-drop" style="
+                    grid-column:span 2;
+                    border:2px dashed var(--border);
+                    padding:16px;
+                    text-align:center;
+                    border-radius:10px;
+                    margin-top:10px;
+                    cursor:pointer;
+                  ">
+                    Drop CSV here or click
+                  </div>
                   <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text3);cursor:pointer;">
                     <input id="menu-csv-replace" type="checkbox" /> Replace existing menu on import
                   </label>
@@ -966,6 +977,24 @@
     return `₹${Number(v||0).toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2})}`;
   }
 
+  function showToast(msg, color = '#22c55e') {
+    const t = document.createElement('div');
+    t.innerText = msg;
+    Object.assign(t.style, {
+      position: 'fixed',
+      bottom: '20px',
+      right: '20px',
+      background: color,
+      color: '#fff',
+      padding: '10px 16px',
+      borderRadius: '8px',
+      fontSize: '12px',
+      zIndex: 9999
+    });
+    document.body.appendChild(t);
+    setTimeout(() => t.remove(), 3000);
+  }
+
   function esc(v) {
     return String(v||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
   }
@@ -994,7 +1023,7 @@
       const data = await res.json().catch(()=>({}));
       if (!res.ok) throw new Error(data.error||'Login failed');
       managementAuth = { token: data.token, restaurant: data.restaurant };
-      sessionStorage.setItem(MGMT_TOKEN_KEY, JSON.stringify(managementAuth));
+      localStorage.setItem(MGMT_TOKEN_KEY, JSON.stringify(managementAuth));
       document.getElementById('login-password').value = '';
       await startSession();
     } catch(e) { err.textContent = e.message||'Login failed'; }
@@ -1027,7 +1056,7 @@
   }
 
   function logoutManagement() {
-    sessionStorage.removeItem(MGMT_TOKEN_KEY);
+    localStorage.removeItem(MGMT_TOKEN_KEY);
     showLoginGate('Logged out.');
   }
 
@@ -1543,15 +1572,43 @@
 
   async function importMenuCsv() {
     const input = document.getElementById('menu-csv-file');
-    const replace = document.getElementById('menu-csv-replace').checked;
     const file = input?.files?.[0];
-    if (!file) { alert('Choose a CSV file first.'); return; }
+    if (!file) { showToast('Select CSV first', '#ef4444'); return; }
     try {
       const csvText = await file.text();
-      const result = await api('/api/menu/import-csv','POST',{csvText,replaceExisting:replace});
-      const inv = Array.isArray(result.invalidRows)?result.invalidRows.length:0;
-      alert(`Imported ${Number(result.inserted||0)} items\nRestaurant: ${result.restaurant?.name||'current'}\nSkipped: ${inv}`);
+      const rows = csvText.split('\n').filter(r => r.trim());
+      const items = [];
+      const errors = [];
+
+      rows.forEach((row, i) => {
+        const [name, price, category] = row.split(',');
+
+        if (!name || !price) {
+          errors.push(`Row ${i + 1}: Missing`);
+          return;
+        }
+
+        if (isNaN(price)) {
+          errors.push(`Row ${i + 1}: Invalid price`);
+          return;
+        }
+
+        items.push({
+          name: name.trim(),
+          price: Number(price),
+          category: (category || 'general').trim()
+        });
+      });
+
+      if (errors.length) {
+        alert(errors.slice(0, 5).join('\n'));
+        return;
+      }
+
+      await api('/api/menu/bulk','POST',{items});
+      showToast('Menu uploaded');
       input.value='';
+      await fetchState();
     } catch(e) { alert(e.message); }
   }
 
@@ -1680,10 +1737,34 @@
       const el=document.getElementById(id); if(el) el.value=fmt(today);
     });
 
-    const persisted=sessionStorage.getItem(MGMT_TOKEN_KEY);
+    const drop = document.getElementById('csv-drop');
+    const csvInput = document.getElementById('menu-csv-file');
+    if (drop && csvInput) {
+      drop.onclick = () => csvInput.click();
+      drop.ondragover = e => {
+        e.preventDefault();
+        drop.style.borderColor = '#f46b35';
+      };
+      drop.ondragleave = () => {
+        drop.style.borderColor = '';
+      };
+      drop.ondrop = e => {
+        e.preventDefault();
+        drop.style.borderColor = '';
+        const file = e.dataTransfer.files[0];
+        if (file && file.name.toLowerCase().endsWith('.csv')) {
+          csvInput.files = e.dataTransfer.files;
+          showToast('CSV loaded');
+        } else {
+          showToast('Drop a CSV file', '#ef4444');
+        }
+      };
+    }
+
+    const persisted=localStorage.getItem(MGMT_TOKEN_KEY);
     if (persisted) { try { managementAuth=JSON.parse(persisted); } catch { managementAuth=null; } }
     if (!managementAuth?.token) { showLoginGate(); return; }
-    try { await startSession(); } catch { sessionStorage.removeItem(MGMT_TOKEN_KEY); showLoginGate('Session expired. Please login.'); }
+    try { await startSession(); } catch { localStorage.removeItem(MGMT_TOKEN_KEY); showLoginGate('Session expired. Please login.'); }
   })();
 </script>
 </body>

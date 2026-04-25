@@ -1257,6 +1257,69 @@ app.delete('/api/menu/:id', requireManagementAuth, async (req, res) => {
   return res.json({ ok: true });
 });
 
+app.post('/api/menu/bulk', requireManagementAuth, async (req, res) => {
+  const actor = `${getActor(req)}:${req.management.restaurantCode}`;
+  const items = Array.isArray(req.body?.items) ? req.body.items : [];
+
+  if (!items.length) return res.status(400).json({ error: 'Menu items are required' });
+
+  const rows = [];
+  const errors = [];
+
+  items.forEach((item, index) => {
+    const name = String(item?.name || '').trim();
+    const price = Math.round(Number(item?.price || 0));
+    const category = String(item?.cat || item?.category || 'general').trim().toLowerCase() || 'general';
+    const description = String(item?.desc || item?.description || 'Custom menu item').trim() || 'Custom menu item';
+    const emoji = String(item?.emoji || '🍽️').trim() || '🍽️';
+    const available = !(item?.available === false || item?.available === 0 || item?.available === '0');
+
+    if (!name) {
+      errors.push(`Row ${index + 1}: Name is required`);
+      return;
+    }
+    if (!Number.isFinite(price) || price <= 0) {
+      errors.push(`Row ${index + 1}: Price must be greater than 0`);
+      return;
+    }
+
+    rows.push({ name, price, category, description, emoji, available });
+  });
+
+  if (errors.length) return res.status(400).json({ error: errors[0], errors });
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    await client.query('DELETE FROM menu_items WHERE restaurant_id = $1', [req.management.restaurantId]);
+
+    for (const row of rows) {
+      await client.query(
+        `INSERT INTO menu_items (restaurant_id, name, description, price, emoji, category, available)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+        [req.management.restaurantId, row.name, row.description, row.price, row.emoji, row.category, row.available]
+      );
+    }
+
+    await logAudit(client, {
+      action: 'menu_bulk_uploaded',
+      entityType: 'menu',
+      actor,
+      restaurantId: req.management.restaurantId,
+      details: { inserted: rows.length, replaceExisting: true }
+    });
+
+    await client.query('COMMIT');
+    await broadcastState(req.management.restaurantId);
+    return res.json({ ok: true, success: true, inserted: rows.length });
+  } catch (error) {
+    await client.query('ROLLBACK');
+    return res.status(400).json({ error: error.message || 'Failed to upload menu' });
+  } finally {
+    client.release();
+  }
+});
+
 app.post('/api/menu/:id/image', requireManagementAuth, (req, res) => {
   uploadMenuImage(req, res, async (uploadError) => {
     if (uploadError) return res.status(400).json({ error: uploadError.message || 'Failed to upload image' });
