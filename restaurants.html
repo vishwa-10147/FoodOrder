@@ -82,7 +82,7 @@
         const thumb = img ? `<img src="${img}" alt="${r.name}" style="width:100%;height:100%;object-fit:cover;display:block">` : `<div style="font-size:28px">🍽️</div>`;
           const mapLink = (r.lat && r.lng) ? `<a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(r.lat+','+r.lng)}" target="_blank" style="font-size:12px;color:var(--muted);text-decoration:none;margin-left:6px">View on map</a>` : '';
           return `
-            <a class="card" href="/client.html?restaurant=${encodeURIComponent(r.code || r.id)}" title="Open ${r.name}">
+            <a class="card" href="/${encodeURIComponent(r.code || r.id)}" title="Open ${r.name}">
               <div class="thumb">${thumb}</div>
               <div class="body">
                 <div style="display:flex;justify-content:space-between;align-items:center">
