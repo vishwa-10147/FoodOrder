@@ -6,6 +6,8 @@
   <title>Tableside — Management</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&family=Instrument+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <style>
     :root {
       --bg:       #0d0f12;
@@ -272,6 +274,8 @@
     }
     .inp:focus { border-color: var(--fire); }
     .inp::placeholder { color: var(--text3); }
+
+    #map-picker { width:100%; height:200px; border-radius:8px; border:1px solid var(--border); margin-top:8px; }
 
     /* ── STATUS TAGS ─────────────────────────────────────── */
     .tag {
@@ -667,6 +671,7 @@
 
     <div class="auth-panel active" id="auth-panel-login">
       <input class="auth-inp" id="login-restaurant" placeholder="Restaurant name or code" />
+      <input class="auth-inp" id="login-username" placeholder="Username (optional for staff)" />
       <input class="auth-inp" id="login-password" type="password" placeholder="Password" />
       <button class="auth-submit" onclick="loginManagement()">Sign In →</button>
       <div class="auth-err" id="login-error"></div>
@@ -776,6 +781,36 @@
                 <div class="outlet-reopen">
                   <input class="inp" style="flex:1;" id="outlet-reopen-note" placeholder="Back online at (e.g. 5:30 PM)" />
                   <button class="btn-ghost" onclick="saveOutletStatusNote()">Save</button>
+                </div>
+                <div style="display:flex;gap:12px;align-items:center;margin-top:12px;">
+                  <div id="restaurant-image-preview" style="width:84px;height:84px;border-radius:8px;overflow:hidden;background:var(--bg4);display:flex;align-items:center;justify-content:center;color:var(--text3);">No image</div>
+                  <div style="flex:1;display:flex;flex-direction:column;gap:8px;">
+                    <input class="inp" id="restaurant-name-input" placeholder="Outlet display name" />
+                    <input class="inp" id="restaurant-address-input" placeholder="Address / location" />
+                    <div style="display:flex;gap:8px;margin-top:6px;">
+                      <input class="inp" id="restaurant-lat-input" placeholder="Latitude" style="width:140px;" />
+                      <input class="inp" id="restaurant-lng-input" placeholder="Longitude" style="width:140px;" />
+                      <button class="btn-ghost" onclick="useMyLocation()">Use my location</button>
+                    </div>
+                    <div id="map-picker"></div>
+                    <div style="display:flex;gap:8px;align-items:center;">
+                      <input id="restaurant-image-input" type="file" accept="image/*" style="flex:1;" onchange="onRestaurantImageSelected(event)" />
+                      <button class="btn-ghost" onclick="saveRestaurantDetails()">Save Details</button>
+                    </div>
+                  </div>
+                  <div id="management-users-panel" style="margin-top:12px;display:block;">
+                    <div style="font-size:13px;font-weight:700;margin-bottom:8px;">Management Users</div>
+                    <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;">
+                      <input class="inp" id="new-user-username" placeholder="Username (eg. staff1)" />
+                      <input class="inp" id="new-user-password" placeholder="Password" type="password" />
+                      <select id="new-user-role" class="inp" style="width:110px;margin-left:4px;">
+                        <option value="staff">Staff</option>
+                        <option value="owner">Owner</option>
+                      </select>
+                      <button class="btn-ghost" onclick="createManagementUser()">Add User</button>
+                    </div>
+                    <div id="management-users-list" style="font-size:13px;color:var(--text2)">Loading users…</div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -1054,15 +1089,18 @@
 
   async function loginManagement() {
     const restaurant = document.getElementById('login-restaurant').value.trim();
+    const username = document.getElementById('login-username').value.trim();
     const password = document.getElementById('login-password').value.trim();
     const err = document.getElementById('login-error');
     err.textContent = '';
     if (!restaurant || !password) { err.textContent = 'Restaurant and password required.'; return; }
     try {
-      const res = await fetch('/api/management/login', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({restaurant,password}) });
+      const body = { restaurant, password };
+      if (username) body.username = username;
+      const res = await fetch('/api/management/login', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body) });
       const data = await res.json().catch(()=>({}));
       if (!res.ok) throw new Error(data.error||'Login failed');
-      managementAuth = { token: data.token, restaurant: data.restaurant };
+      managementAuth = { token: data.token, restaurant: data.restaurant, role: data.role || 'owner', username: data.username || username || 'owner' };
       localStorage.setItem(MGMT_TOKEN_KEY, JSON.stringify(managementAuth));
       document.getElementById('login-password').value = '';
       await startSession();
@@ -1091,6 +1129,7 @@
       document.getElementById('login-restaurant').value = restaurant;
       document.getElementById('login-password').value = password;
       setAuthMode('login');
+      // call login and then set role from response
       await loginManagement();
     } catch(e) { err.textContent = e.message||'Registration failed'; }
   }
@@ -1155,7 +1194,10 @@
     showApp();
     await fetchState();
     await loadAuditLogs();
+    await loadManagementUsers();
     if (pollTimer) clearInterval(pollTimer);
+    // initialize map picker after state loads
+    setTimeout(() => { initMapPicker(); }, 300);
     pollTimer = setInterval(async()=>{
       const prev = knownOrderIds;
       try {
@@ -1321,6 +1363,27 @@
     if (lbl) lbl.textContent = outletOpen?'Open':'Closed';
     if (note) note.textContent = outletOpen?'Currently accepting orders.':`Closed.${r.reopenNote?` Back by ${r.reopenNote}`:''}`;
     if (ri) ri.value = r.reopenNote||'';
+    const imgPreview = document.getElementById('restaurant-image-preview');
+    if (imgPreview) {
+      if (r.imageUrl) imgPreview.innerHTML = `<img src="${r.imageUrl}" style="width:100%;height:100%;object-fit:cover;display:block">`;
+      else imgPreview.textContent = 'No image';
+    }
+    const nameInp = document.getElementById('restaurant-name-input');
+    if (nameInp) nameInp.value = r.name || '';
+    const addrInp = document.getElementById('restaurant-address-input');
+    if (addrInp) addrInp.value = r.address || '';
+    const latInp = document.getElementById('restaurant-lat-input');
+    const lngInp = document.getElementById('restaurant-lng-input');
+    if (latInp) latInp.value = r.lat == null ? '' : Number(r.lat).toFixed(6);
+    if (lngInp) lngInp.value = r.lng == null ? '' : Number(r.lng).toFixed(6);
+    if (window._picker && window._picker.marker) {
+      try {
+        const la = Number(r.lat); const ln = Number(r.lng);
+        if (Number.isFinite(la) && Number.isFinite(ln)) {
+          window._picker.marker.setLatLng([la, ln]); window._picker.map.setView([la, ln], 15);
+        }
+      } catch (e) {}
+    }
 
     renderTableStatusSwitch();
   }
@@ -1339,6 +1402,126 @@
       await api('/api/management/outlet-status','POST',{acceptingOrders:outletOpen,reopenNote});
       await fetchState();
     } catch(e) { alert(e.message); }
+  }
+
+  async function onRestaurantImageSelected(e) {
+    try {
+      const file = e.target.files && e.target.files[0];
+      if (!file) return;
+      const preview = document.getElementById('restaurant-image-preview');
+      preview.textContent = 'Uploading…';
+      const res = await apiUploadImage('/api/management/restaurant/image', file);
+      if (res && res.imageUrl) {
+        preview.innerHTML = `<img src="${res.imageUrl}" style="width:100%;height:100%;object-fit:cover;display:block">`;
+        await fetchState();
+        loadManagementUsers();
+      }
+    } catch (err) { alert(err.message); }
+  }
+
+  async function saveRestaurantDetails() {
+    try {
+      const name = document.getElementById('restaurant-name-input').value.trim();
+      const address = document.getElementById('restaurant-address-input').value.trim();
+      const latVal = document.getElementById('restaurant-lat-input').value.trim();
+      const lngVal = document.getElementById('restaurant-lng-input').value.trim();
+      const lat = latVal === '' ? null : Number(latVal);
+      const lng = lngVal === '' ? null : Number(lngVal);
+      if (!name && !address) return alert('Enter name or address to save');
+      await api('/api/management/restaurant','PATCH',{ name, address, lat, lng });
+      await fetchState();
+      alert('Saved');
+      loadManagementUsers();
+    } catch (err) { alert(err.message); }
+  }
+
+  async function loadManagementUsers() {
+    try {
+      const res = await api('/api/management/users');
+      const listEl = document.getElementById('management-users-list');
+      const users = res.users || [];
+      if (!users.length) { listEl.innerHTML = '<div style="color:var(--text3)">No users</div>'; return; }
+      listEl.innerHTML = users.map(u => `
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.02);">
+          <div style="font-weight:600">${esc(u.username)} <span style="font-weight:400;color:var(--text3);">· ${esc(u.role)}</span></div>
+          ${managementAuth?.role === 'owner' ? `<div style="display:flex;gap:6px;align-items:center;"><button class="btn-ghost" onclick="promptEditUser(${u.id},'${esc(u.username)}','${u.role}')">Edit</button><button class="btn-ghost" onclick="deleteManagementUser(${u.id})">Delete</button></div>` : ''}
+        </div>
+      `).join('');
+    } catch (err) { console.error(err); }
+  }
+
+  function promptEditUser(id, username, role) {
+    if (!confirm(`Edit user ${username}?`)) return;
+    if (managementAuth?.username && managementAuth.username === username && managementAuth.role === 'owner') {
+      // prevent accidentally demoting yourself
+      const check = confirm('You are editing your own owner account. Are you sure?');
+      if (!check) return;
+    }
+    const newPass = prompt('Enter new password (leave blank to keep):', '');
+    const newRole = prompt('Role (owner|staff):', role || 'staff');
+    const payload = {};
+    if (newPass) payload.password = newPass;
+    if (newRole) payload.role = String(newRole || 'staff').trim() === 'owner' ? 'owner' : 'staff';
+    if (!Object.keys(payload).length) return alert('Nothing to update');
+    // prevent self demotion
+    if (managementAuth?.username && managementAuth.username === username && managementAuth.role === 'owner' && payload.role && payload.role !== 'owner') {
+      return alert('You cannot demote your own owner account. Ask another owner to change your role.');
+    }
+    api(`/api/management/users/${id}`,'PATCH',payload).then(() => { alert('User updated'); loadManagementUsers(); }).catch(e => alert(e.message));
+  }
+
+  async function createManagementUser() {
+    try {
+      if (managementAuth?.role !== 'owner') return alert('Owner only');
+      const username = document.getElementById('new-user-username').value.trim();
+      const password = document.getElementById('new-user-password').value.trim();
+      const role = document.getElementById('new-user-role').value;
+      if (!username || password.length < 6) return alert('Username and password (>=6) required');
+      await api('/api/management/users','POST',{ username, password, role });
+      document.getElementById('new-user-username').value = '';
+      document.getElementById('new-user-password').value = '';
+      loadManagementUsers();
+      alert('User added');
+    } catch (err) { alert(err.message); }
+  }
+
+  function initMapPicker() {
+    try {
+      if (window._mapInitialized) return;
+      window._mapInitialized = true;
+      const L = window.L;
+      if (!L) return;
+      const map = L.map('map-picker', { attributionControl: false }).setView([17.449,78.391], 13);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
+      const latInp = document.getElementById('restaurant-lat-input');
+      const lngInp = document.getElementById('restaurant-lng-input');
+      const lat = Number(latInp.value) || 0;
+      const lng = Number(lngInp.value) || 0;
+      const marker = L.marker((lat && lng) ? [lat, lng] : map.getCenter(), { draggable: true }).addTo(map);
+      if (lat && lng) map.setView([lat, lng], 15);
+      marker.on('dragend', () => {
+        const p = marker.getLatLng(); latInp.value = p.lat.toFixed(6); lngInp.value = p.lng.toFixed(6);
+      });
+      map.on('click', (ev) => { marker.setLatLng(ev.latlng); latInp.value = ev.latlng.lat.toFixed(6); lngInp.value = ev.latlng.lng.toFixed(6); });
+      window._picker = { map, marker };
+    } catch (e) { console.warn('Map init failed', e); }
+  }
+
+  function useMyLocation() {
+    if (!navigator.geolocation) return alert('Geolocation not available');
+    navigator.geolocation.getCurrentPosition((pos) => {
+      const lat = pos.coords.latitude; const lng = pos.coords.longitude;
+      document.getElementById('restaurant-lat-input').value = lat.toFixed(6);
+      document.getElementById('restaurant-lng-input').value = lng.toFixed(6);
+      if (window._picker && window._picker.marker) {
+        window._picker.marker.setLatLng([lat, lng]); window._picker.map.setView([lat, lng], 15);
+      }
+    }, (err) => alert('Location error: ' + err.message));
+  }
+
+  async function deleteManagementUser(id) {
+    if (!confirm('Delete this user?')) return;
+    try { await api(`/api/management/users/${id}`,'DELETE'); loadManagementUsers(); } catch (err) { alert(err.message); }
   }
 
   // ── TABLE ─────────────────────────────────────────────────

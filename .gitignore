@@ -1,5 +1,16 @@
 node_modules/
 .env
+render-import.env
+render.yaml
+.vscode/
+test/
+test_results*.json
+token.txt
+data/backups/
+uploads/
+.DS_Store
+*.lognode_modules/
+.env
 .env.*
 !.env.example
 # data/
