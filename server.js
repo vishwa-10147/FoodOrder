@@ -1076,6 +1076,10 @@ app.use((req, res, next) => {
 });
 app.use(express.urlencoded({ extended: true }));
 app.use('/data/uploads', express.static(UPLOADS_DIR));
+
+// Make the restaurant chooser the public landing page.
+app.get(['/', '/index.html'], (_req, res) => res.redirect('/restaurants.html'));
+
 app.use(express.static(__dirname));
 // Support pretty restaurant URLs without changing the visible path.
 // Examples supported: /r/:code  and /:code  (if :code is not a reserved path)
@@ -1108,7 +1112,6 @@ app.use('/api', createMemoryRateLimiter({
   keyPrefix: 'api'
 }));
 
-app.get('/', (_req, res) => res.redirect('/restaurants.html'));
 app.get('/client', (_req, res) => res.redirect('/client.html'));
 app.get('/management', (_req, res) => res.redirect('/management.html'));
 app.get('/outer-screen', (_req, res) => res.redirect('/outer-screen.html'));
