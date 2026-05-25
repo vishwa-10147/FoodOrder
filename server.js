@@ -21,8 +21,10 @@ const io = new Server(server, { cors: { origin: true, credentials: true } });
 const PORT = Number(process.env.PORT || 3000);
 const NODE_ENV = String(process.env.NODE_ENV || 'development').trim();
 const DATABASE_URL = String(process.env.DATABASE_URL || '').trim();
-const MANAGEMENT_AUTH_SECRET = String(process.env.MANAGEMENT_AUTH_SECRET || '').trim()
-  || crypto.createHash('sha256').update(`management:${DATABASE_URL}`).digest('hex');
+const MANAGEMENT_AUTH_SECRET = String(process.env.MANAGEMENT_AUTH_SECRET || '').trim();
+if (NODE_ENV === 'production' && !MANAGEMENT_AUTH_SECRET) {
+  throw new Error('MANAGEMENT_AUTH_SECRET must be set in production');
+}
 const MANAGEMENT_SETUP_KEY = String(process.env.MANAGEMENT_SETUP_KEY || '').trim();
 const MANAGEMENT_DEFAULT_PASSWORD = String(process.env.MANAGEMENT_DEFAULT_PASSWORD || '').trim();
 const MANAGEMENT_DEV_FALLBACK_PASSWORD = String(process.env.MANAGEMENT_DEV_FALLBACK_PASSWORD || '').trim() || 'admin123';
@@ -111,6 +113,7 @@ function createManagementToken({ restaurantId, restaurantCode, restaurantName })
     restaurantId: Number(restaurantId),
     restaurantCode: String(restaurantCode || ''),
     restaurantName: String(restaurantName || ''),
+    role: String(arguments[0]?.role || 'owner'),
     iat: Date.now(),
     exp: Date.now() + (24 * 60 * 60 * 1000)
   };
@@ -135,7 +138,8 @@ function parseManagementToken(token) {
   return {
     restaurantId: Number(payload.restaurantId),
     restaurantCode: String(payload.restaurantCode || ''),
-    restaurantName: String(payload.restaurantName || '')
+    restaurantName: String(payload.restaurantName || ''),
+    role: String(payload.role || 'owner')
   };
 }
 
@@ -220,36 +224,73 @@ function parseCsvLine(line) {
 
 function parseMenuCsv(csvText) {
   const text = String(csvText || '').replace(/^\uFEFF/, '');
-  const lines = text.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
-  if (!lines.length) return { rows: [], invalidRows: [] };
+  if (!text.trim()) return { rows: [], invalidRows: [] };
 
-  const headerValues = parseCsvLine(lines[0]).map((cell) => cell.trim().toLowerCase());
-  const hasHeader = headerValues.includes('item') || headerValues.includes('name') || headerValues.includes('price');
+  // Use robust CSV parsing to correctly handle quoted fields and embedded newlines
+  let records;
+  try {
+    records = parse(text, { relax_column_count: true, skip_empty_lines: true });
+  } catch (e) {
+    return { rows: [], invalidRows: [{ line: 1, reason: 'Failed to parse CSV' }] };
+  }
+
+  if (!records || !records.length) return { rows: [], invalidRows: [] };
+
+  const firstRow = records[0].map((c) => (String(c || '').trim().toLowerCase()));
+  const hasHeader = firstRow.includes('item') || firstRow.includes('name') || firstRow.includes('price');
+
   const rows = [];
   const invalidRows = [];
 
-  (hasHeader ? lines.slice(1) : lines).forEach((line, index) => {
-    const parsed = parseCsvLine(line);
-    if (parsed.length < 3) {
+  const dataRows = hasHeader ? records.slice(1) : records;
+  dataRows.forEach((parsed, index) => {
+    const a = parsed.map((c) => String(c || '').trim());
+    if (a.length < 3) {
       invalidRows.push({ line: index + (hasHeader ? 2 : 1), reason: 'Expected at least 3 columns: Category, Item, Price' });
       return;
     }
-    const category = String(parsed[0] || '').trim().toLowerCase() || 'other';
-    const name = String(parsed[1] || '').trim();
-    const price = Math.round(Number(String(parsed[2] || '').replace(/[^\d.]/g, '')));
-    const description = String(parsed[3] || '').trim() || `${category} menu item`;
+    const category = String(a[0] || '').trim().toLowerCase() || 'other';
+    const name = neutralizeCsvField(String(a[1] || '').trim());
+    const price = Math.round(Number(String(a[2] || '').replace(/[^\d.]/g, '')));
+    const description = neutralizeCsvField(String(a[3] || '').trim() || `${category} menu item`);
     if (!name) {
       invalidRows.push({ line: index + (hasHeader ? 2 : 1), reason: 'Item name is empty' });
       return;
     }
     if (!Number.isFinite(price) || price <= 0) {
-      invalidRows.push({ line: index + (hasHeader ? 2 : 1), reason: `Invalid price: ${parsed[2] || ''}` });
+      invalidRows.push({ line: index + (hasHeader ? 2 : 1), reason: `Invalid price: ${a[2] || ''}` });
       return;
     }
     rows.push({ name, description, price, category, emoji: '🍽️', available: 1 });
   });
 
   return { rows, invalidRows };
+}
+
+function neutralizeCsvField(value) {
+  const v = String(value || '');
+  if (!v) return v;
+  // Neutralize leading spreadsheet-executable characters to prevent CSV injection
+  if (/^[=+\-@].*/.test(v)) return `'${v}`;
+  return v;
+}
+
+function isValidImage(filePath) {
+  try {
+    const fd = fs.openSync(filePath, 'r');
+    const header = Buffer.alloc(8);
+    fs.readSync(fd, header, 0, 8, 0);
+    fs.closeSync(fd);
+    // PNG: 89 50 4E 47 0D 0A 1A 0A
+    if (header[0] === 0x89 && header[1] === 0x50 && header[2] === 0x4E && header[3] === 0x47) return true;
+    // JPEG: FF D8 FF
+    if (header[0] === 0xFF && header[1] === 0xD8 && header[2] === 0xFF) return true;
+    // GIF: GIF87a or GIF89a
+    if (header.slice(0, 3).toString('ascii') === 'GIF') return true;
+    return false;
+  } catch (_e) {
+    return false;
+  }
 }
 
 function toOrderLabel(id) {
@@ -283,6 +324,7 @@ function buildRestaurantPayload(row) {
     code: row.code,
     name: row.name,
     address: row.address || 'Miyapur',
+    imageUrl: row.image_url || row.imageUrl || null,
     cuisines: row.cuisines || 'South Indian, Indian',
     rating: Number(row.rating || 4.1),
     ratingCount: row.ratingCount || row.rating_count || '1.4K+ ratings',
@@ -291,6 +333,9 @@ function buildRestaurantPayload(row) {
       ? row.acceptingOrders
       : Boolean(Number(row.acceptingOrders == null ? 1 : row.acceptingOrders)),
     reopenNote: row.reopenNote || row.reopen_note || null
+    ,
+    lat: row.lat == null ? null : Number(row.lat),
+    lng: row.lng == null ? null : Number(row.lng)
   };
 }
 
@@ -347,7 +392,9 @@ async function getRestaurantById(restaurantId) {
             rating, rating_count AS "ratingCount",
             price_for_two AS "priceForTwo",
             accepting_orders AS "acceptingOrders",
-            reopen_note AS "reopenNote"
+            reopen_note AS "reopenNote",
+            image_url AS "imageUrl",
+            lat, lng
      FROM restaurants
      WHERE id = $1`,
     [restaurantId]
@@ -362,7 +409,9 @@ async function resolveRestaurantByCode(restaurantCode, fallbackName = '') {
             rating, rating_count AS "ratingCount",
             price_for_two AS "priceForTwo",
             accepting_orders AS "acceptingOrders",
-            reopen_note AS "reopenNote"
+            reopen_note AS "reopenNote",
+            image_url AS "imageUrl",
+            lat, lng
      FROM restaurants
      WHERE code = $1
      LIMIT 1`,
@@ -395,7 +444,9 @@ async function resolveRestaurantByCodeOrName(input) {
             rating, rating_count AS "ratingCount",
             price_for_two AS "priceForTwo",
             accepting_orders AS "acceptingOrders",
-            reopen_note AS "reopenNote"
+            reopen_note AS "reopenNote",
+            image_url AS "imageUrl",
+            lat, lng
      FROM restaurants
      WHERE code = $1 OR lower(name) = lower($2)
      ORDER BY CASE WHEN code = $1 THEN 0 ELSE 1 END
@@ -504,6 +555,55 @@ async function getOrders(restaurantId = null) {
     ...order,
     label: labelByOrderId.get(Number(order.id)) || toOrderLabel(order.id)
   }));
+}
+
+async function getOrderById(orderId) {
+  const params = [orderId];
+  const { rows } = await pool.query(
+    `SELECT
+       o.id,
+       o.restaurant_id AS "restaurantId",
+       o.order_type AS "orderType",
+       o.table_number AS "tableNumber",
+       o.notes,
+       o.status,
+       o.paid,
+       o.eta_minutes AS "etaMinutes",
+       o.created_at AS "createdAt",
+       o.updated_at AS "updatedAt",
+       o.payment_method AS "paymentMethod",
+       o.paid_at AS "paidAt",
+       o.payment_gateway_order_id AS "paymentGatewayOrderId",
+       o.payment_gateway_payment_id AS "paymentGatewayPaymentId",
+       o.source,
+       o.external_order_id AS "externalOrderId",
+       o.customer_name AS "customerName",
+       o.customer_mobile AS "customerMobile",
+       o.delivery_name AS "deliveryName",
+       o.delivery_mobile AS "deliveryMobile",
+       o.delivery_lat AS "deliveryLat",
+       o.delivery_lng AS "deliveryLng",
+       COALESCE(
+         json_agg(
+           json_build_object(
+             'id', oi.id,
+             'menuItemId', oi.menu_item_id,
+             'name', oi.item_name,
+             'price', oi.item_price,
+             'qty', oi.qty
+           ) ORDER BY oi.id
+         ) FILTER (WHERE oi.id IS NOT NULL),
+         '[]'::json
+       ) AS items
+     FROM orders o
+     LEFT JOIN order_items oi ON oi.order_id = o.id
+     WHERE o.id = $1
+     GROUP BY o.id
+     LIMIT 1`,
+    params
+  );
+  if (!rows[0]) return null;
+  return enrichOrder(rows[0]);
 }
 
 function getStats(orders, tables) {
@@ -757,7 +857,7 @@ async function seedMenuFromCsv(client, restaurantId) {
   const csvText = fs.readFileSync(csvPath, 'utf8');
   const records = parse(csvText, { columns: true, skip_empty_lines: true });
   for (const record of records) {
-    const name = String(record.Item || record.name || '').trim();
+    const name = neutralizeCsvField(String(record.Item || record.name || '').trim());
     const price = Math.round(Number(record.Price || record.price || 0));
     const category = String(record.Category || record.category || 'other').trim().toLowerCase() || 'other';
     if (!name || price <= 0) continue;
@@ -798,6 +898,19 @@ async function initDatabase() {
         password_hash TEXT NOT NULL,
         password_salt TEXT NOT NULL,
         updated_at BIGINT NOT NULL
+      )
+    `);
+
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS management_users (
+        id SERIAL PRIMARY KEY,
+        restaurant_id INTEGER NOT NULL REFERENCES restaurants(id) ON DELETE CASCADE,
+        username TEXT NOT NULL,
+        password_hash TEXT NOT NULL,
+        password_salt TEXT NOT NULL,
+        role TEXT NOT NULL DEFAULT 'staff',
+        created_at BIGINT NOT NULL,
+        UNIQUE (restaurant_id, username)
       )
     `);
 
@@ -893,8 +1006,11 @@ async function initDatabase() {
     await client.query(`ALTER TABLE menu_items ADD COLUMN IF NOT EXISTS description TEXT NOT NULL DEFAULT ''`);
     await client.query(`ALTER TABLE menu_items ADD COLUMN IF NOT EXISTS emoji TEXT NOT NULL DEFAULT '🍽️'`);
     await client.query(`ALTER TABLE menu_items ADD COLUMN IF NOT EXISTS image_url TEXT`);
+    await client.query(`ALTER TABLE restaurants ADD COLUMN IF NOT EXISTS image_url TEXT`);
     await client.query(`ALTER TABLE menu_items ADD COLUMN IF NOT EXISTS available BOOLEAN NOT NULL DEFAULT TRUE`);
     await client.query(`UPDATE menu_items SET restaurant_id = $1 WHERE restaurant_id IS NULL`, [defaultRestaurantId]);
+    await client.query(`ALTER TABLE restaurants ADD COLUMN IF NOT EXISTS lat NUMERIC`);
+    await client.query(`ALTER TABLE restaurants ADD COLUMN IF NOT EXISTS lng NUMERIC`);
     await client.query(`ALTER TABLE menu_items ALTER COLUMN restaurant_id SET NOT NULL`);
 
     await client.query('CREATE INDEX IF NOT EXISTS idx_menu_items_restaurant ON menu_items (restaurant_id)');
@@ -950,7 +1066,8 @@ app.use(helmet({
   }
 }));
 app.use(compression());
-app.use(cors());
+const ALLOWED_ORIGINS = String(process.env.ALLOWED_ORIGINS || '').trim();
+app.use(cors(ALLOWED_ORIGINS ? { origin: ALLOWED_ORIGINS.split(',').map(s => s.trim()).filter(Boolean) } : undefined));
 
 const jsonParser = express.json();
 app.use((req, res, next) => {
@@ -966,7 +1083,7 @@ app.use('/api', createMemoryRateLimiter({
   keyPrefix: 'api'
 }));
 
-app.get('/', (_req, res) => res.redirect('/client.html'));
+app.get('/', (_req, res) => res.redirect('/restaurants.html'));
 app.get('/client', (_req, res) => res.redirect('/client.html'));
 app.get('/management', (_req, res) => res.redirect('/management.html'));
 app.get('/outer-screen', (_req, res) => res.redirect('/outer-screen.html'));
@@ -998,7 +1115,9 @@ app.get('/api/public/restaurants', async (_req, res) => {
             rating, rating_count AS "ratingCount",
             price_for_two AS "priceForTwo",
             accepting_orders AS "acceptingOrders",
-            reopen_note AS "reopenNote"
+            reopen_note AS "reopenNote",
+            image_url AS "imageUrl",
+            lat, lng
      FROM restaurants
      ORDER BY name ASC`
   );
@@ -1039,20 +1158,104 @@ app.post('/api/management/register', async (req, res) => {
     [restaurant.id, hash.hash, hash.salt, Date.now()]
   );
 
+  // Ensure an owner user exists in management_users for this restaurant
+  try {
+    const existingUser = await pool.query('SELECT id FROM management_users WHERE restaurant_id = $1 AND username = $2', [restaurant.id, 'owner']);
+    if (!existingUser.rows.length) {
+      const now = Date.now();
+      await pool.query(
+        `INSERT INTO management_users (restaurant_id, username, password_hash, password_salt, role, created_at)
+         VALUES ($1, $2, $3, $4, $5, $6)`,
+        [restaurant.id, 'owner', hash.hash, hash.salt, 'owner', now]
+      );
+    }
+  } catch (e) {
+    // ignore user creation errors
+  }
+
   return res.json({
     ok: true,
     token: createManagementToken({
       restaurantId: restaurant.id,
       restaurantCode: restaurant.code,
-      restaurantName: restaurant.name
+      restaurantName: restaurant.name,
+      role: 'owner'
     }),
-    restaurant
+    restaurant,
+    username: 'owner'
   });
+});
+
+const uploadRestaurantImage = multer({
+  storage: multer.diskStorage({
+    destination: (_req, _file, cb) => cb(null, UPLOADS_DIR),
+    filename: (_req, file, cb) => {
+      const ext = String(path.extname(file.originalname || '') || '').toLowerCase();
+      cb(null, `restaurant-${Date.now()}-${crypto.randomBytes(6).toString('hex')}${ext && ext.length <= 8 ? ext : '.jpg'}`);
+    }
+  }),
+  limits: { fileSize: 5 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    if (String(file.mimetype || '').toLowerCase().startsWith('image/')) return cb(null, true);
+    return cb(new Error('Only image files are allowed'));
+  }
+}).single('image');
+
+app.post('/api/management/restaurant/image', requireManagementAuth, (req, res) => {
+  uploadRestaurantImage(req, res, async (uploadError) => {
+    if (uploadError) return res.status(400).json({ error: uploadError.message || 'Failed to upload image' });
+    try {
+      if (!req.file) return res.status(400).json({ error: 'Image file is required' });
+      const savedPath = path.join(UPLOADS_DIR, req.file.filename);
+      if (!isValidImage(savedPath)) {
+        try { fs.unlinkSync(savedPath); } catch (_e) {}
+        return res.status(400).json({ error: 'Uploaded file is not a valid image' });
+      }
+      const imageUrl = `/data/uploads/${req.file.filename}`;
+      await pool.query('UPDATE restaurants SET image_url = $1, updated_at = $2 WHERE id = $3', [imageUrl, Date.now(), req.management.restaurantId]);
+      await logAudit(pool, {
+        action: 'restaurant_image_uploaded', entityType: 'restaurant', entityId: req.management.restaurantId, actor: `${getActor(req)}:${req.management.restaurantCode}`, restaurantId: req.management.restaurantId, details: { imageUrl }
+      });
+      await broadcastState(req.management.restaurantId);
+      return res.json({ ok: true, imageUrl });
+    } catch (error) {
+      return res.status(500).json({ error: error.message || 'Failed to update restaurant image' });
+    }
+  });
+});
+
+app.patch('/api/management/restaurant', requireManagementAuth, async (req, res) => {
+  try {
+    const name = String(req.body?.name || '').trim();
+    const address = String(req.body?.address || '').trim();
+    const lat = req.body?.lat == null ? null : Number(req.body.lat);
+    const lng = req.body?.lng == null ? null : Number(req.body.lng);
+    const cuisines = String(req.body?.cuisines || '').trim();
+    if (!name && !address && !cuisines) return res.status(400).json({ error: 'At least one field (name|address|cuisines) is required' });
+    const updates = [];
+    const params = [];
+    let idx = 1;
+    if (name) { updates.push(`name = $${idx++}`); params.push(name); }
+    if (address) { updates.push(`address = $${idx++}`); params.push(address); }
+    if (lat != null) { updates.push(`lat = $${idx++}`); params.push(lat); }
+    if (lng != null) { updates.push(`lng = $${idx++}`); params.push(lng); }
+    if (cuisines) { updates.push(`cuisines = $${idx++}`); params.push(cuisines); }
+    params.push(Date.now());
+    params.push(req.management.restaurantId);
+    const sql = `UPDATE restaurants SET ${updates.join(', ')}, updated_at = $${idx++} WHERE id = $${idx}`;
+    await pool.query(sql, params);
+    await logAudit(pool, { action: 'restaurant_updated', entityType: 'restaurant', entityId: req.management.restaurantId, actor: `${getActor(req)}:${req.management.restaurantCode}`, restaurantId: req.management.restaurantId, details: { name, address, cuisines } });
+    await broadcastState(req.management.restaurantId);
+    return res.json({ ok: true });
+  } catch (error) {
+    return res.status(400).json({ error: error.message || 'Failed to update restaurant' });
+  }
 });
 
 app.post('/api/management/login', async (req, res) => {
   const restaurantInput = String(req.body?.restaurant || '').trim();
   const password = String(req.body?.password || '').trim();
+  const username = String(req.body?.username || '').trim();
   if (!restaurantInput || !password) {
     return res.status(400).json({ error: 'Restaurant and password are required' });
   }
@@ -1068,25 +1271,36 @@ app.post('/api/management/login', async (req, res) => {
   );
   const auth = authResult.rows[0];
 
+  // If username provided, try management_users lookup
+  if (username) {
+    const userRes = await pool.query(
+      `SELECT id, username, password_hash AS "passwordHash", password_salt AS "passwordSalt", role
+       FROM management_users
+       WHERE restaurant_id = $1 AND lower(username) = lower($2)
+       LIMIT 1`,
+      [restaurant.id, username]
+    );
+    const user = userRes.rows[0];
+    if (!user) return res.status(401).json({ error: 'Invalid restaurant, user, or password' });
+    const validUser = verifyPassword(password, user.passwordSalt, user.passwordHash);
+    if (!validUser) return res.status(401).json({ error: 'Invalid restaurant, user, or password' });
+    return res.json({ ok: true, token: createManagementToken({ restaurantId: restaurant.id, restaurantCode: restaurant.code, restaurantName: restaurant.name, role: user.role }), restaurant, role: user.role, username: user.username });
+  }
+
   let valid = false;
   if (auth?.passwordHash && auth?.passwordSalt) {
     valid = verifyPassword(password, auth.passwordSalt, auth.passwordHash);
+  } else if (MANAGEMENT_DEFAULT_PASSWORD) {
+    // allow explicit MANAGEMENT_DEFAULT_PASSWORD (set via env) to authenticate when no auth row exists
+    valid = password === MANAGEMENT_DEFAULT_PASSWORD;
   } else {
-    const fallbackPassword = MANAGEMENT_DEFAULT_PASSWORD || (NODE_ENV !== 'production' ? MANAGEMENT_DEV_FALLBACK_PASSWORD : '');
-    valid = Boolean(fallbackPassword) && password === fallbackPassword;
+    // No auth available for this restaurant and no default password configured — reject
+    valid = false;
   }
 
   if (!valid) return res.status(401).json({ error: 'Invalid restaurant or password' });
 
-  return res.json({
-    ok: true,
-    token: createManagementToken({
-      restaurantId: restaurant.id,
-      restaurantCode: restaurant.code,
-      restaurantName: restaurant.name
-    }),
-    restaurant
-  });
+  return res.json({ ok: true, token: createManagementToken({ restaurantId: restaurant.id, restaurantCode: restaurant.code, restaurantName: restaurant.name, role: 'owner' }), restaurant, role: 'owner', username: 'owner' });
 });
 
 app.get('/api/management/state', requireManagementAuth, async (req, res) => {
@@ -1128,6 +1342,86 @@ app.post('/api/management/outlet-status', requireManagementAuth, async (req, res
 
   await broadcastState(req.management.restaurantId);
   return res.json({ ok: true, acceptingOrders, reopenNote });
+});
+
+function requireOwner(req, res, next) {
+  if (!req.management || String(req.management.role || 'owner') !== 'owner') {
+    return res.status(403).json({ error: 'Owner role required' });
+  }
+  return next();
+}
+
+// List management users for the restaurant
+app.get('/api/management/users', requireManagementAuth, async (req, res) => {
+  const { rows } = await pool.query(
+    `SELECT id, username, role, created_at AS "createdAt" FROM management_users WHERE restaurant_id = $1 ORDER BY id ASC`,
+    [req.management.restaurantId]
+  );
+  return res.json({ users: rows.map(r => ({ id: Number(r.id), username: r.username, role: r.role, createdAt: Number(r.createdAt || 0) })) });
+});
+
+// Create management user (owner only)
+app.post('/api/management/users', requireManagementAuth, requireOwner, async (req, res) => {
+  const username = String(req.body?.username || '').trim();
+  const password = String(req.body?.password || '').trim();
+  const role = String(req.body?.role || 'staff').trim() === 'owner' ? 'owner' : 'staff';
+  if (!username || password.length < 6) return res.status(400).json({ error: 'Username and password (>=6) required' });
+  const hash = hashPasswordWithSalt(password);
+  const now = Date.now();
+  try {
+    const created = await pool.query(
+      `INSERT INTO management_users (restaurant_id, username, password_hash, password_salt, role, created_at)
+       VALUES ($1, $2, $3, $4, $5, $6) RETURNING id, username, role, created_at AS "createdAt"`,
+      [req.management.restaurantId, username, hash.hash, hash.salt, role, now]
+    );
+    await logAudit(pool, { action: 'management_user_created', entityType: 'management_user', entityId: created.rows[0].id, actor: `${getActor(req)}:${req.management.restaurantCode}`, restaurantId: req.management.restaurantId, details: { username, role } });
+    return res.status(201).json({ user: { id: Number(created.rows[0].id), username: created.rows[0].username, role: created.rows[0].role, createdAt: Number(created.rows[0].createdAt || now) } });
+  } catch (error) {
+    return res.status(400).json({ error: error.message || 'Failed to create user' });
+  }
+});
+
+// Delete management user (owner only)
+app.delete('/api/management/users/:id', requireManagementAuth, requireOwner, async (req, res) => {
+  const id = Number(req.params.id);
+  if (!id) return res.status(400).json({ error: 'Invalid user id' });
+  const result = await pool.query('DELETE FROM management_users WHERE id = $1 AND restaurant_id = $2 RETURNING id, username', [id, req.management.restaurantId]);
+  if (!result.rows[0]) return res.status(404).json({ error: 'User not found' });
+  await logAudit(pool, { action: 'management_user_deleted', entityType: 'management_user', entityId: id, actor: `${getActor(req)}:${req.management.restaurantCode}`, restaurantId: req.management.restaurantId, details: { username: result.rows[0].username } });
+  return res.json({ ok: true });
+});
+
+// Update management user (owner only) - change password or role
+app.patch('/api/management/users/:id', requireManagementAuth, requireOwner, async (req, res) => {
+  const id = Number(req.params.id);
+  if (!id) return res.status(400).json({ error: 'Invalid user id' });
+  const password = req.body?.password == null ? null : String(req.body.password || '').trim();
+  const role = String(req.body?.role || '').trim();
+  const updates = [];
+  const params = [];
+  let idx = 1;
+  if (password) {
+    if (password.length < 6) return res.status(400).json({ error: 'Password must be at least 6 characters' });
+    const hash = hashPasswordWithSalt(password);
+    updates.push(`password_hash = $${idx++}`); params.push(hash.hash);
+    updates.push(`password_salt = $${idx++}`); params.push(hash.salt);
+  }
+  if (role) {
+    const safeRole = role === 'owner' ? 'owner' : 'staff';
+    updates.push(`role = $${idx++}`); params.push(safeRole);
+  }
+  if (!updates.length) return res.status(400).json({ error: 'Nothing to update' });
+  params.push(id);
+  params.push(req.management.restaurantId);
+  try {
+    const sql = `UPDATE management_users SET ${updates.join(', ')} WHERE id = $${idx++} AND restaurant_id = $${idx} RETURNING id, username, role`;
+    const result = await pool.query(sql, params);
+    if (!result.rows[0]) return res.status(404).json({ error: 'User not found' });
+    await logAudit(pool, { action: 'management_user_updated', entityType: 'management_user', entityId: id, actor: `${getActor(req)}:${req.management.restaurantCode}`, restaurantId: req.management.restaurantId, details: { id, role: result.rows[0].role } });
+    return res.json({ ok: true, user: { id: Number(result.rows[0].id), username: result.rows[0].username, role: result.rows[0].role } });
+  } catch (error) {
+    return res.status(400).json({ error: error.message || 'Failed to update user' });
+  }
 });
 
 app.get('/api/menu', async (req, res) => {
@@ -1307,10 +1601,10 @@ app.post('/api/menu/bulk', requireManagementAuth, async (req, res) => {
   const errors = [];
 
   items.forEach((item, index) => {
-    const name = String(item?.name || '').trim();
+    const name = neutralizeCsvField(String(item?.name || '').trim());
     const price = Math.round(Number(item?.price || 0));
     const category = String(item?.cat || item?.category || 'general').trim().toLowerCase() || 'general';
-    const description = String(item?.desc || item?.description || 'Custom menu item').trim() || 'Custom menu item';
+    const description = neutralizeCsvField(String(item?.desc || item?.description || 'Custom menu item').trim() || 'Custom menu item');
     const emoji = String(item?.emoji || '🍽️').trim() || '🍽️';
     const available = !(item?.available === false || item?.available === 0 || item?.available === '0');
 
@@ -1409,6 +1703,12 @@ app.post('/api/menu/:id/image', requireManagementAuth, (req, res) => {
       const item = itemResult.rows[0];
       if (!item) return res.status(404).json({ error: 'Menu item not found' });
       if (!req.file) return res.status(400).json({ error: 'Image file is required' });
+
+      const savedPath = path.join(UPLOADS_DIR, req.file.filename);
+      if (!isValidImage(savedPath)) {
+        try { fs.unlinkSync(savedPath); } catch (_e) {}
+        return res.status(400).json({ error: 'Uploaded file is not a valid image' });
+      }
 
       const imageUrl = `/data/uploads/${req.file.filename}`;
       await pool.query(
@@ -1608,9 +1908,20 @@ app.post('/api/orders/:id/razorpay-order', async (req, res) => {
 
     const orderId = Number(req.params.id);
     const actor = getActor(req);
-    const order = (await getOrders()).find((entry) => entry.id === orderId);
+    const session = getManagementSession(req);
+    const order = await getOrderById(orderId);
     if (!order) return res.status(404).json({ error: 'Order not found' });
     if (Number(order.paid) === 1) return res.status(400).json({ error: 'Order is already paid' });
+
+    // Access control: management sessions can operate on their restaurant; public callers must prove ownership via customerMobile
+    if (session) {
+      if (Number(session.restaurantId) !== Number(order.restaurantId)) return res.status(403).json({ error: 'Not allowed' });
+    } else {
+      const customerMobile = String(req.body?.customerMobile || req.query?.customerMobile || '').trim();
+      if (!order.customerMobile || !customerMobile || String(order.customerMobile) !== customerMobile) {
+        return res.status(403).json({ error: 'Payment can only be initiated by the order owner' });
+      }
+    }
 
     const amountPaise = Math.round(Number(order.total || 0) * 100);
     if (!Number.isFinite(amountPaise) || amountPaise <= 0) {
@@ -1661,6 +1972,7 @@ app.post('/api/orders/:id/razorpay/verify', async (req, res) => {
 
     const orderId = Number(req.params.id);
     const actor = getActor(req);
+    const session = getManagementSession(req);
     const razorpayOrderId = String(req.body?.razorpayOrderId || '').trim();
     const razorpayPaymentId = String(req.body?.razorpayPaymentId || '').trim();
     const razorpaySignature = String(req.body?.razorpaySignature || '').trim();
@@ -1668,7 +1980,7 @@ app.post('/api/orders/:id/razorpay/verify', async (req, res) => {
       return res.status(400).json({ error: 'Missing Razorpay verification fields' });
     }
 
-    const order = (await getOrders()).find((entry) => entry.id === orderId);
+    const order = await getOrderById(orderId);
     if (!order) return res.status(404).json({ error: 'Order not found' });
     if (Number(order.paid) === 1) return res.status(400).json({ error: 'Order is already paid' });
     if (order.paymentGatewayOrderId && order.paymentGatewayOrderId !== razorpayOrderId) {
@@ -1732,7 +2044,7 @@ app.post('/api/payments/razorpay/webhook', express.raw({ type: 'application/json
     const appOrderId = Number(orderEntity?.notes?.appOrderId || 0);
     if (!appOrderId) return res.json({ ok: true, ignored: true });
 
-    const existing = (await getOrders()).find((entry) => entry.id === appOrderId);
+    const existing = await getOrderById(appOrderId);
     if (!existing || Number(existing.paid) === 1) return res.json({ ok: true, ignored: true });
 
     const updatedOrder = await markOrderPaid({
@@ -1758,7 +2070,8 @@ app.post('/api/orders/:id/pay', async (req, res) => {
       return res.status(400).json({ error: 'Invalid payment method' });
     }
 
-    const fullOrder = (await getOrders()).find((entry) => entry.id === orderId);
+    const session = getManagementSession(req);
+    const fullOrder = await getOrderById(orderId);
     if (!fullOrder) return res.status(404).json({ error: 'Order details not found' });
     if (Number(fullOrder.paid) === 1) return res.status(400).json({ error: 'Order is already paid' });
 
@@ -1766,6 +2079,16 @@ app.post('/api/orders/:id/pay', async (req, res) => {
     if (!Number.isFinite(amount) || amount <= 0) return res.status(400).json({ error: 'Invalid payment amount' });
     if (Math.round(amount) !== Math.round(fullOrder.total)) {
       return res.status(400).json({ error: `Payment amount mismatch. Expected ${fullOrder.total}` });
+    }
+
+    // Access control: only management session for the same restaurant or the order owner (by mobile) can pay
+    if (session) {
+      if (Number(session.restaurantId) !== Number(fullOrder.restaurantId)) return res.status(403).json({ error: 'Not allowed' });
+    } else {
+      const customerMobile = String(req.body?.customerMobile || '').trim();
+      if (!fullOrder.customerMobile || !customerMobile || String(fullOrder.customerMobile) !== customerMobile) {
+        return res.status(403).json({ error: 'Only the order owner can pay this order' });
+      }
     }
 
     const updatedOrder = await markOrderPaid({ orderId, actor, paymentMethod });

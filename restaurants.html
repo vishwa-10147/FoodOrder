@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Choose Restaurant</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;600;700;800&family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --clay:    #e8603a;
+      --clay-d:  #c44b28;
+      --clay-l:  #fdf1ec;
+      --clay-m:  #f9d4c5;
+      --cream:   #faf7f3;
+      --paper:   #f4f0ea;
+      --ink:     #1a1310;
+      --ink-m:   #4a3f38;
+      --ink-l:   #8a7d74;
+      --ink-xl:  #b5a99f;
+      --sage:    #2d6a4f;
+      --sage-l:  #e8f4ee;
+      --gold:    #c9892a;
+      --gold-l:  #fdf3e0;
+      --white:   #ffffff;
+      --border:  #e6ddd5;
+      --radius:  16px;
+      --shadow:  0 4px 24px rgba(26,19,16,0.1);
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'DM Sans', sans-serif;
+      background: var(--paper);
+      color: var(--ink);
+      min-height: 100dvh;
+      overflow-x: hidden;
+    }
+
+    /* Page container */
+    .wrap{max-width:1100px;margin:28px auto;padding:16px}
+    header{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px}
+    h1{font-size:20px;margin:0;font-family:'Playfair Display', serif}
+
+    /* Grid / cards (keeps original structure but uses theme variables) */
+    .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:14px}
+    .card{background:var(--white);border-radius:12px;overflow:hidden;box-shadow:var(--shadow);cursor:pointer;text-decoration:none;color:inherit;display:flex;flex-direction:column}
+    .thumb{height:140px;background:#eee;display:flex;align-items:center;justify-content:center;font-size:40px}
+    .body{padding:12px;display:flex;flex-direction:column;gap:6px}
+    .name{font-weight:700;color:var(--ink)}
+    .meta{font-size:13px;color:var(--ink-l)}
+    .loc{font-size:12px;color:var(--ink-l)}
+    .btn{margin-top:8px;padding:8px 10px;border-radius:8px;background:var(--clay);color:white;border:none;font-weight:700;text-align:center}
+    @media(max-width:600px){.thumb{height:110px}}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <h1>Order from a restaurant</h1>
+      <div style="font-size:13px;color:var(--muted)">Tap a restaurant to open its outlet page</div>
+    </header>
+    <div id="grid" class="grid">Loading…</div>
+  </div>
+
+  <script>
+    async function fetchRestaurants(){
+      try{
+        const res = await fetch('/api/public/restaurants');
+        if(!res.ok) throw new Error('Failed to load');
+        const data = await res.json();
+        render(data.restaurants || []);
+      }catch(e){document.getElementById('grid').textContent = 'Unable to load restaurants';}
+    }
+    function safe(v, alt='') { return v || alt }
+    function render(list){
+      const el = document.getElementById('grid');
+      if(!list.length){ el.innerHTML = '<div style="padding:18px;color:#6b7280">No restaurants found.</div>'; return }
+      el.innerHTML = list.map(r => {
+        const img = r.imageUrl ? r.imageUrl : '';
+        const thumb = img ? `<img src="${img}" alt="${r.name}" style="width:100%;height:100%;object-fit:cover;display:block">` : `<div style="font-size:28px">🍽️</div>`;
+          const mapLink = (r.lat && r.lng) ? `<a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(r.lat+','+r.lng)}" target="_blank" style="font-size:12px;color:var(--muted);text-decoration:none;margin-left:6px">View on map</a>` : '';
+          return `
+            <a class="card" href="/client.html?restaurant=${encodeURIComponent(r.code || r.id)}" title="Open ${r.name}">
+              <div class="thumb">${thumb}</div>
+              <div class="body">
+                <div style="display:flex;justify-content:space-between;align-items:center">
+                  <div class="name">${escapeHtml(r.name)}</div>
+                  <div style="font-size:12px;color:var(--muted)">⭐ ${escapeHtml(String(r.rating||'4.1'))}</div>
+                </div>
+                <div class="meta">${escapeHtml(r.cuisines || '')} · ₹${Number(r.priceForTwo||150)} for two</div>
+                <div style="display:flex;align-items:center;gap:8px;">
+                  <div class="loc">${escapeHtml(r.address || '')}</div>
+                  ${mapLink}
+                </div>
+              </div>
+            </a>
+          `
+      }).join('')
+    }
+    function escapeHtml(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;') }
+    fetchRestaurants();
+  </script>
+</body>
+</html>

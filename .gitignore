@@ -2,5 +2,19 @@ node_modules/
 .env
 .env.*
 !.env.example
-# data/
+render-import.env
+render.yaml
+.vscode/
+test/
+test_results*.json
+token.txt
+data/backups/
+data/restaurant.db
+uploads/
+.DS_Store
 *.log
+test-*.txt
+test-image.png
+tmp_*.json
+upload_resp.json
+menu.json
