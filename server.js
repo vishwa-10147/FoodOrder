@@ -1077,6 +1077,31 @@ app.use((req, res, next) => {
 app.use(express.urlencoded({ extended: true }));
 app.use('/data/uploads', express.static(UPLOADS_DIR));
 app.use(express.static(__dirname));
+// Support pretty restaurant URLs without changing the visible path.
+// Examples supported: /r/:code  and /:code  (if :code is not a reserved path)
+app.get(['/r/:code', '/:code'], async (req, res, next) => {
+  try {
+    const maybe = String(req.params.code || '').trim();
+    if (!maybe) return next();
+
+    // reserved paths that should continue to static or other routes
+    const reserved = new Set([
+      'api', 'client.html', 'management', 'management.html', 'restaurants.html', 'index.html', 'outer-screen.html', 'display', 'data', '_redirects', 'favicon.ico'
+    ]);
+    if (reserved.has(maybe.toLowerCase())) return next();
+
+    // normalize and check if restaurant exists
+    const code = normalizeRestaurantCode(maybe);
+    if (!code) return next();
+    const restaurant = await resolveRestaurantByCode(code);
+    if (!restaurant) return next();
+
+    // serve the existing client page so the URL remains pretty (no redirect)
+    return res.sendFile(path.join(__dirname, 'client.html'));
+  } catch (err) {
+    return next();
+  }
+});
 app.use('/api', createMemoryRateLimiter({
   windowMs: RATE_LIMIT_WINDOW_MS,
   max: RATE_LIMIT_MAX,
