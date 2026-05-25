@@ -1119,7 +1119,8 @@ app.get('/api/public/restaurants', async (_req, res) => {
             image_url AS "imageUrl",
             lat, lng
      FROM restaurants
-     ORDER BY name ASC`
+        WHERE code IS NULL OR code <> 'default'
+        ORDER BY name ASC`
   );
   return res.json({ restaurants: rows.map(buildRestaurantPayload) });
 });
