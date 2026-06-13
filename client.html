@@ -1177,6 +1177,7 @@
   let appState = { menu: [], tables: [], orders: [], restaurant: null };
   let restaurants = [];
   let selectedRestaurantCode = 'default';
+  let explicitRestaurantCode = '';
   let cart = [];
   let currentCat = 'all';
   let orderType = 'dine';
@@ -1362,9 +1363,9 @@
       const data = await api('/api/public/restaurants');
       restaurants = Array.isArray(data?.restaurants) ? data.restaurants : [];
       const hasGandikota = restaurants.some(r => String(r.code) === 'gandikotadosa');
-      if (hasGandikota) restaurants = restaurants.filter(r => String(r.code) !== 'default');
+      if (hasGandikota && selectedRestaurantCode !== 'default') restaurants = restaurants.filter(r => String(r.code) !== 'default');
       if (!restaurants.length) restaurants = [{ code: 'default', name: 'Default Restaurant', address: 'Miyapur', cuisines: 'South Indian, Indian', rating: 4.1, ratingCount: '1.4K+', priceForTwo: 150, acceptingOrders: true }];
-      if (!selectedRestaurantCode || !restaurants.some(r => String(r.code) === String(selectedRestaurantCode))) {
+      if (!explicitRestaurantCode && (!selectedRestaurantCode || !restaurants.some(r => String(r.code) === String(selectedRestaurantCode)))) {
         selectedRestaurantCode = restaurants.some(r => String(r.code) === 'gandikotadosa') ? 'gandikotadosa' : restaurants[0].code;
       }
     } catch {
@@ -2163,10 +2164,11 @@
       else if (parts.length >= 2 && parts[0].toLowerCase() === 'r') pathCode = parts[1];
 
       const finalCode = qCode || pathCode || selectedRestaurantCode;
-      if (finalCode && finalCode !== 'default') {
+      if (qCode || pathCode) explicitRestaurantCode = finalCode;
+      if (finalCode) {
         selectedRestaurantCode = finalCode;
         // Hide query string and normalize URL to /code for neatness
-        try { history.replaceState(null, '', `/${selectedRestaurantCode}`); } catch {}
+        if (qCode) try { history.replaceState(null, '', `/${selectedRestaurantCode}${window.location.hash || ''}`); } catch {}
       }
     } catch (e) { /* ignore URL parsing errors */ }
 
