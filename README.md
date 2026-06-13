@@ -73,9 +73,6 @@ npm start
 
 - `npm start`: start the server
 - `npm run dev`: start the server in development mode
-- `npm run supabase:init`: create Supabase schema only
-- `npm run migrate:supabase`: migrate schema and data to Supabase
-- `npm run migrate:supabase:data-only`: migrate data only
 
 ## Environment Configuration
 
@@ -84,6 +81,7 @@ Copy `.env.example` and configure the values needed for your environment:
 - `NODE_ENV`
 - `PORT`
 - `DATABASE_URL`
+- `PGSSL`
 - `RATE_LIMIT_WINDOW_MS`
 - `RATE_LIMIT_MAX`
 - `RAZORPAY_KEY_ID`

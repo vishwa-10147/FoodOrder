@@ -31,6 +31,9 @@ const MANAGEMENT_DEV_FALLBACK_PASSWORD = String(process.env.MANAGEMENT_DEV_FALLB
 const RATE_LIMIT_WINDOW_MS = Math.max(1000, Number(process.env.RATE_LIMIT_WINDOW_MS || 60000));
 const RATE_LIMIT_MAX = Math.max(1, Number(process.env.RATE_LIMIT_MAX || 240));
 const APP_START_TIME = Date.now();
+const PGSSL = String(process.env.PGSSL || '').trim().toLowerCase();
+const PUBLIC_DEFAULT_RESTAURANT_CODE = normalizeRestaurantCode(process.env.PUBLIC_DEFAULT_RESTAURANT_CODE || '');
+const RESTAURANT_DOMAIN_MAP = parseRestaurantDomainMap(process.env.RESTAURANT_DOMAIN_MAP || '');
 
 const RAZORPAY_KEY_ID = String(process.env.RAZORPAY_KEY_ID || '').trim();
 const RAZORPAY_KEY_SECRET = String(process.env.RAZORPAY_KEY_SECRET || '').trim();
@@ -41,11 +44,41 @@ if (!DATABASE_URL) {
   throw new Error('DATABASE_URL is required for PostgreSQL.');
 }
 
+function getPostgresSslConfig(connectionString) {
+  if (['1', 'true', 'yes', 'require'].includes(PGSSL)) return { rejectUnauthorized: false };
+  if (['0', 'false', 'no', 'disable'].includes(PGSSL)) return undefined;
+  return /render\.com|supabase\.co|neon\.tech|railway\.app/i.test(connectionString)
+    ? { rejectUnauthorized: false }
+    : undefined;
+}
+
+function getDatabaseHost(connectionString) {
+  try {
+    return new URL(connectionString).hostname;
+  } catch (_error) {
+    return '';
+  }
+}
+
+function buildStartupError(error) {
+  if (error && error.code === 'ENOTFOUND') {
+    const host = error.hostname || getDatabaseHost(DATABASE_URL) || 'unknown host';
+    const details = [
+      `PostgreSQL host "${host}" could not be resolved.`,
+      'Check the DATABASE_URL environment variable in Render.',
+      'Use the full Render Postgres Internal Database URL only when the web service and database are in the same Render account and region.',
+      'If they are not in the same account/region, use the External Database URL instead.'
+    ];
+    const wrapped = new Error(details.join(' '));
+    wrapped.cause = error;
+    return wrapped;
+  }
+  return error;
+}
+
 const pool = new Pool({
   connectionString: DATABASE_URL,
-  ssl: /render\.com|supabase\.co|neon\.tech|railway\.app/i.test(DATABASE_URL)
-    ? { rejectUnauthorized: false }
-    : undefined
+  ssl: getPostgresSslConfig(DATABASE_URL)
 });
 
 const razorpay = RAZORPAY_ENABLED
@@ -83,6 +116,26 @@ const fallbackMenu = [
 
 function normalizeRestaurantCode(input) {
   return String(input || '').trim().toLowerCase().replace(/[^a-z0-9_-]/g, '').slice(0, 64);
+}
+
+function normalizeHostname(input) {
+  return String(input || '').trim().toLowerCase().replace(/:\d+$/, '').replace(/\.$/, '');
+}
+
+function parseRestaurantDomainMap(input) {
+  const map = new Map();
+  String(input || '').split(',').forEach((entry) => {
+    const [hostPart, codePart] = entry.split(':');
+    const host = normalizeHostname(hostPart);
+    const code = normalizeRestaurantCode(codePart);
+    if (host && code) map.set(host, code);
+  });
+  return map;
+}
+
+function getRestaurantCodeForHost(req) {
+  const host = normalizeHostname(req.headers['x-forwarded-host'] || req.headers.host || '');
+  return RESTAURANT_DOMAIN_MAP.get(host) || PUBLIC_DEFAULT_RESTAURANT_CODE || '';
 }
 
 function getActor(req) {
@@ -1077,8 +1130,18 @@ app.use((req, res, next) => {
 app.use(express.urlencoded({ extended: true }));
 app.use('/data/uploads', express.static(UPLOADS_DIR));
 
-// Make the restaurant chooser the public landing page.
-app.get(['/', '/index.html'], (_req, res) => res.redirect('/restaurants.html'));
+// Route public entry points directly to the restaurant ordering app.
+app.get(['/', '/index.html'], async (req, res) => {
+  const code = getRestaurantCodeForHost(req);
+  if (code) {
+    const restaurant = await resolveRestaurantByCode(code);
+    if (restaurant) return res.redirect(`/${restaurant.code}`);
+  }
+  const defaultRestaurant = await resolveRestaurantByCode('default', 'Default Restaurant');
+  return res.redirect(`/${defaultRestaurant.code}`);
+});
+
+app.get('/restaurants.html', (_req, res) => res.redirect('/'));
 
 app.use(express.static(__dirname));
 // Support pretty restaurant URLs without changing the visible path.
@@ -2308,6 +2371,6 @@ async function start() {
 }
 
 start().catch((error) => {
-  console.error('Startup failed:', error);
+  console.error('Startup failed:', buildStartupError(error));
   process.exit(1);
 });

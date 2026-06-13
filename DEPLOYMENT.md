@@ -1,10 +1,11 @@
 # Production Deployment Guide
 
-This guide is for the current production app: direct ordering, management dashboard, CSV menu import, and Razorpay payments.
+This guide is for the current production app: direct ordering, management dashboard, CSV menu import, PostgreSQL storage, and Razorpay payments.
 
 ## 1) Prerequisites
 - GitHub repository connected to Render
-- Render Web Service with persistent disk mounted at `data`
+- Render Web Service
+- PostgreSQL database, either Render Postgres or another managed Postgres provider
 - Razorpay account with live keys
 
 ## 2) Required Environment Variables
@@ -12,28 +13,42 @@ Set these in Render service settings:
 
 - `NODE_ENV=production`
 - `PORT=10000` (or Render default)
+- `DATABASE_URL=<full_postgres_connection_url>`
 - `RAZORPAY_KEY_ID=<your_live_key_id>`
 - `RAZORPAY_KEY_SECRET=<your_live_key_secret>`
 - `RAZORPAY_WEBHOOK_SECRET=<your_webhook_secret>`
 - `MANAGEMENT_AUTH_SECRET=<long_random_secret>`
-- `REQUIRE_PERSISTENT_DB=true`
+
+Postgres SSL:
+
+- Leave `PGSSL` empty for a Render Internal Database URL when the web service and database are in the same Render account and region.
+- Set `PGSSL=true` for Supabase, Neon, or Render External Database URLs when TLS is required.
 
 Recommended operational settings:
 
 - `RATE_LIMIT_WINDOW_MS=60000`
 - `RATE_LIMIT_MAX=240`
-- `DB_BACKUP_ENABLED=true`
-- `DB_BACKUP_INTERVAL_MINUTES=60`
-- `DB_BACKUP_RETENTION_COUNT=48`
 - `MANAGEMENT_SETUP_KEY=<admin_setup_key>`
 
-Optional explicit path settings (if your platform mount path differs):
+Optional restaurant routing settings:
 
-- `DATA_DIR=/opt/render/project/src/data`
-- `DB_FILE=/opt/render/project/src/data/restaurant.db`
-- `DB_BACKUP_DIR=/opt/render/project/src/data/backups`
+- `PUBLIC_DEFAULT_RESTAURANT_CODE=gandikotadosa`
+- `RESTAURANT_DOMAIN_MAP=gandikotadosa.in:gandikotadosa,www.gandikotadosa.in:gandikotadosa`
 
-## 2.1) Management Login Bootstrap
+Use `PUBLIC_DEFAULT_RESTAURANT_CODE` when one web service/domain should open one restaurant directly. Use `RESTAURANT_DOMAIN_MAP` when multiple custom domains share the same web service and each domain should open a different restaurant.
+
+### 2.1) Render Postgres URL
+
+In Render, copy the full connection string from the database page:
+
+- Use the Internal Database URL only when the web service and database are in the same Render account and region.
+- Use the External Database URL if the database is in a different account/region or if the internal host cannot resolve.
+- Do not set `DATABASE_URL` to only the host name. It must look like:
+  - `postgresql://user:password@host:5432/database`
+
+If deploy logs show `getaddrinfo ENOTFOUND dpg-...`, the web service cannot resolve the database host. Recheck the database status, region, account, and `DATABASE_URL`.
+
+## 2.2) Management Login Bootstrap
 Management now requires login using restaurant name/code + password.
 
 Create first account (first bootstrap does not require setup key):
@@ -62,7 +77,7 @@ Management login endpoint:
 
 Password storage:
 
-- Passwords are stored in SQLite table `restaurant_auth`.
+- Passwords are stored in the PostgreSQL table `restaurant_auth`.
 - Stored as salted PBKDF2 hashes (`password_hash`, `password_salt`), not plain text.
 
 ## 3) Razorpay Webhook
@@ -89,57 +104,26 @@ In Razorpay dashboard:
 - Razorpay checkout and webhook verification both work
 
 ## 6) Data and Backup Notes
-- Primary DB: `data/restaurant.db`
-- Backups: `data/backups/restaurant-YYYYMMDDTHHMMSSZ.db`
-- Backups run at startup and at interval
-- With `REQUIRE_PERSISTENT_DB=true`, production startup fails fast if DB file is missing (prevents silent fresh DB creation and lost logins).
-- If DB file is missing but backups exist, startup now auto-restores from the latest backup before starting.
+- Primary DB: PostgreSQL from `DATABASE_URL`
+- The server creates/migrates required tables during startup.
+- Use your Postgres provider's backups/snapshots for production recovery.
 
 ## 7) Operational Notes
 - Render free tiers may sleep when idle.
-- Keep persistent disk enabled; without it, SQLite data can be lost between deploys.
-- For higher traffic, move to managed Postgres in a future phase.
+- Keep the web service and Render Postgres database in the same region if you use the Internal Database URL.
+- If using an external provider, confirm it allows Render outbound connections and requires the correct SSL setting.
 
-## 8) One-Time Supabase Migration (Automated Script)
-Use this when you want to move existing SQLite data into Supabase Postgres.
+## 8) Supabase Setup
 
-What this does:
-- Creates required tables/indexes in Supabase (if you pass `--apply-schema`).
-- Copies all rows from local SQLite into Supabase.
-- Resets Postgres sequences so new inserts continue correctly.
-
-### 8.1) Supabase setup
 1. Create a Supabase project.
 2. In Supabase dashboard, open: `Settings -> Database -> Connection string -> URI`.
 3. Copy URI and set as `DATABASE_URL`.
-
-### 8.2) Run migration locally
-From project root:
-
-Fresh Supabase DB (schema only, no SQLite import):
-
-```bash
-DATABASE_URL="<supabase_uri>" PGSSL=true npm run supabase:init
-```
-
-```bash
-npm install
-DATABASE_URL="<supabase_uri>" PGSSL=true npm run migrate:supabase
-```
+4. Set `PGSSL=true`.
 
 PowerShell example:
 
 ```powershell
 $env:DATABASE_URL='<supabase_uri>'
 $env:PGSSL='true'
-npm run migrate:supabase
+npm start
 ```
-
-Optional:
-- Custom sqlite source file: set `SQLITE_FILE`.
-- Keep target data (no truncate): run script directly with `--keep-target-data`.
-
-### 8.3) Important notes
-- Migration writes directly to your Supabase DB.
-- Default mode clears target app tables first to prevent duplicate rows.
-- Current runtime server still uses SQLite; this step migrates data only.
