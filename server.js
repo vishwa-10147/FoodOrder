@@ -488,6 +488,25 @@ async function resolveRestaurantByCode(restaurantCode, fallbackName = '') {
   return buildRestaurantPayload(created.rows[0]);
 }
 
+async function findRestaurantByCode(restaurantCode) {
+  const code = normalizeRestaurantCode(restaurantCode);
+  if (!code) return null;
+  const { rows } = await pool.query(
+    `SELECT id, code, name, address, cuisines,
+            rating, rating_count AS "ratingCount",
+            price_for_two AS "priceForTwo",
+            accepting_orders AS "acceptingOrders",
+            reopen_note AS "reopenNote",
+            image_url AS "imageUrl",
+            lat, lng
+     FROM restaurants
+     WHERE code = $1
+     LIMIT 1`,
+    [code]
+  );
+  return rows[0] ? buildRestaurantPayload(rows[0]) : null;
+}
+
 async function resolveRestaurantByCodeOrName(input) {
   const raw = String(input || '').trim();
   if (!raw) return resolveRestaurantByCode('default', 'Default Restaurant');
@@ -1160,7 +1179,7 @@ app.get(['/r/:code', '/:code'], async (req, res, next) => {
     // normalize and check if restaurant exists
     const code = normalizeRestaurantCode(maybe);
     if (!code) return next();
-    const restaurant = await resolveRestaurantByCode(code);
+    const restaurant = await findRestaurantByCode(code);
     if (!restaurant) return next();
 
     // serve the existing client page so the URL remains pretty (no redirect)
