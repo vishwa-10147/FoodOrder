@@ -58,7 +58,14 @@
       background: var(--bg);
     }
     .auth-wrap {
-      width: 400px; max-width: calc(100vw - 32px);
+      width: 760px; max-width: calc(100vw - 32px);
+    }
+    .auth-grid { display: grid; grid-template-columns: minmax(0, 400px) minmax(260px, 1fr); gap: 18px; align-items: start; }
+    .auth-card {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 14px;
     }
     .auth-logo {
       font-family: var(--font-display);
@@ -97,6 +104,44 @@
     .auth-submit:hover { background: var(--fire-d); }
     .auth-err { font-size: 12px; color: var(--red); margin-top: 10px; min-height: 16px; }
     .auth-note { font-size: 12px; color: var(--green); margin-top: 8px; min-height: 16px; }
+    .auth-list-head {
+      display: flex; justify-content: space-between; align-items: center; gap: 10px;
+      margin-bottom: 10px;
+    }
+    .auth-list-title { font-family: var(--font-display); font-size: 15px; font-weight: 700; }
+    .auth-list-refresh {
+      border: 1px solid var(--border); background: var(--bg3); color: var(--text2);
+      border-radius: 7px; padding: 6px 8px; font-size: 11px; cursor: pointer;
+    }
+    .auth-list-refresh:hover { color: var(--text); border-color: var(--border2); }
+    .restaurant-list {
+      display: grid; gap: 8px;
+      max-height: min(430px, calc(100dvh - 220px));
+      overflow: auto;
+      padding-right: 2px;
+    }
+    .restaurant-row {
+      border: 1px solid var(--border);
+      background: var(--bg3);
+      border-radius: 8px;
+      padding: 10px;
+    }
+    .restaurant-row-top { display: flex; justify-content: space-between; gap: 8px; align-items: start; }
+    .restaurant-row-name { font-weight: 700; color: var(--text); line-height: 1.25; }
+    .restaurant-row-code { font-family: var(--font-mono); color: var(--text3); font-size: 10px; margin-top: 3px; }
+    .restaurant-row-meta { color: var(--text2); font-size: 11px; margin-top: 6px; line-height: 1.35; }
+    .restaurant-status { font-size: 10px; font-weight: 700; padding: 4px 7px; border-radius: 999px; white-space: nowrap; }
+    .restaurant-status.open { color: var(--green); background: var(--green-l); }
+    .restaurant-status.closed { color: var(--red); background: var(--red-l); }
+    .restaurant-row-actions { display: flex; gap: 8px; margin-top: 10px; }
+    .restaurant-row-actions button,
+    .restaurant-row-actions a {
+      flex: 1; text-align: center; text-decoration: none;
+      border: 1px solid var(--border); background: var(--bg4); color: var(--text);
+      border-radius: 7px; padding: 7px 8px; font-size: 11px; font-weight: 700; cursor: pointer;
+    }
+    .restaurant-row-actions a { color: var(--fire); }
+    .restaurant-empty { color: var(--text3); font-size: 12px; line-height: 1.5; padding: 12px; border: 1px dashed var(--border); border-radius: 8px; }
 
     /* ── APP SHELL ──────────────────────────────────────── */
     #app { display: none; height: 100dvh; flex-direction: row; }
@@ -640,6 +685,8 @@
       .content-inner { padding: 14px; }
     }
     @media (max-width: 600px) {
+      #auth-gate { align-items: flex-start; overflow: auto; padding: 18px 0; }
+      .auth-grid { grid-template-columns: 1fr; }
       .metrics-grid { grid-template-columns: 1fr; }
       .table-grid { grid-template-columns: repeat(3, 1fr); }
       .menu-form-grid { grid-template-columns: 1fr; }
@@ -664,28 +711,41 @@
   <div class="auth-wrap">
     <div class="auth-logo">Table<span>side</span></div>
     <div class="auth-sub">Management portal — login or register</div>
-    <div class="auth-tabs">
-      <button class="auth-tab active" id="auth-tab-login" onclick="setAuthMode('login')">Login</button>
-      <button class="auth-tab" id="auth-tab-register" onclick="setAuthMode('register')">Register</button>
-    </div>
+    <div class="auth-grid">
+      <div class="auth-card">
+        <div class="auth-tabs">
+          <button class="auth-tab active" id="auth-tab-login" onclick="setAuthMode('login')">Login</button>
+          <button class="auth-tab" id="auth-tab-register" onclick="setAuthMode('register')">Register</button>
+        </div>
 
-    <div class="auth-panel active" id="auth-panel-login">
-      <input class="auth-inp" id="login-restaurant" placeholder="Restaurant name or code" />
-      <input class="auth-inp" id="login-username" placeholder="Username (optional for staff)" />
-      <input class="auth-inp" id="login-password" type="password" placeholder="Password" />
-      <button class="auth-submit" onclick="loginManagement()">Sign In →</button>
-      <div class="auth-err" id="login-error"></div>
-    </div>
+        <div class="auth-panel active" id="auth-panel-login">
+          <input class="auth-inp" id="login-restaurant" placeholder="Restaurant name or code" />
+          <input class="auth-inp" id="login-username" placeholder="Username (optional for staff)" />
+          <input class="auth-inp" id="login-password" type="password" placeholder="Password" />
+          <button class="auth-submit" onclick="loginManagement()">Sign In →</button>
+          <div class="auth-err" id="login-error"></div>
+        </div>
 
-    <div class="auth-panel" id="auth-panel-register">
-      <input class="auth-inp" id="register-restaurant" placeholder="Restaurant code (e.g. gandikotadosa)" />
-      <input class="auth-inp" id="register-restaurant-name" placeholder="Display name (e.g. Gandikota Dosa)" />
-      <input class="auth-inp" id="register-password" type="password" placeholder="Password" />
-      <input class="auth-inp" id="register-confirm-password" type="password" placeholder="Confirm password" />
-      <input class="auth-inp" id="register-setup-key" type="password" placeholder="Setup key (required after first account)" />
-      <button class="auth-submit" onclick="registerManagement()">Register & Sign In →</button>
-      <div class="auth-err" id="register-error"></div>
-      <div class="auth-note" id="register-note"></div>
+        <div class="auth-panel" id="auth-panel-register">
+          <input class="auth-inp" id="register-restaurant" placeholder="Restaurant code (e.g. gandikotadosa)" />
+          <input class="auth-inp" id="register-restaurant-name" placeholder="Display name (e.g. Gandikota Dosa)" />
+          <input class="auth-inp" id="register-password" type="password" placeholder="Password" />
+          <input class="auth-inp" id="register-confirm-password" type="password" placeholder="Confirm password" />
+          <input class="auth-inp" id="register-setup-key" type="password" placeholder="Setup key (required after first account)" />
+          <button class="auth-submit" onclick="registerManagement()">Register & Sign In →</button>
+          <div class="auth-err" id="register-error"></div>
+          <div class="auth-note" id="register-note"></div>
+        </div>
+      </div>
+      <div class="auth-card">
+        <div class="auth-list-head">
+          <div class="auth-list-title">Available restaurants</div>
+          <button class="auth-list-refresh" onclick="loadAvailableRestaurants()">Refresh</button>
+        </div>
+        <div class="restaurant-list" id="available-restaurants">
+          <div class="restaurant-empty">Loading restaurants...</div>
+        </div>
+      </div>
     </div>
   </div>
 </div>
@@ -1074,6 +1134,60 @@
     return String(v||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
   }
 
+  function restaurantUrl(code) {
+    return `/${encodeURIComponent(String(code || 'default').trim() || 'default')}#order`;
+  }
+
+  function chooseRestaurantForLogin(code) {
+    const value = String(code || '').trim();
+    if (!value) return;
+    document.getElementById('login-restaurant').value = value;
+    setAuthMode('login');
+    document.getElementById('login-password')?.focus();
+  }
+
+  function renderAvailableRestaurants(restaurants) {
+    const box = document.getElementById('available-restaurants');
+    if (!box) return;
+    if (!restaurants.length) {
+      box.innerHTML = '<div class="restaurant-empty">No restaurants found. Register the first restaurant to create it.</div>';
+      return;
+    }
+    box.innerHTML = restaurants.map((restaurant) => {
+      const code = String(restaurant.code || 'default').trim() || 'default';
+      const open = restaurant.acceptingOrders !== false;
+      return `
+        <div class="restaurant-row">
+          <div class="restaurant-row-top">
+            <div>
+              <div class="restaurant-row-name">${esc(restaurant.name || code || 'Restaurant')}</div>
+              <div class="restaurant-row-code">${esc(code)}</div>
+            </div>
+            <div class="restaurant-status ${open ? 'open' : 'closed'}">${open ? 'Open' : 'Closed'}</div>
+          </div>
+          <div class="restaurant-row-meta">${esc(restaurant.address || 'No address')} · ${esc(restaurant.cuisines || 'Cuisine not set')}</div>
+          <div class="restaurant-row-actions">
+            <a href="${restaurantUrl(code)}" target="_blank" rel="noopener">Client</a>
+            <button onclick="chooseRestaurantForLogin('${esc(code)}')">Manage</button>
+          </div>
+        </div>
+      `;
+    }).join('');
+  }
+
+  async function loadAvailableRestaurants() {
+    const box = document.getElementById('available-restaurants');
+    if (box) box.innerHTML = '<div class="restaurant-empty">Loading restaurants...</div>';
+    try {
+      const res = await fetch('/api/public/restaurants', { headers: { Accept: 'application/json' } });
+      if (!res.ok) throw new Error('Failed to load restaurants');
+      const data = await res.json();
+      renderAvailableRestaurants(Array.isArray(data?.restaurants) ? data.restaurants : []);
+    } catch (error) {
+      if (box) box.innerHTML = `<div class="restaurant-empty">${esc(error.message || 'Failed to load restaurants')}</div>`;
+    }
+  }
+
   function orderSubtotal(o) {
     const computed = (o.items||[]).reduce((s,i)=>s+Number(i.price||0)*Number(i.qty||0),0);
     return Number(o.subtotal||computed);
@@ -1129,6 +1243,7 @@
       document.getElementById('login-restaurant').value = restaurant;
       document.getElementById('login-password').value = password;
       setAuthMode('login');
+      await loadAvailableRestaurants();
       // call login and then set role from response
       await loginManagement();
     } catch(e) { err.textContent = e.message||'Registration failed'; }
@@ -1145,6 +1260,7 @@
     document.getElementById('auth-gate').style.display = 'flex';
     document.getElementById('app').classList.remove('visible');
     setAuthMode('login');
+    loadAvailableRestaurants();
     if (msg) document.getElementById('login-error').textContent = msg;
   }
 

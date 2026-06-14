@@ -138,6 +138,17 @@ function getRestaurantCodeForHost(req) {
   return RESTAURANT_DOMAIN_MAP.get(host) || PUBLIC_DEFAULT_RESTAURANT_CODE || '';
 }
 
+function getPreferredCustomDomain(restaurantCode) {
+  if (!restaurantCode) return null;
+  const code = normalizeRestaurantCode(restaurantCode);
+  for (const [host, mappedCode] of RESTAURANT_DOMAIN_MAP.entries()) {
+    if (mappedCode === code) {
+      return host;
+    }
+  }
+  return null;
+}
+
 function getActor(req) {
   const actor = req.headers['x-actor'];
   return typeof actor === 'string' && actor.trim() ? actor.trim() : 'system';
@@ -1149,16 +1160,35 @@ app.use((req, res, next) => {
 app.use(express.urlencoded({ extended: true }));
 app.use('/data/uploads', express.static(UPLOADS_DIR));
 
-// Route public entry points directly to the restaurant ordering app.
-app.get(['/', '/index.html'], async (req, res) => {
+async function redirectToRestaurantForHost(req, res) {
+  const host = normalizeHostname(req.headers['x-forwarded-host'] || req.headers.host || '');
+  const mappedCode = RESTAURANT_DOMAIN_MAP.get(host);
+  if (mappedCode) {
+    const restaurant = await resolveRestaurantByCode(mappedCode);
+    if (restaurant) {
+      // Serve client.html directly for custom domain roots! No redirect to /code needed.
+      return res.sendFile(path.join(__dirname, 'client.html'));
+    }
+  }
+
   const code = getRestaurantCodeForHost(req);
   if (code) {
     const restaurant = await resolveRestaurantByCode(code);
-    if (restaurant) return res.redirect(`/${restaurant.code}`);
+    if (restaurant) {
+      const preferredCustomDomain = getPreferredCustomDomain(restaurant.code);
+      if (preferredCustomDomain) {
+        const protocol = req.headers['x-forwarded-proto'] || req.protocol || 'http';
+        return res.redirect(`${protocol}://${preferredCustomDomain}/`);
+      }
+      return res.redirect(`/${restaurant.code}`);
+    }
   }
   const defaultRestaurant = await resolveRestaurantByCode('default', 'Default Restaurant');
   return res.redirect(`/${defaultRestaurant.code}`);
-});
+}
+
+// Route public entry points directly to the restaurant ordering app.
+app.get(['/', '/index.html', '/client.html'], redirectToRestaurantForHost);
 
 app.get('/restaurants.html', (_req, res) => res.redirect('/'));
 
@@ -1181,6 +1211,22 @@ app.get(['/r/:code', '/:code'], async (req, res, next) => {
     if (!code) return next();
     const restaurant = await findRestaurantByCode(code);
     if (!restaurant) return next();
+
+    // Custom domain redirection logic:
+    const preferredCustomDomain = getPreferredCustomDomain(code);
+    if (preferredCustomDomain) {
+      const currentHost = normalizeHostname(req.headers['x-forwarded-host'] || req.headers.host || '');
+      const protocol = req.headers['x-forwarded-proto'] || req.protocol || 'http';
+      
+      // If we are not currently on the custom domain (or its www subdomain), redirect to it!
+      if (currentHost !== preferredCustomDomain && currentHost !== 'www.' + preferredCustomDomain) {
+        return res.redirect(`${protocol}://${preferredCustomDomain}/`);
+      } else {
+        // If we are already on the custom domain but the path contains the restaurant code,
+        // redirect to the root of the custom domain to keep the URL clean.
+        return res.redirect(`${protocol}://${currentHost}/`);
+      }
+    }
 
     // serve the existing client page so the URL remains pretty (no redirect)
     return res.sendFile(path.join(__dirname, 'client.html'));
@@ -1219,6 +1265,17 @@ app.get('/api/state', async (_req, res) => {
   return res.json(await getState(restaurant.id));
 });
 
+app.get('/api/public/config', async (req, res) => {
+  const host = normalizeHostname(req.headers['x-forwarded-host'] || req.headers.host || '');
+  const hasCustomDomain = RESTAURANT_DOMAIN_MAP.has(host);
+  const restaurantCode = getRestaurantCodeForHost(req);
+  return res.json({
+    restaurantCode: restaurantCode || null,
+    defaultRestaurantCode: PUBLIC_DEFAULT_RESTAURANT_CODE || null,
+    isCustomDomain: hasCustomDomain
+  });
+});
+
 app.get('/api/public/restaurants', async (_req, res) => {
   const { rows } = await pool.query(
     `SELECT id, code, name, address, cuisines,
@@ -1229,8 +1286,11 @@ app.get('/api/public/restaurants', async (_req, res) => {
             image_url AS "imageUrl",
             lat, lng
      FROM restaurants
-        WHERE code IS NULL OR code <> 'default'
-        ORDER BY name ASC`
+     WHERE EXISTS (
+       SELECT 1 FROM restaurant_auth
+       WHERE restaurant_auth.restaurant_id = restaurants.id
+     )
+     ORDER BY name ASC`
   );
   return res.json({ restaurants: rows.map(buildRestaurantPayload) });
 });
@@ -1254,7 +1314,10 @@ app.post('/api/management/register', async (req, res) => {
   if (!restaurantInput) return res.status(400).json({ error: 'Restaurant name or code is required' });
   if (password.length < 6) return res.status(400).json({ error: 'Password must be at least 6 characters' });
 
+  const normalizedCode = normalizeRestaurantCode(restaurantInput);
+  const existingRestaurant = await findRestaurantByCode(normalizedCode);
   const restaurant = await resolveRestaurantByCode(restaurantInput, restaurantName || restaurantInput);
+  const isNewRestaurant = !existingRestaurant;
   const existing = await pool.query('SELECT restaurant_id FROM restaurant_auth WHERE restaurant_id = $1', [restaurant.id]);
   if (existing.rows.length && MANAGEMENT_SETUP_KEY && setupKey !== MANAGEMENT_SETUP_KEY) {
     return res.status(403).json({ error: 'Valid setup key required to change an existing restaurant password' });
@@ -1284,8 +1347,18 @@ app.post('/api/management/register', async (req, res) => {
     // ignore user creation errors
   }
 
+  if (isNewRestaurant) {
+    const client = await pool.connect();
+    try {
+      await ensureDefaultTables(client, restaurant.id, 12);
+    } finally {
+      client.release();
+    }
+  }
+
   return res.json({
     ok: true,
+    created: isNewRestaurant,
     token: createManagementToken({
       restaurantId: restaurant.id,
       restaurantCode: restaurant.code,

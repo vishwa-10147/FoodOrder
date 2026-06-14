@@ -26,3 +26,7 @@ services:
         value: "60000"
       - key: RATE_LIMIT_MAX
         value: "240"
+      - key: PUBLIC_DEFAULT_RESTAURANT_CODE
+        sync: false
+      - key: RESTAURANT_DOMAIN_MAP
+        sync: false

@@ -1178,6 +1178,7 @@
   let restaurants = [];
   let selectedRestaurantCode = 'default';
   let explicitRestaurantCode = '';
+  let isCustomDomain = false;
   let cart = [];
   let currentCat = 'all';
   let orderType = 'dine';
@@ -1362,14 +1363,22 @@
     try {
       const data = await api('/api/public/restaurants');
       restaurants = Array.isArray(data?.restaurants) ? data.restaurants : [];
-      const hasGandikota = restaurants.some(r => String(r.code) === 'gandikotadosa');
-      if (hasGandikota && selectedRestaurantCode !== 'default') restaurants = restaurants.filter(r => String(r.code) !== 'default');
       if (!restaurants.length) restaurants = [{ code: 'default', name: 'Default Restaurant', address: 'Miyapur', cuisines: 'South Indian, Indian', rating: 4.1, ratingCount: '1.4K+', priceForTwo: 150, acceptingOrders: true }];
       if (!explicitRestaurantCode && (!selectedRestaurantCode || !restaurants.some(r => String(r.code) === String(selectedRestaurantCode)))) {
-        selectedRestaurantCode = restaurants.some(r => String(r.code) === 'gandikotadosa') ? 'gandikotadosa' : restaurants[0].code;
+        selectedRestaurantCode = restaurants[0].code;
       }
     } catch {
       restaurants = [{ code: 'default', name: 'Tableside Restaurant', address: 'Hyderabad', cuisines: 'South Indian, Indian', rating: 4.5, ratingCount: '2K+', priceForTwo: 150, acceptingOrders: true }];
+    }
+  }
+
+  async function loadHostRestaurantCode() {
+    try {
+      const data = await api('/api/public/config');
+      isCustomDomain = !!data?.isCustomDomain;
+      return String(data?.restaurantCode || '').trim();
+    } catch {
+      return '';
     }
   }
 
@@ -2163,12 +2172,21 @@
       if (parts.length === 1) pathCode = parts[0];
       else if (parts.length >= 2 && parts[0].toLowerCase() === 'r') pathCode = parts[1];
 
-      const finalCode = qCode || pathCode || selectedRestaurantCode;
-      if (qCode || pathCode) explicitRestaurantCode = finalCode;
+      const hostCode = await loadHostRestaurantCode();
+      const finalCode = qCode || pathCode || (isCustomDomain ? hostCode : '') || selectedRestaurantCode || hostCode || 'default';
+      
+      if (qCode || pathCode) {
+        explicitRestaurantCode = finalCode;
+      } else if (isCustomDomain && hostCode) {
+        explicitRestaurantCode = hostCode;
+      }
+
       if (finalCode) {
         selectedRestaurantCode = finalCode;
-        // Hide query string and normalize URL to /code for neatness
-        if (qCode) try { history.replaceState(null, '', `/${selectedRestaurantCode}${window.location.hash || ''}`); } catch {}
+        // Hide query string and normalize URL to /code for neatness, ONLY if NOT on a custom domain
+        if (qCode && !isCustomDomain) {
+          try { history.replaceState(null, '', `/${selectedRestaurantCode}${window.location.hash || ''}`); } catch {}
+        }
       }
     } catch (e) { /* ignore URL parsing errors */ }
 
