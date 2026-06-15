@@ -13,6 +13,7 @@ const Razorpay = require('razorpay');
 const { Pool } = require('pg');
 const { parse } = require('csv-parse/sync');
 const { Server } = require('socket.io');
+const whatsappService = require('./whatsappService');
 
 const app = express();
 const server = http.createServer(app);
@@ -2014,6 +2015,24 @@ app.post('/api/orders', async (req, res) => {
 
     const createdOrder = (await getOrders(restaurantId)).find((order) => order.id === orderId);
     await broadcastState(restaurantId);
+
+    // Send WhatsApp notification for order placed
+    if (createdOrder?.customerMobile && whatsappService.WHATSAPP_ENABLED) {
+      setImmediate(async () => {
+        try {
+          const shopName = restaurant?.name || 'F3 Drivein';
+          await whatsappService.sendOrderPlacedMessage(createdOrder, shopName);
+        } catch (error) {
+          // Log error but don't fail the order creation
+          console.error('Failed to send WhatsApp order placed message:', error.message);
+          whatsappService.logWhatsAppEvent('ORDER_PLACED_ASYNC_FAILED', {
+            orderId: createdOrder.id,
+            error: error.message
+          });
+        }
+      });
+    }
+
     return res.status(201).json({ order: createdOrder });
   } catch (error) {
     return res.status(400).json({ error: error.message || 'Unable to create order' });
@@ -2073,6 +2092,28 @@ app.post('/api/orders/:id/status', requireManagementAuth, async (req, res) => {
 
     await client.query('COMMIT');
     await broadcastState(req.management.restaurantId);
+
+    // Send WhatsApp notification when order is ready
+    if (status === 'ready' && whatsappService.WHATSAPP_ENABLED) {
+      setImmediate(async () => {
+        try {
+          const updatedOrder = await getOrderById(orderId);
+          if (updatedOrder?.customerMobile) {
+            const restaurant = await getRestaurantById(req.management.restaurantId);
+            const shopName = restaurant?.name || 'F3 Drivein';
+            await whatsappService.sendOrderReadyMessage(updatedOrder, shopName);
+          }
+        } catch (error) {
+          // Log error but don't fail the status update
+          console.error('Failed to send WhatsApp order ready message:', error.message);
+          whatsappService.logWhatsAppEvent('ORDER_READY_ASYNC_FAILED', {
+            orderId,
+            error: error.message
+          });
+        }
+      });
+    }
+
     return res.json({ ok: true });
   } catch (error) {
     await client.query('ROLLBACK');
@@ -2451,12 +2492,121 @@ io.on('connection', async (socket) => {
   }
 });
 
+// ════════════════════════════════════════════════════════════════════════════════════
+// WhatsApp Business API Integration Endpoints
+// ════════════════════════════════════════════════════════════════════════════════════
+
+/**
+ * GET /api/whatsapp/status
+ * Check WhatsApp Business API configuration status
+ */
+app.get('/api/whatsapp/status', (_req, res) => {
+  try {
+    const status = whatsappService.getWhatsAppStatus();
+    return res.json({
+      configured: status.enabled,
+      enabled: status.enabled,
+      message: status.enabled ? 'WhatsApp integration is active' : 'WhatsApp integration is not configured'
+    });
+  } catch (error) {
+    return res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * POST /api/whatsapp/test
+ * Send a test WhatsApp message to verify configuration
+ * 
+ * Body: { phoneNumber: string (e.g., "919010002233") }
+ * 
+ * Management authentication required for security
+ */
+app.post('/api/whatsapp/test', requireManagementAuth, async (req, res) => {
+  try {
+    const phoneNumber = String(req.body?.phoneNumber || req.query?.phoneNumber || '').trim();
+    if (!phoneNumber) {
+      return res.status(400).json({ error: 'Phone number is required' });
+    }
+
+    if (!whatsappService.WHATSAPP_ENABLED) {
+      return res.status(400).json({ error: 'WhatsApp is not configured. Check WHATSAPP_ACCESS_TOKEN and WHATSAPP_PHONE_NUMBER_ID environment variables.' });
+    }
+
+    const response = await whatsappService.sendTestMessage(phoneNumber);
+    return res.json({
+      success: true,
+      message: 'Test message sent successfully',
+      messageId: response.messages?.[0]?.id,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('WhatsApp test message error:', error);
+    return res.status(400).json({
+      error: error.message || 'Failed to send test message',
+      details: error.apiResponse || null
+    });
+  }
+});
+
+/**
+ * GET /api/whatsapp/webhook
+ * WhatsApp Cloud API webhook verification (GET request during setup)
+ * 
+ * Query params:
+ * - hub.mode: 'subscribe'
+ * - hub.challenge: random token
+ * - hub.verify_token: must match WHATSAPP_VERIFY_TOKEN
+ */
+app.get('/api/whatsapp/webhook', (req, res) => {
+  const mode = req.query['hub.mode'];
+  const token = req.query['hub.verify_token'];
+  const challenge = req.query['hub.challenge'];
+  const webhookToken = String(process.env.WHATSAPP_VERIFY_TOKEN || '').trim();
+
+  if (!webhookToken) {
+    console.warn('⚠️  WHATSAPP_VERIFY_TOKEN not set. Webhook verification will fail.');
+    return res.status(403).json({ error: 'Webhook verification token not configured' });
+  }
+
+  if (mode === 'subscribe' && token === webhookToken) {
+    console.log('✅ WhatsApp webhook verified');
+    return res.status(200).send(challenge);
+  }
+
+  return res.status(403).json({ error: 'Webhook verification failed' });
+});
+
+/**
+ * POST /api/whatsapp/webhook
+ * WhatsApp Cloud API webhook for incoming messages
+ * (Currently not processing incoming messages - only for future expansion)
+ */
+app.post('/api/whatsapp/webhook', (req, res) => {
+  // For now, we only send messages, don't receive them
+  // This endpoint is required by WhatsApp but we acknowledge all messages
+  const entry = req.body?.entry?.[0];
+  const changes = entry?.changes?.[0];
+
+  if (!changes) {
+    return res.status(200).json({ received: true });
+  }
+
+  // Log the event (optional)
+  if (process.env.NODE_ENV !== 'production') {
+    console.log('📱 WhatsApp Webhook Event:', JSON.stringify(changes.value, null, 2));
+  }
+
+  // Always return 200 to acknowledge receipt
+  return res.status(200).json({ received: true });
+});
+
 app.use((error, _req, res, _next) => {
   return res.status(500).json({ error: error.message || 'Internal server error' });
 });
 
 async function start() {
   await initDatabase();
+  whatsappService.validateWhatsAppConfig();
   server.listen(PORT, () => {
     console.log(`Server running on http://localhost:${PORT}`);
   });

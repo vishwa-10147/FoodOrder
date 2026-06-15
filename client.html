@@ -2050,7 +2050,7 @@
       const order = appState.orders.find(o => o.id === pendingPaymentOrderId);
       if (!order) { alert('Order not found.'); return; }
       if (!razorpayConfig.enabled || !razorpayConfig.keyId) { alert('Payment not configured. Please configure Razorpay.'); return; }
-      const gateway = await api(`/api/orders/${pendingPaymentOrderId}/razorpay-order`, 'POST', { paymentMethod: selectedPaymentMethod });
+      const gateway = await api(`/api/orders/${pendingPaymentOrderId}/razorpay-order`, 'POST', { paymentMethod: selectedPaymentMethod, customerMobile: order.customerMobile });
       const rzp = new Razorpay({
         key: gateway.keyId, amount: gateway.amountPaise,
         currency: gateway.currency || 'INR', name: 'Tableside',
