@@ -521,7 +521,7 @@ async function findRestaurantByCode(restaurantCode) {
 
 async function resolveRestaurantByCodeOrName(input) {
   const raw = String(input || '').trim();
-  if (!raw) return resolveRestaurantByCode('default', 'Default Restaurant');
+  if (!raw) return resolveRestaurantByCode('gandikotadosa', 'Gandikota');
   const code = normalizeRestaurantCode(raw);
   const { rows } = await pool.query(
     `SELECT id, code, name, address, cuisines,
@@ -931,7 +931,7 @@ async function broadcastState(restaurantId) {
     io.emit('state:update', await getState(restaurantId));
     return;
   }
-  const restaurant = await resolveRestaurantByCode('default', 'Default Restaurant');
+  const restaurant = await resolveRestaurantByCode('gandikotadosa', 'Gandikota');
   io.emit('state:update', await getState(restaurant.id));
 }
 
@@ -1068,9 +1068,13 @@ async function initDatabase() {
     `);
 
     const now = Date.now();
-    // Use PUBLIC_DEFAULT_RESTAURANT_CODE if set, otherwise fallback to 'default'
-    const defaultCode = PUBLIC_DEFAULT_RESTAURANT_CODE || 'default';
-    const defaultName = defaultCode === 'gandikotadosa' ? 'Gandikota' : 'Default Restaurant';
+    
+    // Delete any 'default' restaurant - only keep gandikotadosa
+    await client.query(`DELETE FROM restaurants WHERE code = 'default'`);
+    
+    // Always use gandikotadosa as the primary restaurant
+    const defaultCode = 'gandikotadosa';
+    const defaultName = 'Gandikota';
     const restaurantResult = await client.query(
       `INSERT INTO restaurants (
          code, name, created_at, updated_at, address, cuisines, rating, rating_count, price_for_two, accepting_orders
@@ -1187,7 +1191,7 @@ async function redirectToRestaurantForHost(req, res) {
       return res.redirect(`/${restaurant.code}`);
     }
   }
-  const defaultRestaurant = await resolveRestaurantByCode('default', 'Default Restaurant');
+  const defaultRestaurant = await resolveRestaurantByCode('gandikotadosa', 'Gandikota');
   return res.redirect(`/${defaultRestaurant.code}`);
 }
 
@@ -1265,7 +1269,7 @@ app.get('/api/health', async (_req, res) => {
 });
 
 app.get('/api/state', async (_req, res) => {
-  const restaurant = await resolveRestaurantByCode('default', 'Default Restaurant');
+  const restaurant = await resolveRestaurantByCode('gandikotadosa', 'Gandikota');
   return res.json(await getState(restaurant.id));
 });
 
@@ -1300,8 +1304,8 @@ app.get('/api/public/restaurants', async (_req, res) => {
 });
 
 app.get('/api/public/state', async (req, res) => {
-  const restaurantInput = String(req.query.restaurant || req.query.restaurantCode || 'default').trim();
-  const restaurant = await resolveRestaurantByCodeOrName(restaurantInput) || await resolveRestaurantByCode('default', 'Default Restaurant');
+  const restaurantInput = String(req.query.restaurant || req.query.restaurantCode || 'gandikotadosa').trim();
+  const restaurant = await resolveRestaurantByCodeOrName(restaurantInput) || await resolveRestaurantByCode('gandikotadosa', 'Gandikota');
   if (!restaurant?.id) return res.status(404).json({ error: 'Restaurant not found' });
   return res.json({
     ...(await getState(restaurant.id)),
@@ -1612,8 +1616,18 @@ app.patch('/api/management/users/:id', requireManagementAuth, requireOwner, asyn
   }
 });
 
+// List ALL restaurants in database (for debugging)
+app.get('/api/management/all-restaurants', requireManagementAuth, async (req, res) => {
+  const { rows } = await pool.query(
+    `SELECT id, code, name, address, cuisines, rating, rating_count, price_for_two, accepting_orders, created_at 
+     FROM restaurants 
+     ORDER BY created_at DESC`
+  );
+  return res.json({ restaurants: rows });
+});
+
 app.get('/api/menu', async (req, res) => {
-  const restaurant = await resolveRestaurantByCodeOrName(String(req.query.restaurant || 'default').trim()) || await resolveRestaurantByCode('default');
+  const restaurant = await resolveRestaurantByCodeOrName(String(req.query.restaurant || 'gandikotadosa').trim()) || await resolveRestaurantByCode('gandikotadosa');
   return res.json(await getMenu(restaurant.id));
 });
 
@@ -1983,8 +1997,8 @@ app.post('/api/orders', async (req, res) => {
     const session = getManagementSession(req);
     const requestedRestaurant = session
       ? null
-      : (await resolveRestaurantByCodeOrName(String(req.body?.restaurantCode || req.body?.restaurant || 'default').trim()));
-    const restaurantId = session?.restaurantId || requestedRestaurant?.id || (await resolveRestaurantByCode('default')).id;
+      : (await resolveRestaurantByCodeOrName(String(req.body?.restaurantCode || req.body?.restaurant || 'gandikotadosa').trim()));
+    const restaurantId = session?.restaurantId || requestedRestaurant?.id || (await resolveRestaurantByCode('gandikotadosa')).id;
     const restaurant = await getRestaurantById(restaurantId);
     if (restaurant?.acceptingOrders === false && !session) {
       return res.status(400).json({ error: 'This outlet is not accepting orders right now' });
@@ -2489,7 +2503,7 @@ app.delete('/api/tables/:tableNumber', requireManagementAuth, async (req, res) =
 
 io.on('connection', async (socket) => {
   try {
-    const restaurant = await resolveRestaurantByCode('default', 'Default Restaurant');
+    const restaurant = await resolveRestaurantByCode('gandikotadosa', 'Gandikota');
     socket.emit('state:update', await getState(restaurant.id));
   } catch (_error) {
   }
