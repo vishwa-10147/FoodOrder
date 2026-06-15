@@ -1068,14 +1068,17 @@ async function initDatabase() {
     `);
 
     const now = Date.now();
+    // Use PUBLIC_DEFAULT_RESTAURANT_CODE if set, otherwise fallback to 'default'
+    const defaultCode = PUBLIC_DEFAULT_RESTAURANT_CODE || 'default';
+    const defaultName = defaultCode === 'gandikotadosa' ? 'Gandikota' : 'Default Restaurant';
     const restaurantResult = await client.query(
       `INSERT INTO restaurants (
          code, name, created_at, updated_at, address, cuisines, rating, rating_count, price_for_two, accepting_orders
        )
-       VALUES ('default', 'Default Restaurant', $1, $1, 'Miyapur', 'South Indian, Indian', 4.1, '1.4K+ ratings', 150, TRUE)
+       VALUES ($1, $2, $3, $3, 'Miyapur', 'South Indian, Indian', 4.1, '1.4K+ ratings', 150, TRUE)
        ON CONFLICT (code) DO UPDATE SET updated_at = restaurants.updated_at
        RETURNING id`,
-      [now]
+      [defaultCode, defaultName, now]
     );
     const defaultRestaurantId = Number(restaurantResult.rows[0].id);
 
