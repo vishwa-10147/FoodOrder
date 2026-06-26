@@ -938,7 +938,10 @@
           <input class="filter-date" id="kitchen-date-filter" type="date" onchange="renderKitchen()" />
           <button class="btn-ghost" onclick="clearKitchenDateFilter()">All Dates</button>
         </div>
-        <div style="font-size:12px;color:var(--text3);">Delivery orders only</div>
+        <div style="display:flex;align-items:center;gap:6px;">
+          <input type="checkbox" id="kitchen-delivery-only" onchange="renderKitchen()" style="cursor:pointer;" />
+          <label for="kitchen-delivery-only" style="font-size:12px;color:var(--text3);cursor:pointer;user-select:none;">Delivery orders only</label>
+        </div>
       </div>
       <div class="content-inner" style="height:calc(100% - 44px);overflow:hidden;">
         <div class="pipeline">
@@ -1797,8 +1800,11 @@
   // ── KITCHEN ──────────────────────────────────────────────
   function renderKitchen() {
     const selectedDate = getSelectedDate('kitchen-date-filter');
+    const deliveryOnlyCheckbox = document.getElementById('kitchen-delivery-only');
+    const deliveryOnly = deliveryOnlyCheckbox ? deliveryOnlyCheckbox.checked : false;
+
     const paidOrders = getPaidOrders().filter(o => {
-      if (o.orderType !== 'delivery') return false;
+      if (deliveryOnly && o.orderType !== 'delivery') return false;
       if (!selectedDate) return true;
       return orderDateKey(o) === selectedDate;
     });
