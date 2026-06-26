@@ -1025,7 +1025,12 @@
 
             <!-- Menu List -->
             <div class="card">
-              <div class="card-head"><div class="card-title">Menu Items</div></div>
+              <div class="card-head" style="display:flex; justify-content:space-between; align-items:center; gap:16px;">
+                <div class="card-title">Menu Items</div>
+                <div class="search-bar" style="flex:1; max-width:300px;">
+                  <input class="inp" id="menu-item-search" type="text" placeholder="Search menu items..." oninput="renderMenuManagement()" style="width:100%; padding:6px 12px; font-size:12px;" />
+                </div>
+              </div>
               <div id="menu-admin-list"></div>
             </div>
           </div>
@@ -1874,8 +1879,24 @@
       `;
       return;
     }
-    const rows = (state.menu||[]).slice().sort((a,b)=>Number(a.id)-Number(b.id));
-    if (!rows.length) { el.innerHTML='<div style="padding:16px;font-size:12px;color:var(--text3);">No menu items.</div>'; return; }
+    const searchInput = document.getElementById('menu-item-search');
+    const query = searchInput ? searchInput.value.toLowerCase().trim() : '';
+
+    let rows = (state.menu||[]).slice().sort((a,b)=>Number(a.id)-Number(b.id));
+    if (query) {
+      rows = rows.filter(item => {
+        const name = String(item.name || '').toLowerCase();
+        const category = String(item.cat || item.category || '').toLowerCase();
+        const description = String(item.desc || item.description || '').toLowerCase();
+        const id = String(item.id);
+        return name.includes(query) || category.includes(query) || description.includes(query) || id.includes(query);
+      });
+    }
+
+    if (!rows.length) { 
+      el.innerHTML = `<div style="padding:16px;font-size:12px;color:var(--text3);">${query ? 'No matching menu items found.' : 'No menu items.'}</div>`; 
+      return; 
+    }
     el.innerHTML = rows.map(item=>{
       const avail = Number(item.available)===1;
       return `
