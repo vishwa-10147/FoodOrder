@@ -1221,19 +1221,21 @@ app.get(['/r/:code', '/:code'], async (req, res, next) => {
     if (!restaurant) return next();
 
     // Custom domain redirection logic:
+    const currentHost = normalizeHostname(req.headers['x-forwarded-host'] || req.headers.host || '');
+    const mappedCodeForHost = RESTAURANT_DOMAIN_MAP.get(currentHost);
+    const protocol = req.headers['x-forwarded-proto'] || req.protocol || 'http';
+
+    if (mappedCodeForHost) {
+      // The current hostname is a custom domain.
+      // Redirect any code path suffix to the clean root of the custom domain.
+      return res.redirect(`${protocol}://${currentHost}/`);
+    }
+
     const preferredCustomDomain = getPreferredCustomDomain(code);
     if (preferredCustomDomain) {
-      const currentHost = normalizeHostname(req.headers['x-forwarded-host'] || req.headers.host || '');
-      const protocol = req.headers['x-forwarded-proto'] || req.protocol || 'http';
-      
-      // If we are not currently on the custom domain (or its www subdomain), redirect to it!
-      if (currentHost !== preferredCustomDomain && currentHost !== 'www.' + preferredCustomDomain) {
-        return res.redirect(`${protocol}://${preferredCustomDomain}/`);
-      } else {
-        // If we are already on the custom domain but the path contains the restaurant code,
-        // redirect to the root of the custom domain to keep the URL clean.
-        return res.redirect(`${protocol}://${currentHost}/`);
-      }
+      // We are on the main domain (or another domain), but this restaurant has a custom domain.
+      // Redirect to the clean root of the custom domain.
+      return res.redirect(`${protocol}://${preferredCustomDomain}/`);
     }
 
     // serve the existing client page so the URL remains pretty (no redirect)

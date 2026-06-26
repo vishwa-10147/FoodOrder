@@ -2173,7 +2173,7 @@
       else if (parts.length >= 2 && parts[0].toLowerCase() === 'r') pathCode = parts[1];
 
       const hostCode = await loadHostRestaurantCode();
-      const finalCode = qCode || pathCode || (isCustomDomain ? hostCode : '') || selectedRestaurantCode || hostCode || 'default';
+      const finalCode = isCustomDomain ? (hostCode || 'default') : (qCode || pathCode || selectedRestaurantCode || hostCode || 'default');
       
       if (qCode || pathCode) {
         explicitRestaurantCode = finalCode;
