@@ -114,6 +114,17 @@
       border-radius: 7px; padding: 6px 8px; font-size: 11px; cursor: pointer;
     }
     .auth-list-refresh:hover { color: var(--text); border-color: var(--border2); }
+    .sound-btn {
+      border: 1px solid var(--border);
+      background: var(--bg3);
+      color: var(--text2);
+      border-radius: 999px;
+      padding: 6px 10px;
+      font-size: 11px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    .sound-btn.active { color: var(--green); border-color: rgba(34,197,94,0.35); background: var(--green-l); }
     .restaurant-list {
       display: grid; gap: 8px;
       max-height: min(430px, calc(100dvh - 220px));
@@ -795,6 +806,7 @@
     <div class="topbar">
       <div class="tb-title" id="tb-title">Dashboard</div>
       <div class="tb-right">
+        <button class="sound-btn" id="order-sound-btn" onclick="toggleOrderSound()">Sound</button>
         <div class="live-indicator"><div class="live-dot"></div>LIVE</div>
         <div id="clock"></div>
       </div>
@@ -1100,6 +1112,7 @@
   // ── STATE ────────────────────────────────────────────────
   const MGMT_TOKEN_KEY = 'mgmt_auth_token';
   const AUTO_PRINT_KEY = 'mgmt_auto_print';
+  const ORDER_SOUND_KEY = 'mgmt_order_sound';
   let state = { menu: [], tables: [], orders: [], stats: {}, restaurant: null };
   let auditLogs = [];
   let managementAuth = null;
@@ -1111,6 +1124,8 @@
   let autoPrintQueue = [];
   let isAutoPrinting = false;
   let autoPrintPopupBlockedNotified = false;
+  let orderSoundEnabled = true;
+  let orderSoundContext = null;
   const tableOrderDrafts = {};
   let outletOpen = true;
   let csvPreviewItems = null;
@@ -1140,6 +1155,74 @@
 
   function esc(v) {
     return String(v||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+  }
+
+  function getOrderSoundContext() {
+    if (!orderSoundContext) {
+      const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+      if (!AudioContextClass) return null;
+      orderSoundContext = new AudioContextClass();
+    }
+    return orderSoundContext;
+  }
+
+  async function unlockOrderSound(playTest = false) {
+    const ctx = getOrderSoundContext();
+    if (!ctx) return false;
+    try {
+      if (ctx.state === 'suspended') await ctx.resume();
+      if (playTest) playOrderSound();
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  function renderOrderSoundControl() {
+    const btn = document.getElementById('order-sound-btn');
+    if (!btn) return;
+    btn.textContent = `Sound: ${orderSoundEnabled ? 'On' : 'Off'}`;
+    btn.classList.toggle('active', orderSoundEnabled);
+  }
+
+  async function toggleOrderSound() {
+    orderSoundEnabled = !orderSoundEnabled;
+    try { localStorage.setItem(ORDER_SOUND_KEY, orderSoundEnabled ? '1' : '0'); } catch {}
+    renderOrderSoundControl();
+    if (orderSoundEnabled) {
+      const unlocked = await unlockOrderSound(true);
+      if (!unlocked) showToast('Browser blocked sound. Click Sound again.', '#f59e0b');
+    }
+  }
+
+  function playTone(ctx, start, frequency, duration, gainValue = 0.18) {
+    const oscillator = ctx.createOscillator();
+    const gain = ctx.createGain();
+    oscillator.type = 'sine';
+    oscillator.frequency.setValueAtTime(frequency, start);
+    gain.gain.setValueAtTime(0.0001, start);
+    gain.gain.exponentialRampToValueAtTime(gainValue, start + 0.015);
+    gain.gain.exponentialRampToValueAtTime(0.0001, start + duration);
+    oscillator.connect(gain);
+    gain.connect(ctx.destination);
+    oscillator.start(start);
+    oscillator.stop(start + duration + 0.03);
+  }
+
+  function playOrderSound() {
+    if (!orderSoundEnabled) return;
+    const ctx = getOrderSoundContext();
+    if (!ctx || ctx.state !== 'running') return;
+    const now = ctx.currentTime;
+    playTone(ctx, now, 880, 0.18);
+    playTone(ctx, now + 0.2, 1175, 0.24);
+  }
+
+  function notifyNewOrders(orders) {
+    const count = (orders || []).length;
+    if (!count) return;
+    playOrderSound();
+    showToast(`${count} new order${count > 1 ? 's' : ''} received`, '#22c55e');
   }
 
   function restaurantUrl(code) {
@@ -1210,6 +1293,7 @@
   }
 
   async function loginManagement() {
+    unlockOrderSound(false);
     const restaurant = document.getElementById('login-restaurant').value.trim();
     const username = document.getElementById('login-username').value.trim();
     const password = document.getElementById('login-password').value.trim();
@@ -1328,6 +1412,7 @@
         await fetchState();
         await loadAuditLogs();
         const newOrders = (state.orders||[]).filter(o=>!prev.has(o.id));
+        notifyNewOrders(newOrders);
         enqueueAutoPrint(newOrders);
       } catch {}
     }, 4000);
@@ -2330,6 +2415,8 @@
   (async function init(){
     updateClock(); setInterval(updateClock,30000);
     try { const s=localStorage.getItem(AUTO_PRINT_KEY); if(s==='0'||s==='1') autoPrintEnabled=s==='1'; } catch {}
+    try { const s=localStorage.getItem(ORDER_SOUND_KEY); if(s==='0'||s==='1') orderSoundEnabled=s==='1'; } catch {}
+    renderOrderSoundControl();
     renderPrintControls();
 
     // Set default dates
