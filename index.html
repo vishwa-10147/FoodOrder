@@ -725,11 +725,15 @@
     .pay-method {
       flex: 1; padding: 10px; border-radius: 10px;
       border: 1.5px solid var(--border); text-align: center;
+      background: var(--white);
       font-size: 13px; font-weight: 600; color: var(--ink-m);
       cursor: pointer; transition: all 0.2s;
+      font-family: 'DM Sans', sans-serif;
     }
     .pay-method:hover { border-color: var(--clay-m); color: var(--clay-d); }
     .pay-method.active { border-color: var(--clay); background: var(--clay-l); color: var(--clay-d); }
+    .pay-method:disabled { opacity: 0.5; cursor: not-allowed; }
+    .pay-method-pay { padding: 14px; font-size: 15px; font-weight: 800; }
     .upi-group { margin-bottom: 16px; }
     .pay-btn {
       width: 100%; padding: 14px;
@@ -1114,13 +1118,12 @@
           <div class="pay-card">
             <div class="pay-title">Payment</div>
             <div class="pay-methods">
-              <div class="pay-method active" onclick="setMethod(this,'card')">💳 Card / UPI</div>
+              <button class="pay-method pay-method-pay active" id="pay-btn" onclick="payOrder()">💳 Pay with Card / UPI</button>
             </div>
             <div class="upi-group" id="upi-group" style="display:none;">
               <label class="field-lbl" style="margin-bottom:5px;">UPI ID</label>
               <input class="field-inp" id="upi-id" type="text" placeholder="example@okhdfcbank" />
             </div>
-            <button class="pay-btn" id="pay-btn" onclick="payOrder()">Continue Payment</button>
           </div>
           <div class="pay-card">
             <div class="pay-title">Order Summary</div>
@@ -2049,12 +2052,12 @@
     const btn = document.getElementById('pay-btn');
     if (!order) {
       sum.innerHTML = '<div style="font-size:13px;color:var(--ink-l);">No pending order found.</div>';
-      btn.disabled = true; btn.textContent = 'Continue Payment'; return;
+      btn.disabled = true; btn.textContent = 'Pay with Card / UPI'; return;
     }
     const isPending = Number(order.paid) !== 1;
     if (isPending) setPendingPayment(order.id);
     btn.disabled = PAYMENT_TEST_MODE || !isPending;
-    btn.textContent = PAYMENT_TEST_MODE ? 'Payment disabled for testing' : isPending ? 'Continue Payment' : 'Already Paid';
+    btn.textContent = PAYMENT_TEST_MODE ? 'Payment disabled for testing' : isPending ? '💳 Pay with Card / UPI' : 'Already Paid';
     sum.innerHTML = receiptMarkup(order);
   }
 
