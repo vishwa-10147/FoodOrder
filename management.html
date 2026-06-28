@@ -1265,11 +1265,11 @@
     playTone(ctx, now + 0.2, 1175, 0.24);
   }
 
-  function notifyNewOrders(orders) {
+  function notifyPaidOrders(orders) {
     const count = (orders || []).length;
     if (!count) return;
     playOrderSound();
-    showToast(`${count} new order${count > 1 ? 's' : ''} received`, '#22c55e');
+    showToast(`${count} paid order${count > 1 ? 's' : ''} ready to print`, '#22c55e');
   }
 
   function restaurantUrl(code) {
@@ -1455,14 +1455,12 @@
     // initialize map picker after state loads
     setTimeout(() => { initMapPicker(); }, 300);
     pollTimer = setInterval(async()=>{
-      const prev = knownOrderIds;
       const prevPaid = knownPaidOrderIds;
       try {
         await fetchState();
         await loadAuditLogs();
-        const newOrders = (state.orders||[]).filter(o=>!prev.has(o.id));
         const newlyPaidOrders = (state.orders||[]).filter(o=>Number(o.paid)===1&&!prevPaid.has(o.id));
-        notifyNewOrders(newOrders);
+        notifyPaidOrders(newlyPaidOrders);
         enqueueAutoPrint(newlyPaidOrders);
       } catch {}
     }, 4000);
