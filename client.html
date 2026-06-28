@@ -1086,9 +1086,9 @@
               </div>
               <div class="cart-totals">
                 <div class="tot-row"><span>Subtotal</span><span id="sub-total">₹0.00</span></div>
-                <div class="tot-row" id="parcel-charge-row" style="display:none;"><span>Parcel charge</span><span id="parcel-charge">₹0.00</span></div>
                 <div class="tot-row"><span>CGST (2.5%)</span><span id="cgst">₹0.00</span></div>
                 <div class="tot-row"><span>SGST (2.5%)</span><span id="sgst">₹0.00</span></div>
+                <div class="tot-row" id="parcel-charge-row" style="display:none;"><span>Parcel charges</span><span id="parcel-charge">₹0.00</span></div>
                 <div class="tot-row grand"><span>Grand Total</span><span id="grand-total">₹0.00</span></div>
               </div>
               <button class="place-btn" onclick="placeOrder()">Place Order & Checkout →</button>
@@ -1863,9 +1863,9 @@
         <textarea class="notes-area" id="mcs-notes" rows="2" style="margin-top:12px;" placeholder="Special requests…">${esc(document.getElementById('notes')?.value || '')}</textarea>
         <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border);">
           <div class="tot-row"><span>Subtotal</span><span>${money(sub)}</span></div>
-          ${parcelCharge ? `<div class="tot-row"><span>Parcel charge</span><span>${money(parcelCharge)}</span></div>` : ''}
           <div class="tot-row"><span>CGST (2.5%)</span><span>${money(cgst)}</span></div>
           <div class="tot-row"><span>SGST (2.5%)</span><span>${money(sgst)}</span></div>
+          ${parcelCharge ? `<div class="tot-row"><span>Parcel charges</span><span>${money(parcelCharge)}</span></div>` : ''}
           <div class="tot-row grand"><span>Grand Total</span><span>${money(inclusive)}</span></div>
         </div>
         <button class="place-btn" style="border-radius:12px;margin-top:14px;" onclick="closeMobileCart();placeOrder()">Place Order & Checkout →</button>
@@ -1988,10 +1988,10 @@
           <div class="r-table-head"><span>Item</span><span>Qty</span><span>Rate</span><span>Amount</span></div>
           ${(o.items||[]).map(i => `<div class="r-table-row"><span>${esc(i.name)}</span><span>${i.qty}</span><span>${money(i.price)}</span><span>${money(Number(i.price)*Number(i.qty))}</span></div>`).join('')}
           <div class="receipt-divider"></div>
-          ${parcelCharge ? `<div class="receipt-tot-line"><span>Parcel charge</span><span>${money(parcelCharge)}</span></div>` : ''}
           <div class="receipt-tot-line"><span>Subtotal</span><span>${money(sub)}</span></div>
           <div class="receipt-tot-line"><span>CGST @2.5%</span><span>${money(cgst)}</span></div>
           <div class="receipt-tot-line"><span>SGST @2.5%</span><span>${money(sgst)}</span></div>
+          ${parcelCharge ? `<div class="receipt-tot-line"><span>Parcel charges</span><span>${money(parcelCharge)}</span></div>` : ''}
           <div class="receipt-grand"><span>Grand Total</span><span>${money(total)}</span></div>
         </div>
         <div class="receipt-foot">
