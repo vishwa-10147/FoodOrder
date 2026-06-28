@@ -787,6 +787,8 @@ async function createOrder({
   items,
   status = 'new',
   paid = 0,
+  paymentMethod = null,
+  paidAt = null,
   etaMinutes = 15,
   source = 'direct',
   externalOrderId = null,
@@ -823,13 +825,13 @@ async function createOrder({
     const created = await client.query(
       `INSERT INTO orders (
          restaurant_id, order_type, table_number, notes, status, paid,
-         eta_minutes, created_at, updated_at, source, external_order_id,
+         eta_minutes, created_at, updated_at, payment_method, paid_at, source, external_order_id,
          customer_name, customer_mobile,
          delivery_name, delivery_mobile, delivery_lat, delivery_lng
        )
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
        RETURNING id`,
-      [restaurantId, orderType, tableNumber, String(notes || ''), status, paid ? 1 : 0, etaMinutes, now, source, externalOrderId, customerName, customerMobile, deliveryName, deliveryMobile, deliveryLat, deliveryLng]
+      [restaurantId, orderType, tableNumber, String(notes || ''), status, paid ? 1 : 0, etaMinutes, now, paymentMethod, paidAt, source, externalOrderId, customerName, customerMobile, deliveryName, deliveryMobile, deliveryLat, deliveryLng]
     );
     const orderId = Number(created.rows[0].id);
 
@@ -2010,8 +2012,14 @@ app.post('/api/orders', async (req, res) => {
     if (!['dine', 'takeaway', 'preorder', 'delivery'].includes(orderType)) {
       return res.status(400).json({ error: 'Invalid order type' });
     }
+    const paidOnCreate = Boolean(session && req.body?.paid);
+    const paymentMethod = String(req.body?.paymentMethod || 'cash').trim().toLowerCase();
+    if (paidOnCreate && !['card', 'upi', 'cash', 'online'].includes(paymentMethod)) {
+      return res.status(400).json({ error: 'Invalid payment method' });
+    }
 
     const normalizedTableNumber = Number(tableNumber || 0) || null;
+    const now = Date.now();
 
     const actor = session ? `${getActor(req)}:${session.restaurantCode}` : getActor(req);
     const orderId = await createOrder({
@@ -2020,8 +2028,11 @@ app.post('/api/orders', async (req, res) => {
       notes: notes || '',
       items,
       status: 'new',
-      paid: 0,
+      paid: paidOnCreate ? 1 : 0,
+      paymentMethod: paidOnCreate ? paymentMethod : null,
+      paidAt: paidOnCreate ? now : null,
       etaMinutes: orderType === 'preorder' ? 25 : 15,
+      source: paidOnCreate ? 'manual' : 'direct',
       restaurantId,
       actor,
       customerName: customerName || null,

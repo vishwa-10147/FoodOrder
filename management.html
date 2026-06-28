@@ -350,6 +350,7 @@
     .tag-paid { background: var(--green-l); color: var(--green); }
     .tag-pending { background: var(--red-l); color: var(--red); }
     .tag-direct { background: var(--bg4); color: var(--text3); }
+    .tag-manual { background: var(--blue-l); color: var(--blue); }
     .tag-partner { background: var(--amber-l); color: var(--amber); }
 
     /* ── DASHBOARD ───────────────────────────────────────── */
@@ -779,6 +780,10 @@
         Kitchen
         <span class="nav-badge" id="k-badge">0</span>
       </div>
+      <div class="nav-item" data-view="manual" onclick="switchView('manual',this)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11h6"/><path d="M9 15h6"/><path d="M17 21H7a2 2 0 01-2-2V5a2 2 0 012-2h7l5 5v11a2 2 0 01-2 2z"/><path d="M14 3v5h5"/></svg>
+        Manual Order
+      </div>
       <div class="nav-item" data-view="tracking" onclick="switchView('tracking',this)">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
         Tracking
@@ -945,6 +950,45 @@
     </section>
 
     <!-- ── KITCHEN ─────────────────────────────────────────── -->
+    <section class="content" id="view-manual">
+      <div class="content-inner">
+        <div class="menu-layout">
+          <div>
+            <div class="card">
+              <div class="card-head"><div class="card-title">Manual Counter Order</div></div>
+              <div class="card-body">
+                <div class="menu-form-grid">
+                  <input class="inp" id="manual-customer-name" placeholder="Customer name (optional)" />
+                  <input class="inp" id="manual-customer-mobile" placeholder="Mobile (optional)" />
+                  <select class="inp" id="manual-order-type">
+                    <option value="takeaway">Takeaway</option>
+                    <option value="dine">Dine-in</option>
+                  </select>
+                  <input class="inp" id="manual-table-number" type="number" min="1" placeholder="Table no. (optional)" />
+                  <select class="inp" id="manual-payment-method">
+                    <option value="cash">Cash</option>
+                    <option value="upi">UPI</option>
+                    <option value="card">Card</option>
+                  </select>
+                  <input class="inp wide" id="manual-notes" placeholder="Notes (optional)" />
+                </div>
+              </div>
+            </div>
+            <div class="card" style="margin-top:16px;">
+              <div class="card-head"><div class="card-title">Add Items</div></div>
+              <div id="manual-menu-list"></div>
+            </div>
+          </div>
+          <div>
+            <div class="card" style="position:sticky;top:22px;">
+              <div class="card-head"><div class="card-title">Bill Preview</div></div>
+              <div id="manual-order-preview"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
     <section class="content" id="view-kitchen">
       <div class="kit-date-bar">
         <div class="filter-bar">
@@ -1128,6 +1172,7 @@
   let autoPrintPopupBlockedNotified = false;
   let orderSoundEnabled = true;
   let orderSoundContext = null;
+  let manualOrderDraft = {};
   const tableOrderDrafts = {};
   let outletOpen = true;
   let csvPreviewItems = null;
@@ -1429,7 +1474,7 @@
     document.getElementById(`view-${view}`).classList.add('active');
     document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
     if (el) el.classList.add('active');
-    const titles = {dashboard:'Dashboard',kitchen:'Kitchen',tracking:'Tracking',menu:'Menu',history:'History'};
+    const titles = {dashboard:'Dashboard',kitchen:'Kitchen',manual:'Manual Order',tracking:'Tracking',menu:'Menu',history:'History'};
     document.getElementById('tb-title').textContent = titles[view]||view;
   }
 
@@ -1444,7 +1489,11 @@
     const d = new Date(o.createdAt||Date.now());
     return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
   }
-  function sourceLabel(o) { return String(o?.source||'direct').toLowerCase()==='direct'?'Direct':'Partner'; }
+  function sourceLabel(o) {
+    const source = String(o?.source || 'direct').toLowerCase();
+    if (source === 'manual') return 'Manual';
+    return source === 'direct' ? 'Direct' : 'Partner';
+  }
   function getSelectedDate(id) { const el=document.getElementById(id); return el?.value||null; }
   function clearDate(id, fn) { const el=document.getElementById(id); if(el)el.value=''; fn(); }
 
@@ -1479,7 +1528,12 @@
     const restoName = esc(state.restaurant?.name||managementAuth?.restaurant?.name||'Restaurant');
     const isDelivery = o.orderType==='delivery';
     const paidBadge = o.paid ? `<span class="tag tag-paid">Paid</span>` : `<span class="tag tag-pending">Pending</span>`;
-    const srcBadge = sourceLabel(o)==='Direct' ? `<span class="tag tag-direct">Direct</span>` : `<span class="tag tag-partner">Partner</span>`;
+    const src = sourceLabel(o);
+    const srcBadge = src === 'Direct'
+      ? `<span class="tag tag-direct">Direct</span>`
+      : src === 'Manual'
+        ? `<span class="tag tag-manual">Manual</span>`
+        : `<span class="tag tag-partner">Partner</span>`;
     const delivSection = isDelivery ? `
       <div class="delivery-block">
         <div class="delivery-block-title">🏍️ Delivery</div>
@@ -1739,6 +1793,119 @@
         window._picker.marker.setLatLng([lat, lng]); window._picker.map.setView([lat, lng], 15);
       }
     }, (err) => alert('Location error: ' + err.message));
+  }
+
+  function getManualDraftLines() {
+    const menuById = new Map((state.menu || []).map(item => [Number(item.id), item]));
+    return Object.entries(manualOrderDraft)
+      .map(([id, qty]) => ({ item: menuById.get(Number(id)), qty: Number(qty || 0) }))
+      .filter(line => line.item && line.qty > 0);
+  }
+
+  function updateManualQty(id, delta) {
+    const item = (state.menu || []).find(entry => Number(entry.id) === Number(id));
+    if (!item || Number(item.available) !== 1) return;
+    const next = Math.max(0, Number(manualOrderDraft[id] || 0) + Number(delta || 0));
+    if (next) manualOrderDraft[id] = next;
+    else delete manualOrderDraft[id];
+    renderManualOrder();
+  }
+
+  function clearManualOrder() {
+    manualOrderDraft = {};
+    ['manual-customer-name', 'manual-customer-mobile', 'manual-table-number', 'manual-notes'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.value = '';
+    });
+    renderManualOrder();
+  }
+
+  function renderManualOrder() {
+    const list = document.getElementById('manual-menu-list');
+    const preview = document.getElementById('manual-order-preview');
+    if (!list || !preview) return;
+    const available = (state.menu || []).filter(item => Number(item.available) === 1);
+    const byCat = available.reduce((acc, item) => {
+      const cat = item.cat || item.category || 'other';
+      if (!acc[cat]) acc[cat] = [];
+      acc[cat].push(item);
+      return acc;
+    }, {});
+    const cats = Object.keys(byCat);
+    list.innerHTML = cats.length ? cats.map(cat => `
+      <div style="padding:12px 16px;border-bottom:1px solid var(--border);">
+        <div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.7px;color:var(--text3);margin-bottom:8px;">${esc(cat)}</div>
+        ${byCat[cat].map(item => `
+          <div class="op-item">
+            <div>
+              <div class="op-item-name">${esc(item.name)}</div>
+              <div style="font-size:11px;color:var(--text3);margin-top:2px;">${money(item.price)}</div>
+            </div>
+            <div class="op-qty">
+              <button class="op-qty-btn" onclick="updateManualQty(${item.id},-1)">-</button>
+              <div class="op-qty-val">${manualOrderDraft[item.id] || 0}</div>
+              <button class="op-qty-btn" onclick="updateManualQty(${item.id},1)">+</button>
+            </div>
+          </div>
+        `).join('')}
+      </div>
+    `).join('') : '<div style="padding:16px;font-size:12px;color:var(--text3);">No available menu items.</div>';
+
+    const lines = getManualDraftLines();
+    const subtotal = lines.reduce((sum, line) => sum + Number(line.item.price || 0) * line.qty, 0);
+    const totalQty = lines.reduce((sum, line) => sum + line.qty, 0);
+    preview.innerHTML = `
+      <div style="padding:14px 16px;">
+        ${lines.length ? lines.map(line => `
+          <div style="display:flex;justify-content:space-between;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);">
+            <div>
+              <div style="font-weight:700;">${esc(line.item.name)}</div>
+              <div style="font-size:11px;color:var(--text3);">${line.qty} x ${money(line.item.price)}</div>
+            </div>
+            <div style="font-weight:800;">${money(Number(line.item.price || 0) * line.qty)}</div>
+          </div>
+        `).join('') : '<div style="font-size:12px;color:var(--text3);padding:8px 0;">Add items to generate a bill.</div>'}
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:12px;">
+          <div style="font-size:12px;color:var(--text3);">${totalQty} items</div>
+          <div style="font-size:20px;font-weight:900;color:var(--text);">${money(subtotal)}</div>
+        </div>
+        <div style="display:flex;gap:8px;margin-top:14px;">
+          <button class="btn-ghost" style="flex:1;" onclick="clearManualOrder()">Clear</button>
+          <button class="btn-primary" style="flex:2;" ${lines.length ? '' : 'disabled'} onclick="submitManualOrder()">Create & Print Bill</button>
+        </div>
+      </div>
+    `;
+  }
+
+  async function submitManualOrder() {
+    const lines = getManualDraftLines();
+    if (!lines.length) { alert('Add at least one item.'); return; }
+    const orderType = document.getElementById('manual-order-type')?.value || 'takeaway';
+    const tableNumber = Number(document.getElementById('manual-table-number')?.value || 0) || null;
+    if (orderType === 'dine' && !tableNumber) {
+      if (!confirm('Create dine-in bill without a table number?')) return;
+    }
+    const paymentMethod = document.getElementById('manual-payment-method')?.value || 'cash';
+    const payload = {
+      orderType,
+      tableNumber: orderType === 'dine' ? tableNumber : null,
+      notes: document.getElementById('manual-notes')?.value.trim() || 'Manual counter order',
+      customerName: document.getElementById('manual-customer-name')?.value.trim() || null,
+      customerMobile: document.getElementById('manual-customer-mobile')?.value.trim() || null,
+      items: lines.map(line => ({ menuItemId: Number(line.item.id), qty: line.qty })),
+      paid: true,
+      paymentMethod
+    };
+    try {
+      const data = await api('/api/orders', 'POST', payload);
+      const order = data.order;
+      manualOrderDraft = {};
+      await fetchState();
+      showToast('Manual bill created');
+      printOrder(order, { silentPopupError: false });
+    } catch (error) {
+      alert(error.message || 'Failed to create manual order');
+    }
   }
 
   async function deleteManagementUser(id) {
@@ -2415,6 +2582,7 @@
   function renderAll() {
     safeRender('dashboard', renderDashboard);
     safeRender('kitchen', renderKitchen);
+    safeRender('manualOrder', renderManualOrder);
     safeRender('tracking', renderTracking);
     safeRender('menu', renderMenuManagement);
     safeRender('menuOrders', renderMenuOrders);
