@@ -2555,6 +2555,10 @@
   function printLatestOrder() { const orders=getPaidOrders(); if(!orders.length){alert('No orders to print.');return;} printOrder(orders[0]); }
   function printOrder(o,opts={}) {
     if(!o) return false;
+    if(Number(o.paid)!==1) {
+      if(!opts.silentPopupError) alert('Bill can be printed only after payment is completed.');
+      return false;
+    }
     const popup=window.open('','_blank','width=420,height=860');
     if(!popup){if(!opts.silentPopupError)alert('Allow popups to print.');return false;}
     const sub=orderSubtotal(o); const gst=Number(o.gst||o.tax||0); const cgst=Number(o.cgst||(gst/2)); const sgst=Number(o.sgst||(gst-cgst)); const total=Number(o.total||(sub+cgst+sgst));
