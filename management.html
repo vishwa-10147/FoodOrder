@@ -2092,6 +2092,54 @@
     });
   }
 
+  function addKitchenPrintButtons() {
+    const selectedDate = getSelectedDate('kitchen-date-filter');
+    const deliveryOnlyCheckbox = document.getElementById('kitchen-delivery-only');
+    const deliveryOnly = deliveryOnlyCheckbox ? deliveryOnlyCheckbox.checked : false;
+    const groups = { new: [], preparing: [], ready: [], delivered: [] };
+    getPaidOrders().forEach((order) => {
+      if (deliveryOnly && order.orderType !== 'delivery') return;
+      if (selectedDate && orderDateKey(order) !== selectedDate) return;
+      (groups[order.status] || groups.new).push(order);
+    });
+    ['new', 'preparing', 'ready', 'delivered'].forEach((status) => {
+      const list = document.getElementById(`l-${status}`);
+      if (!list) return;
+      const cards = Array.from(list.querySelectorAll('.kitchen-card'));
+      cards.forEach((card, index) => {
+        const order = groups[status][index];
+        if (!order || card.querySelector('.print-bill-btn')) return;
+        const row = document.createElement('div');
+        row.style.display = 'flex';
+        row.style.gap = '8px';
+        row.style.marginTop = '8px';
+        const existing = card.querySelector('.kc-btn');
+        if (existing) {
+          existing.style.marginTop = '0';
+          existing.style.flex = '1';
+          row.appendChild(existing);
+        }
+        const button = document.createElement('button');
+        button.className = 'kc-btn print-bill-btn';
+        button.style.marginTop = '0';
+        button.style.flex = '1';
+        button.style.background = 'var(--green-l)';
+        button.style.color = 'var(--green)';
+        button.style.borderColor = 'rgba(34,197,94,0.28)';
+        button.textContent = 'Print Bill';
+        button.onclick = () => printKitchenOrder(order.id);
+        row.appendChild(button);
+        card.appendChild(row);
+      });
+    });
+  }
+
+  function printKitchenOrder(id) {
+    const order = (state.orders||[]).find(o=>Number(o.id)===Number(id));
+    if (!order) { alert('Order not found.'); return; }
+    printOrder(order, { silentPopupError: false });
+  }
+
   async function changeStatus(id, status) {
     try {
       await api(`/api/orders/${id}/status`,'POST',{status});
@@ -2583,7 +2631,7 @@
 
   function renderAll() {
     safeRender('dashboard', renderDashboard);
-    safeRender('kitchen', renderKitchen);
+    safeRender('kitchen', () => { renderKitchen(); addKitchenPrintButtons(); });
     safeRender('manualOrder', renderManualOrder);
     safeRender('tracking', renderTracking);
     safeRender('menu', renderMenuManagement);
