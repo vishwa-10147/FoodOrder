@@ -1158,6 +1158,7 @@
   const MGMT_TOKEN_KEY = 'mgmt_auth_token';
   const AUTO_PRINT_KEY = 'mgmt_auto_print';
   const ORDER_SOUND_KEY = 'mgmt_order_sound';
+  const PARCEL_CHARGE_AMOUNT = 5;
   let state = { menu: [], tables: [], orders: [], stats: {}, restaurant: null };
   let auditLogs = [];
   let managementAuth = null;
@@ -1329,6 +1330,10 @@
   function orderSubtotal(o) {
     const computed = (o.items||[]).reduce((s,i)=>s+Number(i.price||0)*Number(i.qty||0),0);
     return Number(o.subtotal||computed);
+  }
+
+  function orderParcelCharge(o) {
+    return Number(o?.parcelCharge || (o?.orderType === 'takeaway' ? PARCEL_CHARGE_AMOUNT : 0));
   }
 
   // ── AUTH ─────────────────────────────────────────────────
@@ -1518,6 +1523,7 @@
     const created = new Date(o.createdAt||Date.now());
     const paidAt = o.paidAt ? new Date(o.paidAt) : null;
     const sub = orderSubtotal(o);
+    const parcelCharge = orderParcelCharge(o);
     const gst = Number(o.gst||o.tax||0);
     const cgst = Number(o.cgst||(gst/2));
     const sgst = Number(o.sgst||(gst-cgst));
@@ -1564,6 +1570,7 @@
           ${(o.items||[]).map(i=>`<div class="r-grid-row"><span>${esc(i.name)}</span><span>${i.qty}</span><span>${money(i.price)}</span><span>${money(Number(i.price)*Number(i.qty))}</span></div>`).join('')}
           <div class="receipt-divider"></div>
           <div class="r-tot-line"><span>Total Qty</span><span class="v">${totalQty}</span></div>
+          ${parcelCharge ? `<div class="r-tot-line"><span>Parcel charge</span><span class="v">${money(parcelCharge)}</span></div>` : ''}
           <div class="r-tot-line"><span>Subtotal</span><span class="v">${money(sub)}</span></div>
           <div class="r-tot-line"><span>CGST @2.5%</span><span class="v">${money(cgst)}</span></div>
           <div class="r-tot-line"><span>SGST @2.5%</span><span class="v">${money(sgst)}</span></div>
@@ -2609,11 +2616,11 @@
     }
     const popup=window.open('','_blank','width=420,height=860');
     if(!popup){if(!opts.silentPopupError)alert('Allow popups to print.');return false;}
-    const sub=orderSubtotal(o); const gst=Number(o.gst||o.tax||0); const cgst=Number(o.cgst||(gst/2)); const sgst=Number(o.sgst||(gst-cgst)); const total=Number(o.total||(sub+cgst+sgst));
+    const sub=orderSubtotal(o); const parcelCharge=orderParcelCharge(o); const gst=Number(o.gst||o.tax||0); const cgst=Number(o.cgst||(gst/2)); const sgst=Number(o.sgst||(gst-cgst)); const total=Number(o.total||(sub+cgst+sgst));
     const totalQty=(o.items||[]).reduce((s,i)=>s+Number(i.qty||0),0);
     const restoName=esc(state.restaurant?.name||managementAuth?.restaurant?.name||'Restaurant');
     const rows=(o.items||[]).map(i=>`<tr><td>${esc(i.name||'')}</td><td style="text-align:right">${i.qty}</td><td style="text-align:right">${money(i.price||0)}</td><td style="text-align:right">${money(Number(i.price)*Number(i.qty))}</td></tr>`).join('');
-    popup.document.write(`<html><head><meta charset="utf-8"/><title>${esc(o.label||'Receipt')}</title><style>@page{size:80mm auto;margin:2.5mm}*{box-sizing:border-box}body{width:75mm;font-family:Arial,sans-serif;font-size:12px;color:#111;background:#fff;line-height:1.45}.c{text-align:center}.title{font-size:16px;font-weight:700}.sep{border-top:1px solid #ddd;margin:7px 0}.meta{background:#f7f8fa;border-radius:8px;padding:7px 8px}.r{display:flex;justify-content:space-between}.r+.r{margin-top:3px}.r span:last-child{font-weight:600}table{width:100%;border-collapse:collapse}th,td{padding:3px 0}th{font-size:10px;text-transform:uppercase;border-bottom:1px solid #ddd}.grand{font-size:14px;font-weight:700;background:#fff4ea;color:#9a4b00;padding:8px 10px;border-radius:8px;display:flex;justify-content:space-between;margin-top:6px}.foot{font-size:11px;text-align:center;color:#777;margin-top:6px}</style></head><body><div class="c title">${restoName}</div><div class="c" style="font-size:11px;color:#fc8019;font-weight:700;text-transform:uppercase;letter-spacing:.7px">Tax Invoice</div><div class="sep"></div><div class="meta"><div class="r"><span>Order</span><span>${esc(o.label||'-')}</span></div><div class="r"><span>Date</span><span>${new Date(o.createdAt||Date.now()).toLocaleDateString('en-GB')}</span></div><div class="r"><span>Time</span><span>${new Date(o.createdAt||Date.now()).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:false})}</span></div><div class="r"><span>${o.orderType==='dine'?'Table':'Type'}</span><span>${o.orderType==='dine'?(o.tableNumber?`T${o.tableNumber}`:'-'):esc(o.orderType||'-')}</span></div></div><div class="sep"></div><table><thead><tr><th>Item</th><th style="text-align:right">Qty</th><th style="text-align:right">Rate</th><th style="text-align:right">Amt</th></tr></thead><tbody>${rows}</tbody></table><div class="sep"></div><div class="r"><span>Total Qty</span><span>${totalQty}</span></div><div class="r"><span>Sub Total</span><span>${money(sub)}</span></div><div class="r"><span>CGST @2.5%</span><span>${money(cgst)}</span></div><div class="r"><span>SGST @2.5%</span><span>${money(sgst)}</span></div><div class="grand"><span>Grand Total</span><span>${money(total)}</span></div><div class="foot">${o.paid?`Paid via ${esc((o.paymentMethod||'').toUpperCase())}`:'Payment pending'}</div><div class="foot">Thank you. Visit again.</div></body></html>`);
+    popup.document.write(`<html><head><meta charset="utf-8"/><title>${esc(o.label||'Receipt')}</title><style>@page{size:80mm auto;margin:2.5mm}*{box-sizing:border-box}body{width:75mm;font-family:Arial,sans-serif;font-size:12px;color:#111;background:#fff;line-height:1.45}.c{text-align:center}.title{font-size:16px;font-weight:700}.sep{border-top:1px solid #ddd;margin:7px 0}.meta{background:#f7f8fa;border-radius:8px;padding:7px 8px}.r{display:flex;justify-content:space-between}.r+.r{margin-top:3px}.r span:last-child{font-weight:600}table{width:100%;border-collapse:collapse}th,td{padding:3px 0}th{font-size:10px;text-transform:uppercase;border-bottom:1px solid #ddd}.grand{font-size:14px;font-weight:700;background:#fff4ea;color:#9a4b00;padding:8px 10px;border-radius:8px;display:flex;justify-content:space-between;margin-top:6px}.foot{font-size:11px;text-align:center;color:#777;margin-top:6px}</style></head><body><div class="c title">${restoName}</div><div class="c" style="font-size:11px;color:#fc8019;font-weight:700;text-transform:uppercase;letter-spacing:.7px">Tax Invoice</div><div class="sep"></div><div class="meta"><div class="r"><span>Order</span><span>${esc(o.label||'-')}</span></div><div class="r"><span>Date</span><span>${new Date(o.createdAt||Date.now()).toLocaleDateString('en-GB')}</span></div><div class="r"><span>Time</span><span>${new Date(o.createdAt||Date.now()).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:false})}</span></div><div class="r"><span>${o.orderType==='dine'?'Table':'Type'}</span><span>${o.orderType==='dine'?(o.tableNumber?`T${o.tableNumber}`:'-'):esc(o.orderType||'-')}</span></div></div><div class="sep"></div><table><thead><tr><th>Item</th><th style="text-align:right">Qty</th><th style="text-align:right">Rate</th><th style="text-align:right">Amt</th></tr></thead><tbody>${rows}</tbody></table><div class="sep"></div><div class="r"><span>Total Qty</span><span>${totalQty}</span></div>${parcelCharge?`<div class="r"><span>Parcel charge</span><span>${money(parcelCharge)}</span></div>`:''}<div class="r"><span>Sub Total</span><span>${money(sub)}</span></div><div class="r"><span>CGST @2.5%</span><span>${money(cgst)}</span></div><div class="r"><span>SGST @2.5%</span><span>${money(sgst)}</span></div><div class="grand"><span>Grand Total</span><span>${money(total)}</span></div><div class="foot">${o.paid?`Paid via ${esc((o.paymentMethod||'').toUpperCase())}`:'Payment pending'}</div><div class="foot">Thank you. Visit again.</div></body></html>`);
     popup.document.close(); popup.focus(); setTimeout(()=>popup.print(),250); return true;
   }
 

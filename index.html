@@ -1086,6 +1086,7 @@
               </div>
               <div class="cart-totals">
                 <div class="tot-row"><span>Subtotal</span><span id="sub-total">₹0.00</span></div>
+                <div class="tot-row" id="parcel-charge-row" style="display:none;"><span>Parcel charge</span><span id="parcel-charge">₹0.00</span></div>
                 <div class="tot-row"><span>CGST (2.5%)</span><span id="cgst">₹0.00</span></div>
                 <div class="tot-row"><span>SGST (2.5%)</span><span id="sgst">₹0.00</span></div>
                 <div class="tot-row grand"><span>Grand Total</span><span id="grand-total">₹0.00</span></div>
@@ -1186,6 +1187,7 @@
   let selectedPaymentMethod = 'card';
   let razorpayConfig = { enabled: false, keyId: null };
   let currentCartTotal = 0;
+  const PARCEL_CHARGE_AMOUNT = 5;
   let deliveryUnlockedShown = false;
   let deliveryLocation = { lat: null, lng: null };
   let clientOrderIds = new Set();
@@ -1423,6 +1425,7 @@
     el.classList.add('active');
     orderType = type;
     applyOrderTypeUI(type);
+    renderCart();
     saveDraft();
   }
 
@@ -1777,22 +1780,32 @@
     `).join('');
   }
 
+  function parcelChargeForType(type = orderType) {
+    return String(type) === 'takeaway' ? PARCEL_CHARGE_AMOUNT : 0;
+  }
+
   function totalsHTML() {
-    const inclusive = cart.reduce((s,i) => s + i.price * i.qty, 0);
+    const itemsTotal = cart.reduce((s,i) => s + i.price * i.qty, 0);
+    const parcelCharge = cart.length ? parcelChargeForType() : 0;
+    const inclusive = itemsTotal + parcelCharge;
     const sub = Number((inclusive / 1.05).toFixed(2));
     const gst = Number((inclusive - sub).toFixed(2));
     const cgst = Number((gst / 2).toFixed(2));
     const sgst = Number((gst - cgst).toFixed(2));
-    return { inclusive, sub, cgst, sgst };
+    return { inclusive, sub, cgst, sgst, parcelCharge, itemsTotal };
   }
 
   function renderCart() {
-    const { inclusive, sub, cgst, sgst } = totalsHTML();
+    const { inclusive, sub, cgst, sgst, parcelCharge } = totalsHTML();
     currentCartTotal = inclusive;
     ['sub-total','cgst','sgst','grand-total'].forEach((id, i) => {
       const el = document.getElementById(id);
       if (el) el.textContent = money([sub, cgst, sgst, inclusive][i]);
     });
+    const parcelRow = document.getElementById('parcel-charge-row');
+    const parcelEl = document.getElementById('parcel-charge');
+    if (parcelRow) parcelRow.style.display = parcelCharge ? 'flex' : 'none';
+    if (parcelEl) parcelEl.textContent = money(parcelCharge);
     const items = document.getElementById('cart-items');
     if (items) items.innerHTML = cartHTML();
     const count = cart.reduce((s,i) => s + i.qty, 0);
@@ -1838,7 +1851,7 @@
 
   // ── MOBILE CART SHEET ─────────────────────────────────────
   function injectMobileCartContent() {
-    const { inclusive, sub, cgst, sgst } = totalsHTML();
+    const { inclusive, sub, cgst, sgst, parcelCharge } = totalsHTML();
     const content = document.getElementById('mcs-cart-content');
     if (!content) return;
     content.innerHTML = `
@@ -1848,6 +1861,7 @@
         <textarea class="notes-area" id="mcs-notes" rows="2" style="margin-top:12px;" placeholder="Special requests…">${esc(document.getElementById('notes')?.value || '')}</textarea>
         <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border);">
           <div class="tot-row"><span>Subtotal</span><span>${money(sub)}</span></div>
+          ${parcelCharge ? `<div class="tot-row"><span>Parcel charge</span><span>${money(parcelCharge)}</span></div>` : ''}
           <div class="tot-row"><span>CGST (2.5%)</span><span>${money(cgst)}</span></div>
           <div class="tot-row"><span>SGST (2.5%)</span><span>${money(sgst)}</span></div>
           <div class="tot-row grand"><span>Grand Total</span><span>${money(inclusive)}</span></div>
@@ -1948,7 +1962,9 @@
   // ── RECEIPT ───────────────────────────────────────────────
   function receiptMarkup(o) {
     const created = new Date(o.createdAt || Date.now());
-    const sub = (o.items || []).reduce((s,i) => s + Number(i.price||0)*Number(i.qty||0), 0);
+    const itemTotal = (o.items || []).reduce((s,i) => s + Number(i.price||0)*Number(i.qty||0), 0);
+    const parcelCharge = Number(o.parcelCharge || (o.orderType === 'takeaway' ? PARCEL_CHARGE_AMOUNT : 0));
+    const sub = Number(o.subtotal || ((itemTotal + parcelCharge) / 1.05));
     const gst = Number(o.gst || o.tax || 0);
     const cgst = Number(o.cgst || (gst / 2));
     const sgst = Number(o.sgst || (gst - cgst));
@@ -1970,6 +1986,7 @@
           <div class="r-table-head"><span>Item</span><span>Qty</span><span>Rate</span><span>Amount</span></div>
           ${(o.items||[]).map(i => `<div class="r-table-row"><span>${esc(i.name)}</span><span>${i.qty}</span><span>${money(i.price)}</span><span>${money(Number(i.price)*Number(i.qty))}</span></div>`).join('')}
           <div class="receipt-divider"></div>
+          ${parcelCharge ? `<div class="receipt-tot-line"><span>Parcel charge</span><span>${money(parcelCharge)}</span></div>` : ''}
           <div class="receipt-tot-line"><span>Subtotal</span><span>${money(sub)}</span></div>
           <div class="receipt-tot-line"><span>CGST @2.5%</span><span>${money(cgst)}</span></div>
           <div class="receipt-tot-line"><span>SGST @2.5%</span><span>${money(sgst)}</span></div>

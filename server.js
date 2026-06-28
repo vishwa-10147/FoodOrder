@@ -40,6 +40,7 @@ const RAZORPAY_KEY_ID = String(process.env.RAZORPAY_KEY_ID || '').trim();
 const RAZORPAY_KEY_SECRET = String(process.env.RAZORPAY_KEY_SECRET || '').trim();
 const RAZORPAY_WEBHOOK_SECRET = String(process.env.RAZORPAY_WEBHOOK_SECRET || '').trim();
 const RAZORPAY_ENABLED = Boolean(RAZORPAY_KEY_ID && RAZORPAY_KEY_SECRET);
+const PARCEL_CHARGE_AMOUNT = 5;
 
 if (!DATABASE_URL) {
   throw new Error('DATABASE_URL is required for PostgreSQL.');
@@ -404,9 +405,15 @@ function buildRestaurantPayload(row) {
   };
 }
 
+function getParcelCharge(orderType) {
+  return String(orderType || '').toLowerCase() === 'takeaway' ? PARCEL_CHARGE_AMOUNT : 0;
+}
+
 function enrichOrder(order) {
   const items = Array.isArray(order.items) ? order.items : [];
-  const inclusiveTotal = Number(items.reduce((sum, item) => sum + (Number(item.price || 0) * Number(item.qty || 0)), 0));
+  const itemsTotal = Number(items.reduce((sum, item) => sum + (Number(item.price || 0) * Number(item.qty || 0)), 0));
+  const parcelCharge = getParcelCharge(order.orderType || order.order_type);
+  const inclusiveTotal = itemsTotal + parcelCharge;
   const subtotal = Math.round((inclusiveTotal / 1.05) * 100) / 100;
   const gst = Math.round((inclusiveTotal - subtotal) * 100) / 100;
   const cgst = Math.round((gst / 2) * 100) / 100;
@@ -430,6 +437,8 @@ function enrichOrder(order) {
     cgst,
     sgst,
     total,
+    itemsTotal,
+    parcelCharge,
     progress: progressMap[order.status] || 0,
     items: items.map((item) => ({
       id: Number(item.id || 0),
