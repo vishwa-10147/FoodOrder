@@ -2573,13 +2573,22 @@
   function downloadHistoryByDateExcel() {
     const dateText = document.getElementById('history-export-date').value;
     if (!dateText) { alert('Select a date first.'); return; }
-    const rows = (state.orders||[]).filter(o=>orderDateKey(o)===dateText);
-    if (!rows.length) { alert('No orders for selected date.'); return; }
+    const rows = (state.orders||[]).filter(o=>orderDateKey(o)===dateText && String(o.status||'').toLowerCase()==='delivered');
+    if (!rows.length) { alert('No delivered orders for selected date.'); return; }
     let total=0;
-    const dataRows = rows.map(o=>{ total+=Number(o.total||0); return `<tr><td>${esc(o.label||'-')}</td><td>${esc(o.customerName||o.deliveryName||'-')}</td><td>${esc(o.customerMobile||o.deliveryMobile||'-')}</td><td>${Number(o.total||0)}</td></tr>`; }).join('');
+    let totalGst=0;
+    const dataRows = rows.map(o=>{
+      const gst = Number(o.gst||o.tax||0);
+      const amount = Number(o.total||0);
+      totalGst += gst;
+      total += amount;
+      return `<tr><td>${esc(o.label||'-')}</td><td>${esc(o.customerName||o.deliveryName||'-')}</td><td>${esc(o.customerMobile||o.deliveryMobile||'-')}</td><td>${gst.toFixed(2)}</td><td>${amount.toFixed(2)}</td></tr>`;
+    }).join('');
+    const summaryRows = `<tr><td colspan="5"></td></tr><tr><th colspan="4" style="text-align:right">Total GST for day</th><th>${totalGst.toFixed(2)}</th></tr><tr><th colspan="4" style="text-align:right">Total amount for day</th><th>${total.toFixed(2)}</th></tr>`;
     const html = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40"><head><meta charset="utf-8"/></head><body><table border="1"><tr><th colspan="4">Orders ${dateText} · Total: ${money(total)}</th></tr><tr><th>Order No</th><th>Name</th><th>Mobile</th><th>Amount</th></tr>${dataRows}</table></body></html>`;
-    const blob = new Blob([html],{type:'application/vnd.ms-excel;charset=utf-8;'});
-    const a = document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=`orders-${dateText}.xls`; a.click(); URL.revokeObjectURL(a.href);
+    const exportHtml = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40"><head><meta charset="utf-8"/></head><body><table border="1"><tr><th colspan="5">Delivered Orders ${dateText} - Total: ${money(total)}</th></tr><tr><th>Order No</th><th>Name</th><th>Mobile</th><th>GST</th><th>Amount</th></tr>${dataRows}${summaryRows}</table></body></html>`;
+    const blob = new Blob([exportHtml],{type:'application/vnd.ms-excel;charset=utf-8;'});
+    const a = document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=`delivered-orders-${dateText}.xls`; a.click(); URL.revokeObjectURL(a.href);
   }
 
   // ── AUDIT LOGS ───────────────────────────────────────────
