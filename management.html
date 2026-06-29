@@ -625,6 +625,21 @@
     .op-cat { margin-bottom: 12px; }
     .op-cat:last-child { margin-bottom: 0; }
     .op-cat-name { font-size: 10px; font-weight: 700; letter-spacing: 0.8px; text-transform: uppercase; color: var(--text3); margin-bottom: 6px; }
+    .manual-cat-grid {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      gap: 10px; margin-bottom: 12px;
+    }
+    .manual-cat-btn {
+      min-height: 74px; border-radius: 10px; border: 1px solid var(--border);
+      background: var(--bg3); color: var(--text);
+      padding: 12px; text-align: left; cursor: pointer;
+      display: flex; flex-direction: column; justify-content: space-between;
+      transition: all 0.15s; font-family: var(--font-sans);
+    }
+    .manual-cat-btn:hover { border-color: var(--fire-m); background: var(--fire-l); }
+    .manual-cat-btn.active { border-color: var(--fire); background: var(--fire-l); box-shadow: inset 0 0 0 1px var(--fire-m); }
+    .manual-cat-name { font-size: 14px; font-weight: 800; color: var(--text); }
+    .manual-cat-count { font-size: 11px; font-weight: 700; color: var(--text3); font-family: var(--font-mono); }
     .op-item { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 5px 0; }
     .op-item-name { font-size: 12px; color: var(--text2); flex: 1; }
     .op-qty { display: flex; align-items: center; gap: 6px; }
@@ -978,6 +993,7 @@
               <div class="card-head"><div class="card-title">Add Items</div></div>
               <div class="card-body" style="border-bottom:1px solid var(--border);">
                 <input class="inp" id="manual-menu-search" placeholder="Search menu items..." oninput="renderManualOrder()" />
+                <div id="manual-category-buttons" style="margin-top:12px;"></div>
               </div>
               <div id="manual-menu-list"></div>
             </div>
@@ -1122,7 +1138,7 @@
           <div class="card-head">
             <div class="card-title">Order History</div>
             <div class="filter-bar">
-              <input class="filter-date" id="history-export-date" type="date" />
+              <input class="filter-date" id="history-export-date" type="date" onchange="renderHistoryTable()" />
               <button class="btn-primary" onclick="downloadHistoryByDateExcel()">↓ Export Excel</button>
             </div>
           </div>
@@ -1177,6 +1193,7 @@
   let orderSoundEnabled = true;
   let orderSoundContext = null;
   let manualOrderDraft = {};
+  let manualSelectedCategory = 'all';
   const tableOrderDrafts = {};
   let outletOpen = true;
   let csvPreviewItems = null;
@@ -1206,6 +1223,10 @@
 
   function esc(v) {
     return String(v||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+  }
+
+  function escAttr(v) {
+    return esc(v).replace(/`/g, '&#96;');
   }
 
   function getOrderSoundContext() {
@@ -1828,15 +1849,46 @@
     renderManualOrder();
   }
 
+  function selectManualCategory(category) {
+    manualSelectedCategory = String(category || 'all');
+    renderManualOrder();
+  }
+
   function renderManualOrder() {
     const list = document.getElementById('manual-menu-list');
     const preview = document.getElementById('manual-order-preview');
     if (!list || !preview) return;
+    const catButtons = document.getElementById('manual-category-buttons');
     const query = String(document.getElementById('manual-menu-search')?.value || '').trim().toLowerCase();
-    const available = (state.menu || [])
+    const allAvailable = (state.menu || [])
       .filter(item => Number(item.available) === 1)
-      .filter(item => !query || String(item.name || '').toLowerCase().includes(query) || String(item.cat || item.category || '').toLowerCase().includes(query))
       .sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''), 'en', { sensitivity: 'base' }));
+    const categoryCounts = allAvailable.reduce((acc, item) => {
+      const cat = item.cat || item.category || 'other';
+      acc[cat] = (acc[cat] || 0) + 1;
+      return acc;
+    }, {});
+    const allCats = Object.keys(categoryCounts).sort((a, b) => String(a).localeCompare(String(b), 'en', { sensitivity: 'base' }));
+    if (manualSelectedCategory !== 'all' && !categoryCounts[manualSelectedCategory]) manualSelectedCategory = 'all';
+    if (catButtons) {
+      catButtons.innerHTML = allCats.length ? `
+        <div class="manual-cat-grid">
+          <button class="manual-cat-btn ${manualSelectedCategory === 'all' ? 'active' : ''}" onclick="selectManualCategory('all')">
+            <span class="manual-cat-name">All Items</span>
+            <span class="manual-cat-count">${allAvailable.length} items</span>
+          </button>
+          ${allCats.map(cat => `
+            <button class="manual-cat-btn ${manualSelectedCategory === cat ? 'active' : ''}" onclick="selectManualCategory(${escAttr(JSON.stringify(cat))})">
+              <span class="manual-cat-name">${esc(cat)}</span>
+              <span class="manual-cat-count">${categoryCounts[cat]} items</span>
+            </button>
+          `).join('')}
+        </div>
+      ` : '';
+    }
+    const available = allAvailable
+      .filter(item => manualSelectedCategory === 'all' || (item.cat || item.category || 'other') === manualSelectedCategory)
+      .filter(item => !query || String(item.name || '').toLowerCase().includes(query) || String(item.cat || item.category || '').toLowerCase().includes(query));
     const byCat = available.reduce((acc, item) => {
       const cat = item.cat || item.category || 'other';
       if (!acc[cat]) acc[cat] = [];
@@ -2552,14 +2604,19 @@
   function renderHistoryTable() {
     const el = document.getElementById('history-order-list');
     if (!el) return;
-    const orders = (state.orders||[]).slice().sort((a,b)=>Number(b.createdAt||0)-Number(a.createdAt||0));
-    if (!orders.length) { el.innerHTML='<div style="padding:16px;font-size:12px;color:var(--text3);">No orders found.</div>'; return; }
+    const selectedDate = document.getElementById('history-export-date')?.value || '';
+    const orders = (state.orders||[])
+      .filter(o => !selectedDate || orderDateKey(o) === selectedDate)
+      .slice()
+      .sort((a,b)=>Number(b.createdAt||0)-Number(a.createdAt||0));
+    if (!orders.length) { el.innerHTML=`<div style="padding:16px;font-size:12px;color:var(--text3);">${selectedDate ? 'No orders found for selected date.' : 'No orders found.'}</div>`; return; }
     el.innerHTML = `
       <table class="history-table">
-        <thead><tr><th>Order No</th><th>Customer</th><th>Mobile</th><th>Status</th><th class="r">Amount</th></tr></thead>
+        <thead><tr><th>Order No</th><th>Date</th><th>Customer</th><th>Mobile</th><th>Status</th><th class="r">Amount</th></tr></thead>
         <tbody>${orders.map(o=>`
           <tr>
             <td class="mono">${esc(o.label||'-')}</td>
+            <td class="mono">${new Date(o.createdAt||Date.now()).toLocaleDateString('en-IN')}</td>
             <td>${esc(o.customerName||o.deliveryName||'-')}</td>
             <td class="mono">${esc(o.customerMobile||o.deliveryMobile||'-')}</td>
             <td><span class="tag tag-${o.status||'new'}">${esc(o.status||'-')}</span></td>
@@ -2580,13 +2637,13 @@
     const dataRows = rows.map(o=>{
       const gst = Number(o.gst||o.tax||0);
       const amount = Number(o.total||0);
+      const orderDate = new Date(o.createdAt||Date.now()).toLocaleString('en-IN');
       totalGst += gst;
       total += amount;
-      return `<tr><td>${esc(o.label||'-')}</td><td>${esc(o.customerName||o.deliveryName||'-')}</td><td>${esc(o.customerMobile||o.deliveryMobile||'-')}</td><td>${gst.toFixed(2)}</td><td>${amount.toFixed(2)}</td></tr>`;
+      return `<tr><td>${esc(o.label||'-')}</td><td>${esc(orderDate)}</td><td>${esc(o.customerName||o.deliveryName||'-')}</td><td>${esc(o.customerMobile||o.deliveryMobile||'-')}</td><td>${gst.toFixed(2)}</td><td>${amount.toFixed(2)}</td></tr>`;
     }).join('');
-    const summaryRows = `<tr><td colspan="5"></td></tr><tr><th colspan="4" style="text-align:right">Total GST for day</th><th>${totalGst.toFixed(2)}</th></tr><tr><th colspan="4" style="text-align:right">Total amount for day</th><th>${total.toFixed(2)}</th></tr>`;
-    const html = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40"><head><meta charset="utf-8"/></head><body><table border="1"><tr><th colspan="4">Orders ${dateText} · Total: ${money(total)}</th></tr><tr><th>Order No</th><th>Name</th><th>Mobile</th><th>Amount</th></tr>${dataRows}</table></body></html>`;
-    const exportHtml = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40"><head><meta charset="utf-8"/></head><body><table border="1"><tr><th colspan="5">Delivered Orders ${dateText} - Total: ${money(total)}</th></tr><tr><th>Order No</th><th>Name</th><th>Mobile</th><th>GST</th><th>Amount</th></tr>${dataRows}${summaryRows}</table></body></html>`;
+    const summaryRows = `<tr><td colspan="6"></td></tr><tr><th colspan="5" style="text-align:right">Total GST for day</th><th>${totalGst.toFixed(2)}</th></tr><tr><th colspan="5" style="text-align:right">Total amount for day</th><th>${total.toFixed(2)}</th></tr>`;
+    const exportHtml = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40"><head><meta charset="utf-8"/></head><body><table border="1"><tr><th colspan="6">Delivered Orders ${dateText} - Total: ${money(total)}</th></tr><tr><th>Order No</th><th>Date</th><th>Name</th><th>Mobile</th><th>GST</th><th>Amount</th></tr>${dataRows}${summaryRows}</table></body></html>`;
     const blob = new Blob([exportHtml],{type:'application/vnd.ms-excel;charset=utf-8;'});
     const a = document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=`delivered-orders-${dateText}.xls`; a.click(); URL.revokeObjectURL(a.href);
   }
