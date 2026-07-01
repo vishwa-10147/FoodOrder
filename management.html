@@ -923,7 +923,7 @@
                 <div class="print-row">
                   <button class="btn-ghost" id="auto-print-toggle" onclick="toggleAutoPrint()">Auto Print: Off</button>
                   <button class="btn-ghost" onclick="printLatestOrder()">🖨 Print Latest</button>
-                  <span class="print-note">Browser handles printer selection.</span>
+                  <span class="print-note">Launch with Chrome kiosk printing for silent receipts.</span>
                 </div>
               </div>
             </div>
@@ -2707,7 +2707,14 @@
     const restoName=esc(state.restaurant?.name||managementAuth?.restaurant?.name||'Restaurant');
     const rows=(o.items||[]).map(i=>`<tr><td>${esc(i.name||'')}</td><td style="text-align:right">${i.qty}</td><td style="text-align:right">${money(i.price||0)}</td><td style="text-align:right">${money(Number(i.price)*Number(i.qty))}</td></tr>`).join('');
     popup.document.write(`<html><head><meta charset="utf-8"/><title>${esc(o.label||'Receipt')}</title><style>@page{size:80mm auto;margin:2.5mm}*{box-sizing:border-box}body{width:75mm;font-family:Arial,sans-serif;font-size:12px;color:#111;background:#fff;line-height:1.45}.c{text-align:center}.title{font-size:16px;font-weight:700}.sep{border-top:1px solid #ddd;margin:7px 0}.meta{background:#f7f8fa;border-radius:8px;padding:7px 8px}.r{display:flex;justify-content:space-between}.r+.r{margin-top:3px}.r span:last-child{font-weight:600}table{width:100%;border-collapse:collapse}th,td{padding:3px 0}th{font-size:10px;text-transform:uppercase;border-bottom:1px solid #ddd}.grand{font-size:14px;font-weight:700;background:#fff4ea;color:#9a4b00;padding:8px 10px;border-radius:8px;display:flex;justify-content:space-between;margin-top:6px}.foot{font-size:11px;text-align:center;color:#777;margin-top:6px}</style></head><body><div class="c title">${restoName}</div><div class="c" style="font-size:11px;color:#fc8019;font-weight:700;text-transform:uppercase;letter-spacing:.7px">Tax Invoice</div><div class="sep"></div><div class="meta"><div class="r"><span>Order</span><span>${esc(o.label||'-')}</span></div><div class="r"><span>Date</span><span>${new Date(o.createdAt||Date.now()).toLocaleDateString('en-GB')}</span></div><div class="r"><span>Time</span><span>${new Date(o.createdAt||Date.now()).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:false})}</span></div><div class="r"><span>${o.orderType==='dine'?'Table':'Type'}</span><span>${o.orderType==='dine'?(o.tableNumber?`T${o.tableNumber}`:'-'):esc(o.orderType||'-')}</span></div></div><div class="sep"></div><table><thead><tr><th>Item</th><th style="text-align:right">Qty</th><th style="text-align:right">Rate</th><th style="text-align:right">Amt</th></tr></thead><tbody>${rows}</tbody></table><div class="sep"></div><div class="r"><span>Total Qty</span><span>${totalQty}</span></div><div class="r"><span>Sub Total</span><span>${money(sub)}</span></div><div class="r"><span>CGST @2.5%</span><span>${money(cgst)}</span></div><div class="r"><span>SGST @2.5%</span><span>${money(sgst)}</span></div>${parcelCharge?`<div class="r"><span>Parcel charges</span><span>${money(parcelCharge)}</span></div>`:''}<div class="grand"><span>Grand Total</span><span>${money(total)}</span></div><div class="foot">${o.paid?`Paid via ${esc((o.paymentMethod||'').toUpperCase())}`:'Payment pending'}</div><div class="foot">Thank you. Visit again.</div></body></html>`);
-    popup.document.close(); popup.focus(); setTimeout(()=>popup.print(),250); return true;
+    popup.document.close();
+    popup.focus();
+    popup.onafterprint = () => setTimeout(()=>popup.close(),100);
+    setTimeout(()=>{
+      popup.print();
+      setTimeout(()=>{ if(!popup.closed) popup.close(); },4000);
+    },250);
+    return true;
   }
 
   function openOuterScreen() {
