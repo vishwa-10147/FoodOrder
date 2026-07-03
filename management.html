@@ -2099,6 +2099,7 @@
       await fetchState();
       showToast('Manual bill created');
       printOrder(order, { silentPopupError: false });
+      printCounterKot(order, { silentPopupError: false, printDelay: 1200 });
     } catch (error) {
       alert(error.message || 'Failed to create manual order');
     }
@@ -2813,6 +2814,41 @@
     setTimeout(()=>{ isAutoPrinting=false; processAutoPrintQueue(); },printed?700:300);
   }
   function printLatestOrder() { const orders=getPaidOrders(); if(!orders.length){alert('No orders to print.');return;} printOrder(orders[0]); }
+  function printCounterKot(o,opts={}) {
+    if(!o) return false;
+    const popup=window.open('','_blank','width=420,height=760');
+    if(!popup){if(!opts.silentPopupError)alert('Allow popups to print counter KOT.');return false;}
+    const restoName=esc(state.restaurant?.name||managementAuth?.restaurant?.name||'Restaurant').toUpperCase();
+    const createdAt = Number(o.createdAt || Date.now());
+    const orderNo = esc(String(o.label || o.id || '-').replace(/^#/, ''));
+    const orderTypeText = o.orderType === 'dine' ? 'Dine In' : String(o.orderType || 'Takeaway').replace(/^./, c => c.toUpperCase());
+    const tableNo = o.orderType === 'dine' ? (o.tableNumber || '-') : '-';
+    const pad = (value, size) => String(value || '').slice(0, size).padEnd(size, ' ');
+    const itemRows = (o.items || []).map(item => `${pad(item.name || '', 24)}${String(item.qty || 0).padStart(5, ' ')}`).join('\n');
+    popup.document.write(`<html><head><meta charset="utf-8"/><title>KOT ${esc(o.label||'')}</title><style>@page{size:80mm auto;margin:2.5mm}*{box-sizing:border-box}body{width:75mm;font-family:'Courier New',monospace;font-size:18px;font-weight:700;color:#000;background:#fff;line-height:1.35}pre{white-space:pre-wrap;margin:0}.c{text-align:center}.title{font-size:24px;font-weight:bold}.subtitle{font-size:20px;font-weight:bold}.sep{font-weight:bold}</style></head><body><pre><div class="sep">========================================</div><div class="c title">${restoName}</div><div class="c subtitle">KOT BILL</div><div class="sep">========================================</div>
+Counter      : 1
+Date         : ${new Date(createdAt).toLocaleDateString('en-GB')}
+Time         : ${new Date(createdAt).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:false})}
+ORDER No.    : ${orderNo}
+
+Order Type   : ${esc(orderTypeText)}
+${o.orderType === 'dine' ? `Table No.    : ${esc(tableNo)}\n` : ''}
+----------------------------------------
+Item                     Qty
+----------------------------------------
+${esc(itemRows || 'No items')}
+
+----------------------------------------
+</pre></body></html>`);
+    popup.document.close();
+    popup.focus();
+    popup.onafterprint = () => setTimeout(()=>popup.close(),100);
+    setTimeout(()=>{
+      popup.print();
+      setTimeout(()=>{ if(!popup.closed) popup.close(); },4000);
+    },Number(opts.printDelay || 250));
+    return true;
+  }
   function printOrder(o,opts={}) {
     if(!o) return false;
     if(Number(o.paid)!==1) {
