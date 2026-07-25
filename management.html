@@ -517,6 +517,54 @@
     .state-btn.unavail.active { background: var(--red-l); border-color: rgba(239,68,68,0.2); color: var(--red); }
     .state-btn:hover { border-color: var(--border2); color: var(--text); }
 
+    /* ── ORDER TYPE TOGGLE ──────────────────────────────────── */
+    .order-type-toggle {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+    .ot-btn {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      padding: 16px 10px;
+      border-radius: 10px;
+      border: 2px solid var(--border);
+      background: var(--bg3);
+      color: var(--text3);
+      font-family: var(--font-sans);
+      font-size: 13px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.2s;
+      letter-spacing: 0.2px;
+      line-height: 1.2;
+    }
+    .ot-btn .ot-icon {
+      font-size: 26px;
+      line-height: 1;
+      transition: transform 0.2s;
+    }
+    .ot-btn:hover {
+      border-color: var(--border2);
+      color: var(--text);
+      background: var(--bg4);
+    }
+    .ot-btn.active-takeaway {
+      border-color: var(--amber);
+      background: var(--amber-l);
+      color: var(--amber);
+    }
+    .ot-btn.active-takeaway .ot-icon { transform: scale(1.1); }
+    .ot-btn.active-dine {
+      border-color: var(--blue);
+      background: var(--blue-l);
+      color: var(--blue);
+    }
+    .ot-btn.active-dine .ot-icon { transform: scale(1.1); }
+
     /* ── ORDER LIST SIDEBAR ───────────────────────────────── */
     .order-list-scroll { max-height: 600px; overflow-y: auto; }
     .order-list-item {
@@ -1092,10 +1140,17 @@
             <div class="card" style="margin-bottom:16px;">
               <div class="card-head"><div class="card-title">Order Type</div></div>
               <div class="card-body">
-                <select class="inp" id="manual-order-type" onchange="renderManualOrder()" style="width:100%;">
-                  <option value="dine">Dine-in</option>
-                  <option value="takeaway" selected>Takeaway</option>
-                </select>
+                <input type="hidden" id="manual-order-type" value="takeaway" />
+                <div class="order-type-toggle">
+                  <button class="ot-btn" id="ot-btn-takeaway" onclick="setManualOrderType('takeaway')">
+                    <span class="ot-icon">🛍️</span>
+                    Takeaway
+                  </button>
+                  <button class="ot-btn" id="ot-btn-dine" onclick="setManualOrderType('dine')">
+                    <span class="ot-icon">🍽️</span>
+                    Dine-In
+                  </button>
+                </div>
               </div>
             </div>
             <div class="card" style="position:sticky;top:22px;">
@@ -1950,6 +2005,19 @@
     manualSelectedCategory = String(category || 'all');
     renderManualOrder();
   }
+
+  function setManualOrderType(type) {
+    const inp = document.getElementById('manual-order-type');
+    if (inp) inp.value = type;
+    const takeawayBtn = document.getElementById('ot-btn-takeaway');
+    const dineBtn = document.getElementById('ot-btn-dine');
+    if (takeawayBtn) takeawayBtn.classList.toggle('active-takeaway', type === 'takeaway');
+    if (dineBtn) dineBtn.classList.toggle('active-dine', type === 'dine');
+    renderManualOrder();
+  }
+
+  // initialise the toggle buttons after DOMContentLoaded
+  document.addEventListener('DOMContentLoaded', () => { setManualOrderType('takeaway'); });
 
   function renderManualOrder() {
     const list = document.getElementById('manual-menu-list');
